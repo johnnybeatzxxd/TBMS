@@ -1,17 +1,46 @@
 export const COLORS = {
-  primary: "#1A56DB",
-  primaryLight: "#EBF2FF",
+  // Primary - Blue
+  primary: "#2563EB",
+  primary50: "#EFF6FF",
+  primary100: "#DBEAFE",
+  primary200: "#BFDBFE",
+  primary300: "#93C5FD",
+  primary400: "#60A5FA",
+  primary500: "#2563EB",
+  primary600: "#1D4ED8",
+  primary700: "#1E40AF",
+  primary800: "#1E3A8A",
+  primary900: "#172554",
+
+  // Secondary - Orange
   secondary: "#F97316",
+  secondary50: "#FFF7ED",
+  secondary500: "#F97316",
+  secondary600: "#EA580C",
+
+  // Semantic
   success: "#16A34A",
-  warning: "#CA8A04",
+  warning: "#EAB308",
   danger: "#DC2626",
-  dark: "#0F172A",
-  dark100: "#1E293B",
-  dark200: "#334155",
-  dark300: "#475569",
+  info: "#0EA5E9",
+
+  // Backgrounds
+  background: "#FFFFFF",
   surface: "#F8FAFC",
-  white: "#FFFFFF",
+  surfaceHover: "#F1F5F9",
+
+  // Text
+  text: "#0F172A",
+  textSecondary: "#64748B",
+  textMuted: "#94A3B8",
+  textInverse: "#FFFFFF",
+
+  // Borders
   border: "#E2E8F0",
+  borderLight: "#F1F5F9",
+
+  // White
+  white: "#FFFFFF",
 } as const;
 
 export const FONTS = {
@@ -40,13 +69,13 @@ export const BORDER_RADIUS = {
 
 export const TRUCK_STATUS_COLORS: Record<string, string> = {
   active: "#16A34A",
-  maintenance: "#CA8A04",
-  idle: "#475569",
+  maintenance: "#EAB308",
+  idle: "#64748B",
   retired: "#DC2626",
 } as const;
 
 export const TRIP_STATUS_COLORS: Record<string, string> = {
-  scheduled: "#1A56DB",
+  scheduled: "#2563EB",
   "in-progress": "#F97316",
   completed: "#16A34A",
   cancelled: "#DC2626",
@@ -55,6 +84,6 @@ export const TRIP_STATUS_COLORS: Record<string, string> = {
 export const DRIVER_STATUS_COLORS: Record<string, string> = {
   available: "#16A34A",
   "on-trip": "#F97316",
-  "off-duty": "#475569",
+  "off-duty": "#64748B",
   suspended: "#DC2626",
 } as const;

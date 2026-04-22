@@ -17,6 +17,13 @@ export default function RootLayout() {
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="add-trip"
+          options={{
+            presentation: "modal",
+            headerShown: false,
+          }}
+        />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

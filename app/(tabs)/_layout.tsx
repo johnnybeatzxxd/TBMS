@@ -1,9 +1,8 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { View, Text } from 'react-native';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
@@ -12,18 +11,43 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        tabBarInactiveTintColor: Colors[colorScheme ?? 'light'].tabIconDefault,
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: colorScheme === 'dark' ? '#0f172a' : '#fff',
-          borderTopWidth: 0,
+          backgroundColor: '#FFFFFF',
+          borderTopWidth: 1,
+          borderTopColor: '#E2E8F0',
           elevation: 0,
+          shadowOpacity: 0,
+          paddingTop: 4,
         },
       }}>
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <Ionicons size={24} name="home" color={color} />,
+          title: 'Trips',
+          tabBarIcon: ({ color }) => <MaterialCommunityIcons size={24} name="truck" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="expenses"
+        options={{
+          title: 'Expenses',
+          tabBarIcon: ({ color }) => <Ionicons size={24} name="receipt" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="fleet"
+        options={{
+          title: 'Fleet',
+          tabBarIcon: ({ color }) => <Ionicons size={24} name="car" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
+          tabBarIcon: ({ color }) => <Ionicons size={24} name="person" color={color} />,
         }}
       />
     </Tabs>
