@@ -16,24 +16,24 @@ const getPastDateStr = (daysAgo: number) => {
 // Dummy data for trips
 const MOCK_TRIPS = [
   // Today
-  { id: "1", date: getPastDateStr(0), loadingSite: "Port of Los Angeles", unloadingSite: "Amazon FC - Riverside", paymentMethod: "Dispatch" },
-  { id: "2", date: getPastDateStr(0), loadingSite: "Dallas Logistics Hub", unloadingSite: "Walmart Distribution - Houston", paymentMethod: "Cash", cashAmount: "850.00" },
-  { id: "3", date: getPastDateStr(0), loadingSite: "Chicago Railyard", unloadingSite: "FedEx Ground - Detroit", paymentMethod: "Dispatch" },
+  { id: "1", date: getPastDateStr(0), loadingSite: "Port of Los Angeles", unloadingSite: "Amazon FC - Riverside", paymentMethod: "Dispatch", volume: "10MCUBE" },
+  { id: "2", date: getPastDateStr(0), loadingSite: "Dallas Logistics Hub", unloadingSite: "Walmart Distribution - Houston", paymentMethod: "Cash", cashAmount: "850.00", volume: "16MCUBE" },
+  { id: "3", date: getPastDateStr(0), loadingSite: "Chicago Railyard", unloadingSite: "FedEx Ground - Detroit", paymentMethod: "Dispatch", volume: "16MCUBE" },
   
   // Yesterday
-  { id: "4", date: getPastDateStr(1), loadingSite: "Miami Port", unloadingSite: "Publix DC - Orlando", paymentMethod: "Cash", cashAmount: "450.00" },
-  { id: "5", date: getPastDateStr(1), loadingSite: "Newark Port Auth", unloadingSite: "Target DC - Philadelphia", paymentMethod: "Dispatch" },
-  { id: "6", date: getPastDateStr(1), loadingSite: "Seattle Terminal", unloadingSite: "Costco Depot - Tacoma", paymentMethod: "Cash", cashAmount: "300.00" },
+  { id: "4", date: getPastDateStr(1), loadingSite: "Miami Port", unloadingSite: "Publix DC - Orlando", paymentMethod: "Cash", cashAmount: "450.00", volume: "10MCUBE" },
+  { id: "5", date: getPastDateStr(1), loadingSite: "Newark Port Auth", unloadingSite: "Target DC - Philadelphia", paymentMethod: "Dispatch", volume: "16MCUBE" },
+  { id: "6", date: getPastDateStr(1), loadingSite: "Seattle Terminal", unloadingSite: "Costco Depot - Tacoma", paymentMethod: "Cash", cashAmount: "300.00", volume: "10MCUBE" },
 
   // 2 days ago
-  { id: "7", date: getPastDateStr(2), loadingSite: "Atlanta Hub", unloadingSite: "Home Depot DC - Savannah", paymentMethod: "Dispatch" },
-  { id: "8", date: getPastDateStr(2), loadingSite: "Houston Port", unloadingSite: "HEB Warehouse - Austin", paymentMethod: "Cash", cashAmount: "550.00" },
-  { id: "9", date: getPastDateStr(2), loadingSite: "Denver Railyard", unloadingSite: "Kroger DC - Salt Lake City", paymentMethod: "Dispatch" },
+  { id: "7", date: getPastDateStr(2), loadingSite: "Atlanta Hub", unloadingSite: "Home Depot DC - Savannah", paymentMethod: "Dispatch", volume: "16MCUBE" },
+  { id: "8", date: getPastDateStr(2), loadingSite: "Houston Port", unloadingSite: "HEB Warehouse - Austin", paymentMethod: "Cash", cashAmount: "550.00", volume: "10MCUBE" },
+  { id: "9", date: getPastDateStr(2), loadingSite: "Denver Railyard", unloadingSite: "Kroger DC - Salt Lake City", paymentMethod: "Dispatch", volume: "16MCUBE" },
   
   // 3+ days ago
-  { id: "10", date: getPastDateStr(3), loadingSite: "Oakland Port", unloadingSite: "Safeway DC - Tracy", paymentMethod: "Dispatch" },
-  { id: "11", date: getPastDateStr(4), loadingSite: "Kansas City Hub", unloadingSite: "Walmart DC - Bentonville", paymentMethod: "Cash", cashAmount: "900.00" },
-  { id: "12", date: getPastDateStr(5), loadingSite: "Memphis Terminal", unloadingSite: "AutoZone Hub - Little Rock", paymentMethod: "Dispatch" },
+  { id: "10", date: getPastDateStr(3), loadingSite: "Oakland Port", unloadingSite: "Safeway DC - Tracy", paymentMethod: "Dispatch", volume: "10MCUBE" },
+  { id: "11", date: getPastDateStr(4), loadingSite: "Kansas City Hub", unloadingSite: "Walmart DC - Bentonville", paymentMethod: "Cash", cashAmount: "900.00", volume: "16MCUBE" },
+  { id: "12", date: getPastDateStr(5), loadingSite: "Memphis Terminal", unloadingSite: "AutoZone Hub - Little Rock", paymentMethod: "Dispatch", volume: "10MCUBE" },
 ];
 
 const getRelativeDateLabel = (dateStr: string) => {
@@ -108,7 +108,7 @@ const TripCard = ({ trip }: { trip: typeof MOCK_TRIPS[0] }) => {
             <TouchableOpacity
               onPress={(e) => {
                 e.stopPropagation?.();
-                const qs = `?id=${trip.id}&date=${encodeURIComponent(trip.date)}&loadingSite=${encodeURIComponent(trip.loadingSite)}&unloadingSite=${encodeURIComponent(trip.unloadingSite)}&paymentMethod=${trip.paymentMethod.toLowerCase()}&cashAmount=${trip.cashAmount || ""}`;
+                const qs = `?id=${trip.id}&date=${encodeURIComponent(trip.date)}&loadingSite=${encodeURIComponent(trip.loadingSite)}&unloadingSite=${encodeURIComponent(trip.unloadingSite)}&paymentMethod=${trip.paymentMethod.toLowerCase()}&cashAmount=${trip.cashAmount || ""}&volume=${trip.volume}`;
                 router.push(`/add-trip${qs}` as any);
               }}
               className="w-8 h-8 bg-primary-50 rounded-lg items-center justify-center border border-primary-100"
@@ -144,6 +144,18 @@ const TripCard = ({ trip }: { trip: typeof MOCK_TRIPS[0] }) => {
                   <Ionicons name="calendar-outline" size={12} color="#64748B" />
                   <Text className="text-text-primary text-sm font-medium ml-1">
                     {trip.date}
+                  </Text>
+                </View>
+              </View>
+
+              <View>
+                <Text className="text-text-secondary text-[10px] font-semibold tracking-widest uppercase">
+                  Volume
+                </Text>
+                <View className="flex-row items-center mt-0.5">
+                  <Ionicons name="cube-outline" size={12} color="#64748B" />
+                  <Text className="text-text-primary text-sm font-medium ml-1">
+                    {trip.volume?.replace("MCUBE", " M³")}
                   </Text>
                 </View>
               </View>

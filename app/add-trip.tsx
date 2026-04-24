@@ -16,6 +16,7 @@ import DateTimePicker, {
 import { router, useLocalSearchParams } from "expo-router";
 
 type PaymentMethod = "dispatch" | "cash";
+type Volume = "10MCUBE" | "16MCUBE";
 
 export default function AddTripModal() {
   const params = useLocalSearchParams<{
@@ -25,6 +26,7 @@ export default function AddTripModal() {
     unloadingSite?: string;
     paymentMethod?: string;
     cashAmount?: string;
+    volume?: string;
   }>();
 
   const isEditMode = !!params.id;
@@ -46,6 +48,7 @@ export default function AddTripModal() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
     (params.paymentMethod as PaymentMethod) || "cash"
   );
+  const [volume, setVolume] = useState<Volume>((params.volume as Volume) || "10MCUBE");
   const [cashAmount, setCashAmount] = useState(params.cashAmount || "");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -127,6 +130,50 @@ export default function AddTripModal() {
             />
           )}
           <View className="h-4" />
+        </View>
+
+        {/* Volume Selection */}
+        <View className="bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
+          <View className="flex-row items-center gap-2 px-4 pt-4 pb-3 border-b border-border bg-primary-50">
+            <Ionicons name="cube-outline" size={16} color="#2563EB" />
+            <Text className="text-primary font-semibold text-xs tracking-widest uppercase">
+              Volume (M³)
+            </Text>
+          </View>
+          <View className="p-4">
+            <View className="flex-row bg-surface rounded-xl overflow-hidden border border-border">
+              <TouchableOpacity
+                onPress={() => setVolume("10MCUBE")}
+                className={`flex-1 py-3 items-center rounded-xl ${
+                  volume === "10MCUBE" ? "bg-primary-700" : "bg-transparent"
+                }`}
+                activeOpacity={0.8}
+              >
+                <Text
+                  className={`font-bold text-sm tracking-widest uppercase ${
+                    volume === "10MCUBE" ? "text-white" : "text-text-secondary"
+                  }`}
+                >
+                  10M³
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setVolume("16MCUBE")}
+                className={`flex-1 py-3 items-center rounded-xl ${
+                  volume === "16MCUBE" ? "bg-primary-700" : "bg-transparent"
+                }`}
+                activeOpacity={0.8}
+              >
+                <Text
+                  className={`font-bold text-sm tracking-widest uppercase ${
+                    volume === "16MCUBE" ? "text-white" : "text-text-secondary"
+                  }`}
+                >
+                  16M³
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
 
         {/* Route Details */}
