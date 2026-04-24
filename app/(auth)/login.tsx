@@ -4,10 +4,8 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -21,11 +19,11 @@ export default function LoginScreen() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const { login, isLoading, error, clearError } = useAuthStore();
+  const { setMockUser } = useAuthStore();
 
   const handleLogin = async () => {
-    // TEMPORARY BYPASS: Navigate to main app without validation
-    // We navigate to (tabs) directly as requested
+    // TEMPORARY BYPASS: set mock user with selected role then navigate
+    setMockUser(role);
     router.replace("/(tabs)");
   };
 
@@ -100,13 +98,6 @@ export default function LoginScreen() {
               </View>
             </View>
 
-            {/* Error */}
-            {error && (
-              <View className="bg-danger-50 border border-danger rounded-xl px-4 py-3 flex-row items-center gap-2">
-                <Ionicons name="alert-circle" size={16} color="#DC2626" />
-                <Text className="text-danger text-sm flex-1">{error}</Text>
-              </View>
-            )}
 
             {/* Username */}
             <View className="gap-1">
@@ -151,23 +142,15 @@ export default function LoginScreen() {
               </View>
             </View>
 
-            {/* Sign In Button */}
             <TouchableOpacity
               className="bg-primary rounded-xl py-4 items-center mt-1 flex-row justify-center gap-2"
               onPress={handleLogin}
-              disabled={isLoading}
               activeOpacity={0.85}
             >
-              {isLoading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <>
-                  <Ionicons name="log-in-outline" size={18} color="#fff" />
-                  <Text className="text-white font-bold text-base tracking-wide">
-                    Sign In as {role === "driver" ? "Driver" : "Manager"}
-                  </Text>
-                </>
-              )}
+              <Ionicons name="log-in-outline" size={18} color="#fff" />
+              <Text className="text-white font-bold text-base tracking-wide">
+                Sign In as {role === "driver" ? "Driver" : "Manager"}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>

@@ -1,20 +1,24 @@
 export interface Driver {
-  id: string;
-  userId: string;
+  id: string; // driver profile id
   name: string;
-  email: string;
-  phone: string;
-  licenseNumber: string;
-  licenseExpiry: string;
-  status: "available" | "on-trip" | "off-duty" | "suspended";
-  assignedTruckId?: string;
-  totalTrips: number;
-  totalKm: number;
-  avatar?: string;
-  createdAt: string;
+  truckId: string;
+  adminId: string;
+  accountId: string;
+  username?: string;
+  password?: string;
+  accountActive: boolean;
 }
 
-export interface DriverFilters {
-  status?: Driver["status"];
-  search?: string;
+export interface CreateDriverPayload {
+  name: string;
+  username?: string;
+  password?: string;
+  truckId: string;
+}
+
+export interface UpdateDriverPayload {
+  name?: string;
+  username?: string;
+  password?: string;
+  truckId: string;
 }

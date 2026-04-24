@@ -1,116 +1,105 @@
-/**
- * Mock Drivers Service
- * --------------------
- * Replace with real API calls when backend is ready.
- */
+import { Driver, CreateDriverPayload, UpdateDriverPayload } from "@/src/types";
 
-import { Driver, DriverFilters, PaginatedResponse } from "@/src/types";
+// Simulating database latency
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const MOCK_DELAY = 600;
-const delay = (ms: number) =>
-  new Promise((resolve) => setTimeout(resolve, ms));
-
-const MOCK_DRIVERS: Driver[] = [
+let MOCK_DRIVERS: Driver[] = [
   {
     id: "drv_001",
-    userId: "usr_002",
     name: "John Driver",
-    email: "driver@tbms.com",
-    phone: "+254700000001",
-    licenseNumber: "DL-2021-001",
-    licenseExpiry: "2027-06-30",
-    status: "on-trip",
-    assignedTruckId: "trk_001",
-    totalTrips: 142,
-    totalKm: 87400,
-    createdAt: "2024-01-10T08:00:00Z",
+    truckId: "trk_101",
+    adminId: "mock_mgr_001",
+    accountId: "acc_001",
+    username: "john_d",
+    password: "password123",
+    accountActive: true,
   },
   {
     id: "drv_002",
-    userId: "usr_004",
-    name: "Peter Kamau",
-    email: "peter@tbms.com",
-    phone: "+254700000002",
-    licenseNumber: "DL-2020-045",
-    licenseExpiry: "2026-12-31",
-    status: "on-trip",
-    assignedTruckId: "trk_004",
-    totalTrips: 230,
-    totalKm: 154200,
-    createdAt: "2022-08-01T08:00:00Z",
-  },
-  {
-    id: "drv_003",
-    userId: "usr_005",
-    name: "Mary Njeri",
-    email: "mary@tbms.com",
-    phone: "+254700000003",
-    licenseNumber: "DL-2023-112",
-    licenseExpiry: "2028-03-15",
-    status: "available",
-    totalTrips: 56,
-    totalKm: 32100,
-    createdAt: "2024-06-01T08:00:00Z",
+    name: "Alex Smooth",
+    truckId: "trk_102",
+    adminId: "mock_mgr_001",
+    accountId: "acc_002",
+    username: "alex_s",
+    password: "password123",
+    accountActive: false,
   },
 ];
 
 export const mockDriverService = {
-  async getAll(
-    filters?: DriverFilters
-  ): Promise<PaginatedResponse<Driver>> {
-    await delay(MOCK_DELAY);
-    let drivers = [...MOCK_DRIVERS];
-    if (filters?.status)
-      drivers = drivers.filter((d) => d.status === filters.status);
-    if (filters?.search) {
-      const q = filters.search.toLowerCase();
-      drivers = drivers.filter(
-        (d) =>
-          d.name.toLowerCase().includes(q) ||
-          d.email.toLowerCase().includes(q) ||
-          d.phone.includes(q)
-      );
+  // GET /admin/my-drivers
+  async getMyDrivers(): Promise<{ drivers: Driver[] }> {
+    await delay(600);
+    return { drivers: [...MOCK_DRIVERS] };
+  },
+
+  // POST /admin/driver-account/create-driver-account
+  async createDriver(payload: CreateDriverPayload): Promise<{ driver: Driver }> {
+    await delay(800);
+    
+    // Simulate unique username check (simple mock logic)
+    if (payload.username === "taken_user") {
+      throw new Error("username already taken");
     }
-    return {
-      data: drivers,
-      total: drivers.length,
-      page: 1,
-      limit: 20,
-      totalPages: 1,
-    };
-  },
 
-  async getById(id: string): Promise<Driver> {
-    await delay(MOCK_DELAY);
-    const driver = MOCK_DRIVERS.find((d) => d.id === id);
-    if (!driver) throw new Error("Driver not found");
-    return driver;
-  },
-
-  async create(
-    payload: Omit<Driver, "id" | "createdAt">
-  ): Promise<Driver> {
-    await delay(MOCK_DELAY);
     const newDriver: Driver = {
-      ...payload,
       id: `drv_${Date.now()}`,
-      createdAt: new Date().toISOString(),
+      name: payload.name,
+      truckId: payload.truckId,
+      adminId: "mock_mgr_001", // hardcoded mock admin
+      accountId: `acc_${Date.now()}`,
+      username: payload.username,
+      password: payload.password,
+      accountActive: true,
     };
+
     MOCK_DRIVERS.push(newDriver);
-    return newDriver;
+    return { driver: newDriver };
   },
 
-  async update(id: string, payload: Partial<Driver>): Promise<Driver> {
-    await delay(MOCK_DELAY);
-    const idx = MOCK_DRIVERS.findIndex((d) => d.id === id);
-    if (idx === -1) throw new Error("Driver not found");
-    MOCK_DRIVERS[idx] = { ...MOCK_DRIVERS[idx], ...payload };
-    return MOCK_DRIVERS[idx];
+  // PUT /admin/driver-account/deactivate-driver-account/:id
+  async deactivateDriver(id: string): Promise<{ message: string }> {
+    await delay(500);
+    const driver = MOCK_DRIVERS.find((d) => d.id === id);
+    if (!driver) throw new Error("driver account missing");
+    
+    driver.accountActive = false;
+    return { message: "driver account deactivated." };
   },
 
-  async delete(id: string): Promise<void> {
-    await delay(MOCK_DELAY);
+  // PUT /admin/driver-account/activate-driver-account/:id
+  async activateDriver(id: string): Promise<{ message: string }> {
+    await delay(500);
+    const driver = MOCK_DRIVERS.find((d) => d.id === id);
+    if (!driver) throw new Error("driver account missing");
+    
+    driver.accountActive = true;
+    return { message: "driver account activated." };
+  },
+
+  // DELETE /admin/driver-account/delete-driver-account/:id
+  async deleteDriver(id: string): Promise<{ message: string }> {
+    await delay(700);
     const idx = MOCK_DRIVERS.findIndex((d) => d.id === id);
-    if (idx !== -1) MOCK_DRIVERS.splice(idx, 1);
+    if (idx === -1) throw new Error("driver account missing");
+    
+    const name = MOCK_DRIVERS[idx].name;
+    MOCK_DRIVERS.splice(idx, 1);
+    return { message: `driver account deleted: ${name}` };
+  },
+
+  // POST /admin/driver-account/update-driver-profile/:id
+  async updateDriverProfile(id: string, payload: UpdateDriverPayload): Promise<{ message: string }> {
+    await delay(600);
+    const driver = MOCK_DRIVERS.find((d) => d.id === id);
+    if (!driver) throw new Error("driver profile missing");
+    
+    if (payload.name) driver.name = payload.name;
+    if (payload.truckId) driver.truckId = payload.truckId;
+    if (payload.username) driver.username = payload.username;
+    if (payload.password) driver.password = payload.password;
+    // Note: In a real system username/password might have separate security endpoints
+    // but for mock purposes we update them here.
+    return { message: "profile updated" };
   },
 };

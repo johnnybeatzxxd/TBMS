@@ -37,10 +37,10 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="fleet"
+        name="manage"
         options={{
-          title: 'Fleet',
-          tabBarIcon: ({ color }) => <Ionicons size={24} name="car" color={color} />,
+          title: 'Manage',
+          tabBarIcon: ({ color }) => <Ionicons size={24} name="settings" color={color} />,
         }}
       />
       <Tabs.Screen

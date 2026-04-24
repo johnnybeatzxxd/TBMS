@@ -21,6 +21,8 @@ interface AuthStore {
   logout: () => Promise<void>;
   restoreSession: () => Promise<void>;
   clearError: () => void;
+  /** DEV ONLY: set a mock user directly (bypasses API) */
+  setMockUser: (role: "manager" | "driver") => void;
 }
 
 export const useAuthStore = create<AuthStore>((set) => ({
@@ -41,6 +43,17 @@ export const useAuthStore = create<AuthStore>((set) => ({
     } catch (err: any) {
       set({ error: err.message || "Login failed", isLoading: false });
     }
+  },
+
+  setMockUser: (role) => {
+    const mockUser: User = {
+      id: role === "manager" ? "mock_mgr_001" : "mock_drv_001",
+      name: role === "manager" ? "Mock Manager" : "Mock Driver",
+      username: role === "manager" ? "manager" : "driver1",
+      email: role === "manager" ? "manager@tbms.com" : "driver@tbms.com",
+      role,
+    };
+    set({ user: mockUser, isAuthenticated: true });
   },
 
   logout: async () => {

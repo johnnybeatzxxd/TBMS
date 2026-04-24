@@ -18,6 +18,14 @@ export default function RootLayout() {
       <Stack>
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="drivers" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="manage-driver"
+          options={{
+            presentation: "modal",
+            headerShown: false,
+          }}
+        />
         <Stack.Screen
           name="add-trip"
           options={{

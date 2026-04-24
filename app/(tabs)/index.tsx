@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { View, Text, TouchableOpacity, ScrollView } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, Modal } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { useAuthStore } from "@/src/store";
 
 const getPastDateStr = (daysAgo: number) => {
   const d = new Date();
@@ -34,6 +35,12 @@ const MOCK_TRIPS = [
   { id: "10", date: getPastDateStr(3), loadingSite: "Oakland Port", unloadingSite: "Safeway DC - Tracy", paymentMethod: "Dispatch", volume: "10MCUBE" },
   { id: "11", date: getPastDateStr(4), loadingSite: "Kansas City Hub", unloadingSite: "Walmart DC - Bentonville", paymentMethod: "Cash", cashAmount: "900.00", volume: "16MCUBE" },
   { id: "12", date: getPastDateStr(5), loadingSite: "Memphis Terminal", unloadingSite: "AutoZone Hub - Little Rock", paymentMethod: "Dispatch", volume: "10MCUBE" },
+];
+
+const MOCK_DRIVERS = [
+  { id: "all", name: "All Drivers" },
+  { id: "drv_001", name: "Driver 1" },
+  { id: "drv_002", name: "Driver 2" },
 ];
 
 const getRelativeDateLabel = (dateStr: string) => {
@@ -201,12 +208,66 @@ const TripCard = ({ trip }: { trip: typeof MOCK_TRIPS[0] }) => {
 };
 
 export default function TripsListScreen() {
+  const { user } = useAuthStore();
+  const isManager = user?.role === "manager";
+  const [showDriverMenu, setShowDriverMenu] = useState(false);
+  const [selectedDriver, setSelectedDriver] = useState(MOCK_DRIVERS[0]);
+
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
       {/* Top Header */}
-      <View className="flex-row items-center px-5 pt-2 pb-3 border-b border-border shadow-sm z-10 bg-white">
-        <MaterialCommunityIcons name="truck" size={26} color="#2563EB" className="mr-2" />
-        <Text className="text-text-primary font-bold text-xl ml-2 tracking-wide">Trips</Text>
+      <View className="flex-row items-center justify-between px-5 pt-2 pb-3 border-b border-border shadow-sm z-10 bg-white">
+        <View className="flex-row items-center">
+          <MaterialCommunityIcons name="truck" size={26} color="#2563EB" />
+          <Text className="text-text-primary font-bold text-xl ml-2 tracking-wide">Trips</Text>
+        </View>
+        {isManager && (
+          <View className="relative">
+            <TouchableOpacity
+              onPress={() => setShowDriverMenu((v) => !v)}
+              className="flex-row items-center gap-1.5 bg-primary-50 border border-primary-100 rounded-xl px-3 py-2"
+              activeOpacity={0.8}
+            >
+              <Ionicons name="person" size={14} color="#2563EB" />
+              <Text className="text-primary font-semibold text-sm">{selectedDriver.name}</Text>
+              <Ionicons name={showDriverMenu ? "chevron-up" : "chevron-down"} size={14} color="#2563EB" />
+            </TouchableOpacity>
+
+            {showDriverMenu && (
+              <View className="absolute right-0 top-10 bg-white rounded-2xl border border-border shadow-lg z-50 overflow-hidden min-w-[140px]">
+                {MOCK_DRIVERS.map((driver) => (
+                  <TouchableOpacity
+                    key={driver.id}
+                    onPress={() => {
+                      setSelectedDriver(driver);
+                      setShowDriverMenu(false);
+                    }}
+                    className={`px-4 py-3 flex-row items-center gap-2 ${
+                      selectedDriver.id === driver.id ? "bg-primary-50" : "bg-white"
+                    }`}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name="person-circle-outline"
+                      size={16}
+                      color={selectedDriver.id === driver.id ? "#2563EB" : "#64748B"}
+                    />
+                    <Text
+                      className={`text-sm font-medium ${
+                        selectedDriver.id === driver.id ? "text-primary font-bold" : "text-text-primary"
+                      }`}
+                    >
+                      {driver.name}
+                    </Text>
+                    {selectedDriver.id === driver.id && (
+                      <Ionicons name="checkmark" size={14} color="#2563EB" />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
       </View>
 
       <ScrollView
