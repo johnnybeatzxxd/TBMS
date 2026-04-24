@@ -76,6 +76,8 @@ export default function ManageScreen() {
             onPress={() => {
               if (section.id === "drivers") {
                 router.push("/drivers");
+              } else if (section.id === "trucks") {
+                router.push("/trucks" as any);
               }
             }}
           >

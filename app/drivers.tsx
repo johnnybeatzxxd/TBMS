@@ -22,13 +22,15 @@ export default function DriversListScreen() {
     try {
       const [driversRes, trucksRes] = await Promise.all([
         mockDriverService.getMyDrivers(),
-        mockTruckService.getAll(),
+        mockTruckService.getMyTrucks(),
       ]);
       setDrivers(driversRes.drivers);
 
       // Create a truck map for easy lookups
       const truckMap: Record<string, Truck> = {};
-      trucksRes.data.forEach((t) => {
+      
+      const truckList = "trucks" in trucksRes ? trucksRes.trucks : [];
+      truckList.forEach((t) => {
         truckMap[t.id] = t;
       });
       setTrucks(truckMap);
@@ -97,7 +99,7 @@ export default function DriversListScreen() {
         const q = searchQuery.toLowerCase();
         const truck = trucks[d.truckId];
         const matchesName = d.name.toLowerCase().includes(q);
-        const matchesTruck = truck?.plateNumber.toLowerCase().includes(q) || false;
+        const matchesTruck = truck?.plateNumber.toLowerCase().includes(q) || truck?.vinNumber?.toLowerCase().includes(q) || false;
         if (!matchesName && !matchesTruck) return false;
       }
       return true;
@@ -199,7 +201,7 @@ export default function DriversListScreen() {
                           <Ionicons name="car-outline" size={12} color="#64748B" />
                           <Text className="text-text-secondary text-xs ml-1 flex-1" numberOfLines={1}>
                             {assignedTruck 
-                              ? `${assignedTruck.plateNumber} - ${assignedTruck.model}`
+                              ? `${assignedTruck.plateNumber}${assignedTruck.vinNumber ? ` - ${assignedTruck.vinNumber}` : ""}`
                               : "No truck assigned"}
                           </Text>
                         </View>

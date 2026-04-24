@@ -19,8 +19,16 @@ export default function RootLayout() {
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="drivers" options={{ headerShown: false }} />
+        <Stack.Screen name="trucks" options={{ headerShown: false }} />
         <Stack.Screen
           name="manage-driver"
+          options={{
+            presentation: "modal",
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="add-truck"
           options={{
             presentation: "modal",
             headerShown: false,

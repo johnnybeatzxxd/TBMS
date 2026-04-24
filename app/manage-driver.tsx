@@ -34,11 +34,12 @@ export default function ManageDriverModal() {
 
   // Fetch trucks for dropdown
   useState(() => {
-    mockTruckService.getAll().then((res) => {
-      setTrucks(res.data);
+    mockTruckService.getMyTrucks().then((res) => {
+      const truckList = "trucks" in res ? res.trucks : [];
+      setTrucks(truckList);
       if (isEdit && initialTruckId) {
-        const found = res.data.find(t => t.id === initialTruckId);
-        if (found) setTruckName(`${found.plateNumber} - ${found.model}`);
+        const found = truckList.find(t => t.id === initialTruckId);
+        if (found) setTruckName(`${found.plateNumber}${found.vinNumber ? ` - ${found.vinNumber}` : ""}`);
       }
     });
   });
@@ -147,7 +148,7 @@ export default function ManageDriverModal() {
                           key={truck.id}
                           onPress={() => {
                             setTruckId(truck.id);
-                            setTruckName(`${truck.plateNumber} - ${truck.model}`);
+                            setTruckName(`${truck.plateNumber}${truck.vinNumber ? ` - ${truck.vinNumber}` : ""}`);
                             setShowTruckMenu(false);
                           }}
                           className={`flex-row items-center px-4 py-3 border-b border-border-light ${
@@ -155,7 +156,7 @@ export default function ManageDriverModal() {
                           }`}
                         >
                           <Text className={`flex-1 text-sm ${truckId === truck.id ? "text-primary font-semibold" : "text-text-primary"}`}>
-                            {truck.plateNumber} - {truck.model}
+                            {truck.plateNumber}{truck.vinNumber ? ` - ${truck.vinNumber}` : ""}
                           </Text>
                           {truckId === truck.id && (
                             <Ionicons name="checkmark-circle" size={16} color="#2563EB" />

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, TouchableOpacity, ScrollView, Modal } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, Modal, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -63,20 +63,22 @@ const getRelativeDateLabel = (dateStr: string) => {
   return `${weekdays[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}`;
 };
 
-const groupedTrips = MOCK_TRIPS.reduce((acc, trip) => {
-  if (!acc[trip.date]) acc[trip.date] = [];
-  acc[trip.date].push(trip);
-  return acc;
-}, {} as Record<string, typeof MOCK_TRIPS>);
+// We will handle grouping dynamically inside the component instead of globally
+const getGroupedTrips = (trips: typeof MOCK_TRIPS) => {
+  const grouped = trips.reduce((acc, trip) => {
+    if (!acc[trip.date]) acc[trip.date] = [];
+    acc[trip.date].push(trip);
+    return acc;
+  }, {} as Record<string, typeof MOCK_TRIPS>);
 
-// Convert to array for rendering
-const tripGroups = Object.entries(groupedTrips).map(([date, trips]) => ({
-  dateStr: date,
-  title: getRelativeDateLabel(date),
-  data: trips,
-}));
+  return Object.entries(grouped).map(([date, t]) => ({
+    dateStr: date,
+    title: getRelativeDateLabel(date),
+    data: t,
+  }));
+};
 
-const TripCard = ({ trip }: { trip: typeof MOCK_TRIPS[0] }) => {
+const TripCard = ({ trip, onDelete }: { trip: typeof MOCK_TRIPS[0], onDelete: (id: string) => void }) => {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -110,8 +112,22 @@ const TripCard = ({ trip }: { trip: typeof MOCK_TRIPS[0] }) => {
       {/* EXPANDED CONTENT: Date, Loading Site, Payment Method */}
       {expanded && (
         <View className="relative px-4 pb-4 bg-surface/50 border-t border-border pt-3 gap-3">
-          {/* Edit icon - top right */}
-          <View className="absolute top-3 right-4 z-10">
+          {/* Edit & Delete Action icons - top right */}
+          <View className="absolute top-3 right-4 z-10 flex-row gap-2">
+            <TouchableOpacity
+              onPress={(e) => {
+                e.stopPropagation?.();
+                Alert.alert("Delete Trip", "Are you sure you want to delete this trip?", [
+                  { text: "Cancel", style: "cancel" },
+                  { text: "Delete", style: "destructive", onPress: () => onDelete(trip.id) },
+                ]);
+              }}
+              className="w-8 h-8 bg-danger-50 rounded-lg items-center justify-center border border-danger-100"
+              activeOpacity={0.7}
+            >
+              <Ionicons name="trash-outline" size={14} color="#DC2626" />
+            </TouchableOpacity>
+
             <TouchableOpacity
               onPress={(e) => {
                 e.stopPropagation?.();
@@ -213,6 +229,15 @@ export default function TripsListScreen() {
   const [showDriverMenu, setShowDriverMenu] = useState(false);
   const [selectedDriver, setSelectedDriver] = useState(MOCK_DRIVERS[0]);
 
+  // Trip State
+  const [trips, setTrips] = useState(MOCK_TRIPS);
+  const tripGroups = getGroupedTrips(trips);
+
+  const handleDelete = (id: string) => {
+    // We update local state to reflect deletion
+    setTrips((current: typeof MOCK_TRIPS) => current.filter((t) => t.id !== id));
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
       {/* Top Header */}
@@ -281,7 +306,7 @@ export default function TripsListScreen() {
               {group.title}
             </Text>
             {group.data.map((trip) => (
-              <TripCard key={trip.id} trip={trip} />
+              <TripCard key={trip.id} trip={trip} onDelete={handleDelete} />
             ))}
           </View>
         ))}
