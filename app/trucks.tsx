@@ -18,7 +18,7 @@ export default function TrucksListScreen() {
       if ("message" in res && !("trucks" in res)) {
         setTrucks([]);
       } else if ("trucks" in res) {
-        setTrucks(res.trucks);
+        setTrucks(res.trucks as Truck[]);
       }
     } catch (error: any) {
       Alert.alert("Error", error.message || "Failed to load trucks");

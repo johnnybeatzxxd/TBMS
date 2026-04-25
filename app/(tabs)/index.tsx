@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { View, Text, TouchableOpacity, ScrollView, Modal, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -17,31 +17,30 @@ const getPastDateStr = (daysAgo: number) => {
 // Dummy data for trips
 const MOCK_TRIPS = [
   // Today
-  { id: "1", date: getPastDateStr(0), loadingSite: "Port of Los Angeles", unloadingSite: "Amazon FC - Riverside", paymentMethod: "Dispatch", volume: "10MCUBE" },
-  { id: "2", date: getPastDateStr(0), loadingSite: "Dallas Logistics Hub", unloadingSite: "Walmart Distribution - Houston", paymentMethod: "Cash", cashAmount: "850.00", volume: "16MCUBE" },
-  { id: "3", date: getPastDateStr(0), loadingSite: "Chicago Railyard", unloadingSite: "FedEx Ground - Detroit", paymentMethod: "Dispatch", volume: "16MCUBE" },
+  { id: "1", date: getPastDateStr(0), loadingSite: "4kilo", unloadingSite: "Moria", paymentMethod: "Dispatch", volume: "10MCUBE" },
+  { id: "2", date: getPastDateStr(0), loadingSite: "Bole", unloadingSite: "Dukem", paymentMethod: "Cash", cashAmount: "850.00", volume: "16MCUBE" },
+  { id: "3", date: getPastDateStr(0), loadingSite: "Bole airport", unloadingSite: "Kality", paymentMethod: "Dispatch", volume: "16MCUBE" },
   
   // Yesterday
-  { id: "4", date: getPastDateStr(1), loadingSite: "Miami Port", unloadingSite: "Publix DC - Orlando", paymentMethod: "Cash", cashAmount: "450.00", volume: "10MCUBE" },
-  { id: "5", date: getPastDateStr(1), loadingSite: "Newark Port Auth", unloadingSite: "Target DC - Philadelphia", paymentMethod: "Dispatch", volume: "16MCUBE" },
-  { id: "6", date: getPastDateStr(1), loadingSite: "Seattle Terminal", unloadingSite: "Costco Depot - Tacoma", paymentMethod: "Cash", cashAmount: "300.00", volume: "10MCUBE" },
+  { id: "4", date: getPastDateStr(1), loadingSite: "Entoto", unloadingSite: "Sendafa", paymentMethod: "Cash", cashAmount: "450.00", volume: "10MCUBE" },
+  { id: "5", date: getPastDateStr(1), loadingSite: "Bole", unloadingSite: "Moria", paymentMethod: "Dispatch", volume: "16MCUBE" },
+  { id: "6", date: getPastDateStr(1), loadingSite: "4kilo", unloadingSite: "Dukem", paymentMethod: "Cash", cashAmount: "300.00", volume: "10MCUBE" },
 
   // 2 days ago
-  { id: "7", date: getPastDateStr(2), loadingSite: "Atlanta Hub", unloadingSite: "Home Depot DC - Savannah", paymentMethod: "Dispatch", volume: "16MCUBE" },
-  { id: "8", date: getPastDateStr(2), loadingSite: "Houston Port", unloadingSite: "HEB Warehouse - Austin", paymentMethod: "Cash", cashAmount: "550.00", volume: "10MCUBE" },
-  { id: "9", date: getPastDateStr(2), loadingSite: "Denver Railyard", unloadingSite: "Kroger DC - Salt Lake City", paymentMethod: "Dispatch", volume: "16MCUBE" },
+  { id: "7", date: getPastDateStr(2), loadingSite: "Entoto", unloadingSite: "Kality", paymentMethod: "Dispatch", volume: "16MCUBE" },
+  { id: "8", date: getPastDateStr(2), loadingSite: "Bole airport", unloadingSite: "Sendafa", paymentMethod: "Cash", cashAmount: "550.00", volume: "10MCUBE" },
+  { id: "9", date: getPastDateStr(2), loadingSite: "4kilo", unloadingSite: "Moria", paymentMethod: "Dispatch", volume: "16MCUBE" },
   
   // 3+ days ago
-  { id: "10", date: getPastDateStr(3), loadingSite: "Oakland Port", unloadingSite: "Safeway DC - Tracy", paymentMethod: "Dispatch", volume: "10MCUBE" },
-  { id: "11", date: getPastDateStr(4), loadingSite: "Kansas City Hub", unloadingSite: "Walmart DC - Bentonville", paymentMethod: "Cash", cashAmount: "900.00", volume: "16MCUBE" },
-  { id: "12", date: getPastDateStr(5), loadingSite: "Memphis Terminal", unloadingSite: "AutoZone Hub - Little Rock", paymentMethod: "Dispatch", volume: "10MCUBE" },
+  { id: "10", date: getPastDateStr(3), loadingSite: "Bole", unloadingSite: "Dukem", paymentMethod: "Dispatch", volume: "10MCUBE" },
+  { id: "11", date: getPastDateStr(4), loadingSite: "Entoto", unloadingSite: "Kality", paymentMethod: "Cash", cashAmount: "900.00", volume: "16MCUBE" },
+  { id: "12", date: getPastDateStr(5), loadingSite: "Bole airport", unloadingSite: "Sendafa", paymentMethod: "Dispatch", volume: "10MCUBE" },
 ];
 
-const MOCK_DRIVERS = [
-  { id: "all", name: "All Drivers" },
-  { id: "drv_001", name: "Driver 1" },
-  { id: "drv_002", name: "Driver 2" },
-];
+import { mockTruckService } from "@/src/api/mock/trucks.mock";
+import { Truck } from "@/src/types";
+
+const ALL_TRUCKS_MOCK: Truck = { id: "all", plateNumber: "All Trucks", adminId: "" };
 
 const getRelativeDateLabel = (dateStr: string) => {
   const parts = dateStr.split("/");
@@ -226,12 +225,23 @@ const TripCard = ({ trip, onDelete }: { trip: typeof MOCK_TRIPS[0], onDelete: (i
 export default function TripsListScreen() {
   const { user } = useAuthStore();
   const isManager = user?.role === "manager";
-  const [showDriverMenu, setShowDriverMenu] = useState(false);
-  const [selectedDriver, setSelectedDriver] = useState(MOCK_DRIVERS[0]);
+  const [showTruckMenu, setShowTruckMenu] = useState(false);
+  const [trucks, setTrucks] = useState<Truck[]>([ALL_TRUCKS_MOCK]);
+  const [selectedTruck, setSelectedTruck] = useState<Truck>(ALL_TRUCKS_MOCK);
 
   // Trip State
   const [trips, setTrips] = useState(MOCK_TRIPS);
   const tripGroups = getGroupedTrips(trips);
+
+  useEffect(() => {
+    if (isManager) {
+      mockTruckService.getMyTrucks().then((res) => {
+        if ("trucks" in res) {
+          setTrucks([ALL_TRUCKS_MOCK, ...res.trucks]);
+        }
+      });
+    }
+  }, [isManager]);
 
   const handleDelete = (id: string) => {
     // We update local state to reflect deletion
@@ -249,42 +259,42 @@ export default function TripsListScreen() {
         {isManager && (
           <View className="relative">
             <TouchableOpacity
-              onPress={() => setShowDriverMenu((v) => !v)}
+              onPress={() => setShowTruckMenu((v) => !v)}
               className="flex-row items-center gap-1.5 bg-primary-50 border border-primary-100 rounded-xl px-3 py-2"
               activeOpacity={0.8}
             >
-              <Ionicons name="person" size={14} color="#2563EB" />
-              <Text className="text-primary font-semibold text-sm">{selectedDriver.name}</Text>
-              <Ionicons name={showDriverMenu ? "chevron-up" : "chevron-down"} size={14} color="#2563EB" />
+              <Ionicons name="car-sport" size={14} color="#2563EB" />
+              <Text className="text-primary font-semibold text-sm">{selectedTruck.plateNumber}</Text>
+              <Ionicons name={showTruckMenu ? "chevron-up" : "chevron-down"} size={14} color="#2563EB" />
             </TouchableOpacity>
 
-            {showDriverMenu && (
-              <View className="absolute right-0 top-10 bg-white rounded-2xl border border-border shadow-lg z-50 overflow-hidden min-w-[140px]">
-                {MOCK_DRIVERS.map((driver) => (
+            {showTruckMenu && (
+              <View className="absolute right-0 top-10 bg-white rounded-2xl border border-border shadow-lg z-50 overflow-hidden min-w-[160px]">
+                {trucks.map((truck) => (
                   <TouchableOpacity
-                    key={driver.id}
+                    key={truck.id}
                     onPress={() => {
-                      setSelectedDriver(driver);
-                      setShowDriverMenu(false);
+                      setSelectedTruck(truck);
+                      setShowTruckMenu(false);
                     }}
                     className={`px-4 py-3 flex-row items-center gap-2 ${
-                      selectedDriver.id === driver.id ? "bg-primary-50" : "bg-white"
+                      selectedTruck.id === truck.id ? "bg-primary-50" : "bg-white"
                     }`}
                     activeOpacity={0.7}
                   >
                     <Ionicons
-                      name="person-circle-outline"
+                      name={truck.id === "all" ? "apps-outline" : "car-sport-outline"}
                       size={16}
-                      color={selectedDriver.id === driver.id ? "#2563EB" : "#64748B"}
+                      color={selectedTruck.id === truck.id ? "#2563EB" : "#64748B"}
                     />
                     <Text
                       className={`text-sm font-medium ${
-                        selectedDriver.id === driver.id ? "text-primary font-bold" : "text-text-primary"
+                        selectedTruck.id === truck.id ? "text-primary font-bold" : "text-text-primary"
                       }`}
                     >
-                      {driver.name}
+                      {truck.plateNumber}
                     </Text>
-                    {selectedDriver.id === driver.id && (
+                    {selectedTruck.id === truck.id && (
                       <Ionicons name="checkmark" size={14} color="#2563EB" />
                     )}
                   </TouchableOpacity>

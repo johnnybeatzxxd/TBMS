@@ -37,6 +37,13 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="transfers"
+        options={{
+          title: 'Transfers',
+          tabBarIcon: ({ color }) => <Ionicons size={24} name="swap-horizontal" color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="manage"
         options={{
           title: 'Manage',

@@ -35,6 +35,20 @@ export default function RootLayout() {
           }}
         />
         <Stack.Screen
+          name="add-expense"
+          options={{
+            presentation: "modal",
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="add-transfer"
+          options={{
+            presentation: "modal",
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
           name="add-trip"
           options={{
             presentation: "modal",
