@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert, SectionList } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -45,10 +45,16 @@ const ExpenseCard = ({ exp }: { exp: Expense }) => {
     iconBorder = "border-sky-100";
   } else if (expenseTitle.includes("Maintenance")) {
     iconName = "build-outline";
-    iconColor = "#F59E0B";
-    iconBg = "bg-amber-50";
-    iconBorder = "border-amber-100";
+    iconColor = "#1E3A8A"; // Dark blue
+    iconBg = "bg-blue-50"; // Light blue background
+    iconBorder = "border-blue-100";
+  } else if (expenseTitle.includes("Road Expense")) {
+    iconName = "car-outline"; // Assuming car-outline fits, or "map-outline"
+    iconColor = "#10B981"; // Emerald green
+    iconBg = "bg-emerald-50";
+    iconBorder = "border-emerald-100";
   }
+
 
   return (
     <TouchableOpacity
@@ -97,44 +103,93 @@ const ExpenseCard = ({ exp }: { exp: Expense }) => {
 
 export default function ExpensesScreen() {
   const { user } = useAuthStore();
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  // Note: Only DRIVERS should technically add expenses according to API docs,
-  // but we can allow Managers to view them.
-  const isDriver = user?.role === "driver";
-
-  const fetchExpenses = async () => {
-    setLoading(true);
-    try {
-      const res = await mockExpenseService.getMyExpenses();
-      setExpenses(res.expenses);
-    } catch (error: any) {
-      Alert.alert("Error", error.message || "Failed to load expenses");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchExpenses();
-  }, []);
+  const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
+  const [displayedExpenses, setDisplayedExpenses] = useState<Expense[]>([]);
+  const [loadingInitial, setLoadingInitial] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
 
   // Date Filter State
   const [filterPreset, setFilterPreset] = useState<DateFilterPreset>("all");
   const [customFrom, setCustomFrom] = useState<Date | null>(null);
   const [customTo, setCustomTo] = useState<Date | null>(null);
 
-  const filteredExpenses = useMemo(() => 
-    expenses.filter(exp => passesDateFilter(exp.date, filterPreset, customFrom, customTo)),
-    [expenses, filterPreset, customFrom, customTo]
+  const isDriver = user?.role === "driver";
+  const isAdminOrManager = user?.role === "admin" || user?.role === "manager";
+
+  const loadInitialData = async () => {
+    setLoadingInitial(true);
+    setPage(1);
+    try {
+      const res = await mockExpenseService.getMyExpenses();
+      // Apply filters first
+      const sorted = [...res.expenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      setAllExpenses(sorted);
+      
+      // Simulate pagination slice
+      const limit = 6;
+      const initialSlice = sorted.slice(0, limit);
+      setDisplayedExpenses(initialSlice);
+      setHasMore(sorted.length > limit);
+    } catch (error: any) {
+      Alert.alert("Error", error.message || "Failed to load expenses");
+    } finally {
+      setLoadingInitial(false);
+    }
+  };
+
+  const handleLoadMore = async () => {
+    if (loadingMore || !hasMore) return;
+
+    setLoadingMore(true);
+    // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    const nextPage = page + 1;
+    const limit = 6;
+    const start = (nextPage - 1) * limit;
+    const end = start + limit;
+    
+    const nextSlice = filteredDataFull.slice(start, end);
+    
+    if (nextSlice.length > 0) {
+      setDisplayedExpenses(prev => {
+        const newItems = nextSlice.filter(item => !prev.some(p => p.id === item.id));
+        return [...prev, ...newItems];
+      });
+      setPage(nextPage);
+      setHasMore(filteredDataFull.length > end);
+    } else {
+      setHasMore(false);
+    }
+    setLoadingMore(false);
+  };
+
+  useEffect(() => {
+    loadInitialData();
+  }, []);
+
+  // When filters change, we reset pagination and re-apply filters to the full set
+  const filteredDataFull = useMemo(() => 
+    allExpenses.filter(exp => passesDateFilter(exp.date, filterPreset, customFrom, customTo)),
+    [allExpenses, filterPreset, customFrom, customTo]
   );
 
-  const groupedExpenses = filteredExpenses.reduce((acc, exp) => {
+  useEffect(() => {
+    // Sync displayed with filtered on first page
+    const limit = 6;
+    const firstSlice = filteredDataFull.slice(0, limit);
+    setDisplayedExpenses(firstSlice);
+    setPage(1);
+    setHasMore(filteredDataFull.length > limit);
+  }, [filteredDataFull]);
+
+  const groupedExpenses = displayedExpenses.reduce((acc, exp) => {
     if (!acc[exp.date]) acc[exp.date] = [];
     acc[exp.date].push(exp);
     return acc;
-  }, {} as Record<string, typeof expenses>);
+  }, {} as Record<string, typeof displayedExpenses>);
 
   const expenseGroups = Object.entries(groupedExpenses).map(([date, exps]) => ({
     dateStr: date,
@@ -157,7 +212,14 @@ export default function ExpensesScreen() {
       {/* Date Filter */}
       <DateFilterBar
         activePreset={filterPreset}
-        onPresetChange={setFilterPreset}
+        onPresetChange={(preset) => {
+          setFilterPreset(preset);
+          if (preset === "all") {
+            setCustomFrom(null);
+            setCustomTo(null);
+            loadInitialData(); // Fresh fetch
+          }
+        }}
         customFrom={customFrom}
         customTo={customTo}
         onCustomFromChange={setCustomFrom}
@@ -165,40 +227,54 @@ export default function ExpensesScreen() {
       />
 
       {/* Content */}
-      {loading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#0EA5E9" />
-        </View>
-      ) : (
-        <ScrollView
-          className="flex-1"
-          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
-          showsVerticalScrollIndicator={false}
-        >
-          {expenseGroups.length === 0 ? (
-            <View className="items-center justify-center py-20 opacity-60">
+      <SectionList
+        sections={expenseGroups}
+        keyExtractor={(item, index) => item.id + index}
+        renderSectionHeader={({ section: { title } }) => (
+          <Text className="text-text-secondary font-bold text-xs tracking-widest uppercase ml-5 mb-2 mt-6">
+            {title}
+          </Text>
+        )}
+        renderItem={({ item }) => (
+          <View className="px-4">
+            <ExpenseCard exp={item} />
+          </View>
+        )}
+        contentContainerStyle={{ paddingBottom: 100 }}
+        showsVerticalScrollIndicator={false}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          loadingMore ? (
+            <View className="py-6 items-center flex-row justify-center gap-2">
+              <ActivityIndicator size="small" color="#0EA5E9" />
+              <Text className="text-text-secondary text-sm font-medium tracking-wide">Loading more expenses...</Text>
+            </View>
+          ) : !hasMore && displayedExpenses.length > 0 ? (
+            <View className="py-6 items-center">
+              <Text className="text-text-secondary/50 text-xs tracking-wide">No more expenses to show</Text>
+            </View>
+          ) : null
+        }
+        ListEmptyComponent={
+          !loadingInitial ? (
+            <View className="py-20 items-center justify-center opacity-60">
               <Ionicons name="wallet-outline" size={64} color="#94A3B8" />
               <Text className="text-text-secondary text-base mt-4 text-center">
-                No expenses logged yet.
+                No expenses found matching filters.
               </Text>
             </View>
           ) : (
-            expenseGroups.map((group) => (
-              <View key={group.dateStr} className="mb-6">
-                <Text className="text-text-secondary font-bold text-xs tracking-widest uppercase ml-1 mb-2">
-                  {group.title}
-                </Text>
-                {group.data.map((exp) => (
-                  <ExpenseCard key={exp.id} exp={exp} />
-                ))}
-              </View>
-            ))
-          )}
-        </ScrollView>
-      )}
+            <View className="py-20 items-center justify-center gap-3">
+               <ActivityIndicator size="large" color="#0EA5E9" />
+               <Text className="text-text-secondary tracking-widest uppercase text-xs font-bold">Loading expenses...</Text>
+            </View>
+          )
+        }
+      />
 
-      {/* FAB - Add Expense - Only for Drivers */}
-      {isDriver && (
+      {/* FAB - Add Expense - Available for all relevant roles */}
+      {(isDriver || isAdminOrManager) && (
         <TouchableOpacity
           onPress={() => router.push("/add-expense")}
           activeOpacity={0.8}

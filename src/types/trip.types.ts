@@ -11,9 +11,12 @@ export interface Trip {
   distanceKm: number;
   cargoDescription?: string;
   cargoWeightTons?: number;
+  roadExpense?: number;
   notes?: string;
+  claimed?: boolean;
   createdAt: string;
 }
+
 
 export interface TripFilters {
   status?: Trip["status"];

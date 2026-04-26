@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, TouchableOpacity, Platform } from "react-native";
+import { View, Text, TouchableOpacity, Platform, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
@@ -12,6 +12,7 @@ interface DateFilterBarProps {
   customTo: Date | null;
   onCustomFromChange: (date: Date) => void;
   onCustomToChange: (date: Date) => void;
+  hideCustomDateRow?: boolean;
 }
 
 const PRESETS: { key: DateFilterPreset; label: string }[] = [
@@ -34,15 +35,17 @@ export function DateFilterBar({
   customTo,
   onCustomFromChange,
   onCustomToChange,
+  hideCustomDateRow = false,
 }: DateFilterBarProps) {
   const [showFromPicker, setShowFromPicker] = useState(false);
   const [showToPicker, setShowToPicker] = useState(false);
 
   return (
-    <View className="bg-white px-4 py-3 border-b border-border/50">
+    <View className="bg-white py-3 border-b border-border/50">
       {/* Preset Pills */}
-      <View className="flex-row gap-2">
-        {PRESETS.map((p) => (
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16 }}>
+        <View className="flex-row gap-2">
+          {PRESETS.map((p) => (
           <TouchableOpacity
             key={p.key}
             onPress={() => onPresetChange(p.key)}
@@ -61,11 +64,12 @@ export function DateFilterBar({
             </Text>
           </TouchableOpacity>
         ))}
-      </View>
+        </View>
+      </ScrollView>
 
       {/* Custom Date Range Row */}
-      {activePreset === "custom" && (
-        <View className="flex-row items-center gap-2 mt-3">
+      {activePreset === "custom" && !hideCustomDateRow && (
+        <View className="flex-row items-center gap-2 mt-3 px-4">
           <TouchableOpacity
             onPress={() => setShowFromPicker(true)}
             className="flex-1 flex-row items-center bg-surface rounded-lg px-3 py-2 border border-border"

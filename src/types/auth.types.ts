@@ -3,7 +3,7 @@ export interface User {
   name: string;
   username: string;
   email: string;
-  role: "manager" | "driver";
+  role: "manager" | "driver" | "admin";
   avatar?: string;
 }
 
@@ -15,7 +15,7 @@ export interface AuthTokens {
 export interface LoginCredentials {
   username: string;
   password: string;
-  role: "manager" | "driver";
+  role: "manager" | "driver" | "admin";
 }
 
 export interface AuthState {

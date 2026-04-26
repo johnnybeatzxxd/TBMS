@@ -205,8 +205,9 @@ export default function AddTransferModal() {
                   placeholder="0.00"
                   placeholderTextColor="#94A3B8"
                   value={amount}
-                  onChangeText={setAmount}
+                  onChangeText={(text) => setAmount(text.replace(/[^0-9.]/g, ""))}
                   keyboardType="decimal-pad"
+
                 />
               </View>
             </View>

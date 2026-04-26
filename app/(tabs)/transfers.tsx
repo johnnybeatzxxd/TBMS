@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert, SectionList } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -90,40 +90,88 @@ const TransferCard = ({ tx }: { tx: Transfer }) => {
 
 export default function TransfersScreen() {
   const { user } = useAuthStore();
-  const [transfers, setTransfers] = useState<Transfer[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const fetchTransfers = async () => {
-    setLoading(true);
-    try {
-      const res = await mockTransferService.getTransfers();
-      setTransfers(res.transfers);
-    } catch (error: any) {
-      Alert.alert("Error", error.message || "Failed to load transfers");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchTransfers();
-  }, []);
+  const [allTransfers, setAllTransfers] = useState<Transfer[]>([]);
+  const [displayedTransfers, setDisplayedTransfers] = useState<Transfer[]>([]);
+  const [loadingInitial, setLoadingInitial] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
 
   // Date Filter State
   const [filterPreset, setFilterPreset] = useState<DateFilterPreset>("all");
   const [customFrom, setCustomFrom] = useState<Date | null>(null);
   const [customTo, setCustomTo] = useState<Date | null>(null);
 
-  const filteredTransfers = useMemo(() =>
-    transfers.filter(tx => passesDateFilter(tx.date, filterPreset, customFrom, customTo)),
-    [transfers, filterPreset, customFrom, customTo]
+  const loadInitialData = async () => {
+    setLoadingInitial(true);
+    setPage(1);
+    try {
+      const res = await mockTransferService.getTransfers();
+      // Apply filters first if we wanted backend-like behavior, but here we sort and slice
+      const sorted = [...res.transfers].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      setAllTransfers(sorted);
+      
+      const limit = 6;
+      const initialSlice = sorted.slice(0, limit);
+      setDisplayedTransfers(initialSlice);
+      setHasMore(sorted.length > limit);
+    } catch (error: any) {
+      Alert.alert("Error", error.message || "Failed to load transfers");
+    } finally {
+      setLoadingInitial(false);
+    }
+  };
+
+  const handleLoadMore = async () => {
+    if (loadingMore || !hasMore) return;
+
+    setLoadingMore(true);
+    // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    const nextPage = page + 1;
+    const limit = 6;
+    const start = (nextPage - 1) * limit;
+    const end = start + limit;
+    
+    const nextSlice = filteredDataFull.slice(start, end);
+    
+    if (nextSlice.length > 0) {
+      setDisplayedTransfers(prev => {
+        const newItems = nextSlice.filter(item => !prev.some(p => p.id === item.id));
+        return [...prev, ...newItems];
+      });
+      setPage(nextPage);
+      setHasMore(filteredDataFull.length > end);
+    } else {
+      setHasMore(false);
+    }
+    setLoadingMore(false);
+  };
+
+  useEffect(() => {
+    loadInitialData();
+  }, []);
+
+  // When filters change, reset pagination
+  const filteredDataFull = useMemo(() =>
+    allTransfers.filter(tx => passesDateFilter(tx.date, filterPreset, customFrom, customTo)),
+    [allTransfers, filterPreset, customFrom, customTo]
   );
 
-  const groupedTransfers = filteredTransfers.reduce((acc, tx) => {
+  useEffect(() => {
+    const limit = 6;
+    const firstSlice = filteredDataFull.slice(0, limit);
+    setDisplayedTransfers(firstSlice);
+    setPage(1);
+    setHasMore(filteredDataFull.length > limit);
+  }, [filteredDataFull]);
+
+  const groupedTransfers = displayedTransfers.reduce((acc, tx) => {
     if (!acc[tx.date]) acc[tx.date] = [];
     acc[tx.date].push(tx);
     return acc;
-  }, {} as Record<string, typeof transfers>);
+  }, {} as Record<string, typeof displayedTransfers>);
 
   const transferGroups = Object.entries(groupedTransfers).map(([date, txs]) => ({
     dateStr: date,
@@ -146,7 +194,14 @@ export default function TransfersScreen() {
       {/* Date Filter */}
       <DateFilterBar
         activePreset={filterPreset}
-        onPresetChange={setFilterPreset}
+        onPresetChange={(preset) => {
+          setFilterPreset(preset);
+          if (preset === "all") {
+            setCustomFrom(null);
+            setCustomTo(null);
+            loadInitialData(); // Fresh fetch
+          }
+        }}
         customFrom={customFrom}
         customTo={customTo}
         onCustomFromChange={setCustomFrom}
@@ -154,37 +209,51 @@ export default function TransfersScreen() {
       />
 
       {/* Content */}
-      {loading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#0EA5E9" />
-        </View>
-      ) : (
-        <ScrollView
-          className="flex-1"
-          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
-          showsVerticalScrollIndicator={false}
-        >
-          {transferGroups.length === 0 ? (
-            <View className="items-center justify-center py-20 opacity-60">
+      <SectionList
+        sections={transferGroups}
+        keyExtractor={(item, index) => item.id + index}
+        renderSectionHeader={({ section: { title } }) => (
+          <Text className="text-text-secondary font-bold text-xs tracking-widest uppercase ml-5 mb-2 mt-6">
+            {title}
+          </Text>
+        )}
+        renderItem={({ item }) => (
+          <View className="px-4">
+            <TransferCard tx={item} />
+          </View>
+        )}
+        contentContainerStyle={{ paddingBottom: 100 }}
+        showsVerticalScrollIndicator={false}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          loadingMore ? (
+            <View className="py-6 items-center flex-row justify-center gap-2">
+              <ActivityIndicator size="small" color="#2563EB" />
+              <Text className="text-text-secondary text-sm font-medium tracking-wide">Loading more transfers...</Text>
+            </View>
+          ) : !hasMore && displayedTransfers.length > 0 ? (
+            <View className="py-6 items-center">
+              <Text className="text-text-secondary/50 text-xs tracking-wide">No more transfers to show</Text>
+            </View>
+          ) : null
+        }
+        ListEmptyComponent={
+          !loadingInitial ? (
+            <View className="py-20 items-center justify-center opacity-60">
               <Ionicons name="card-outline" size={64} color="#94A3B8" />
               <Text className="text-text-secondary text-base mt-4 text-center">
-                No money transfers found.
+                No money transfers found matching filters.
               </Text>
             </View>
           ) : (
-            transferGroups.map((group) => (
-              <View key={group.dateStr} className="mb-6">
-                <Text className="text-text-secondary font-bold text-xs tracking-widest uppercase ml-1 mb-2">
-                  {group.title}
-                </Text>
-                {group.data.map((tx) => (
-                  <TransferCard key={tx.id} tx={tx} />
-                ))}
-              </View>
-            ))
-          )}
-        </ScrollView>
-      )}
+            <View className="py-20 items-center justify-center gap-3">
+               <ActivityIndicator size="large" color="#2563EB" />
+               <Text className="text-text-secondary tracking-widest uppercase text-xs font-bold">Loading transfers...</Text>
+            </View>
+          )
+        }
+      />
 
       {/* FAB - Add Transfer - Available for all roles */}
       <TouchableOpacity

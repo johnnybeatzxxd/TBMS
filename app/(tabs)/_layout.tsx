@@ -3,9 +3,13 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React from 'react';
+import { useAuthStore } from '@/src/store/authStore';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const { user } = useAuthStore();
+  const isDriver = user?.role === "driver";
+  const isManager = user?.role === "manager" || user?.role === "admin";
 
   return (
     <Tabs
@@ -46,6 +50,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="manage"
         options={{
+          href: isManager ? "/manage" : null,
           title: 'Manage',
           tabBarIcon: ({ color }) => <Ionicons size={24} name="settings" color={color} />,
         }}
@@ -53,13 +58,11 @@ export default function TabLayout() {
       <Tabs.Screen
         name="profile"
         options={{
+          href: isDriver ? "/profile" : null,
           title: 'Profile',
           tabBarIcon: ({ color }) => <Ionicons size={24} name="person" color={color} />,
         }}
       />
-      {/* Hide redundant tabs automatically discovered by Expo Router */}
-      <Tabs.Screen name="payments" options={{ href: null }} />
-      <Tabs.Screen name="trips" options={{ href: null }} />
     </Tabs>
   );
 }

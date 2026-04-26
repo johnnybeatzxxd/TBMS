@@ -27,7 +27,9 @@ export default function AddTripModal() {
     paymentMethod?: string;
     cashAmount?: string;
     volume?: string;
+    roadExpense?: string;
   }>();
+
 
   const isEditMode = !!params.id;
 
@@ -50,7 +52,9 @@ export default function AddTripModal() {
   );
   const [volume, setVolume] = useState<Volume>((params.volume as Volume) || "10MCUBE");
   const [cashAmount, setCashAmount] = useState(params.cashAmount || "");
+  const [roadExpense, setRoadExpense] = useState(params.roadExpense || "");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
 
   const onDateChange = (_: DateTimePickerEvent, selected?: Date) => {
     setShowDatePicker(false);
@@ -73,7 +77,13 @@ export default function AddTripModal() {
       Alert.alert("Validation Error", "Please enter a valid cash amount.");
       return;
     }
+    if (roadExpense && isNaN(Number(roadExpense))) {
+      Alert.alert("Validation Error", "Please enter a valid road expense amount.");
+      return;
+    }
     setIsSubmitting(true);
+
+
     // TODO: connect to API
     await new Promise((r) => setTimeout(r, 1200));
     setIsSubmitting(false);
@@ -107,7 +117,7 @@ export default function AddTripModal() {
         <View className="bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
           <View className="px-4 pt-4 pb-2">
             <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase mb-2">
-              Trip Date
+              Trip Date *
             </Text>
             <TouchableOpacity
               onPress={() => setShowDatePicker(true)}
@@ -188,7 +198,7 @@ export default function AddTripModal() {
             {/* Loading Site */}
             <View>
               <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase mb-2">
-                Loading Site
+                Loading Site *
               </Text>
               <View className="flex-row items-center bg-surface rounded-xl px-4 border border-border">
                 <Ionicons name="radio-button-on" size={16} color="#2563EB" />
@@ -214,7 +224,7 @@ export default function AddTripModal() {
             {/* Unloading Site */}
             <View>
               <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase mb-2">
-                Unloading Site
+                Unloading Site *
               </Text>
               <View className="flex-row items-center bg-surface rounded-xl px-4 border border-border">
                 <Ionicons name="location" size={16} color="#2563EB" />
@@ -277,7 +287,7 @@ export default function AddTripModal() {
             {paymentMethod === "cash" && (
               <View>
                 <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase mb-2">
-                  Cash Amount
+                  Cash Amount *
                 </Text>
                 <View className="flex-row items-center bg-surface rounded-xl px-4 border border-border">
                   <Text className="text-text-secondary font-semibold text-base">$</Text>
@@ -294,6 +304,35 @@ export default function AddTripModal() {
             )}
           </View>
         </View>
+
+        {/* Road Expense */}
+        <View className="bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
+          <View className="flex-row items-center gap-2 px-4 pt-4 pb-3 border-b border-border bg-primary-50">
+            <Ionicons name="car-outline" size={16} color="#2563EB" />
+            <Text className="text-primary font-semibold text-xs tracking-widest uppercase">
+              Additional Expenses
+            </Text>
+          </View>
+          <View className="p-4">
+            <View>
+              <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase mb-2">
+                Road Expense
+              </Text>
+              <View className="flex-row items-center bg-surface rounded-xl px-4 border border-border">
+                <Text className="text-text-secondary font-semibold text-base">$</Text>
+                <TextInput
+                  className="flex-1 text-text-primary py-3.5 pl-3 text-base"
+                  placeholder="0"
+                  placeholderTextColor="#94A3B8"
+                  keyboardType="number-pad"
+                  value={roadExpense}
+                  onChangeText={(text) => setRoadExpense(text.replace(/[^0-9]/g, ""))}
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+
 
         {/* Submit Button */}
         <TouchableOpacity

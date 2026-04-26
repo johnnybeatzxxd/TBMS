@@ -23,6 +23,7 @@ const MOCK_TRIPS: Trip[] = [
     distanceKm: 480,
     cargoDescription: "Electronics",
     cargoWeightTons: 12,
+    roadExpense: 45,
     createdAt: "2026-04-20T18:00:00Z",
   },
   {
