@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -6,6 +6,7 @@ import { router } from "expo-router";
 import { useAuthStore } from "@/src/store";
 import { mockTransferService } from "@/src/api/mock/transfers.mock";
 import { Transfer } from "@/src/types";
+import { DateFilterBar, DateFilterPreset, passesDateFilter } from "@/src/components/DateFilterBar";
 
 const getRelativeDateLabel = (dateStr: string) => {
   const [year, month, day] = dateStr.split("-").map(Number);
@@ -108,7 +109,17 @@ export default function TransfersScreen() {
     fetchTransfers();
   }, []);
 
-  const groupedTransfers = transfers.reduce((acc, tx) => {
+  // Date Filter State
+  const [filterPreset, setFilterPreset] = useState<DateFilterPreset>("all");
+  const [customFrom, setCustomFrom] = useState<Date | null>(null);
+  const [customTo, setCustomTo] = useState<Date | null>(null);
+
+  const filteredTransfers = useMemo(() =>
+    transfers.filter(tx => passesDateFilter(tx.date, filterPreset, customFrom, customTo)),
+    [transfers, filterPreset, customFrom, customTo]
+  );
+
+  const groupedTransfers = filteredTransfers.reduce((acc, tx) => {
     if (!acc[tx.date]) acc[tx.date] = [];
     acc[tx.date].push(tx);
     return acc;
@@ -131,6 +142,16 @@ export default function TransfersScreen() {
           </Text>
         </View>
       </View>
+
+      {/* Date Filter */}
+      <DateFilterBar
+        activePreset={filterPreset}
+        onPresetChange={setFilterPreset}
+        customFrom={customFrom}
+        customTo={customTo}
+        onCustomFromChange={setCustomFrom}
+        onCustomToChange={setCustomTo}
+      />
 
       {/* Content */}
       {loading ? (

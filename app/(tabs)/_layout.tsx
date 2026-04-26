@@ -1,8 +1,8 @@
-import { Tabs } from 'expo-router';
-import React from 'react';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Tabs } from 'expo-router';
+import React from 'react';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
@@ -57,6 +57,9 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <Ionicons size={24} name="person" color={color} />,
         }}
       />
+      {/* Hide redundant tabs automatically discovered by Expo Router */}
+      <Tabs.Screen name="payments" options={{ href: null }} />
+      <Tabs.Screen name="trips" options={{ href: null }} />
     </Tabs>
   );
 }

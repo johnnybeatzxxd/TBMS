@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useAuthStore } from "@/src/store";
+import { DateFilterBar, DateFilterPreset, passesDateFilter } from "@/src/components/DateFilterBar";
 
 const getPastDateStr = (daysAgo: number) => {
   const d = new Date();
@@ -231,7 +232,18 @@ export default function TripsListScreen() {
 
   // Trip State
   const [trips, setTrips] = useState(MOCK_TRIPS);
-  const tripGroups = getGroupedTrips(trips);
+
+  // Date Filter State
+  const [filterPreset, setFilterPreset] = useState<DateFilterPreset>("all");
+  const [customFrom, setCustomFrom] = useState<Date | null>(null);
+  const [customTo, setCustomTo] = useState<Date | null>(null);
+
+  const filteredTrips = useMemo(() =>
+    trips.filter(trip => passesDateFilter(trip.date, filterPreset, customFrom, customTo)),
+    [trips, filterPreset, customFrom, customTo]
+  );
+
+  const tripGroups = getGroupedTrips(filteredTrips);
 
   useEffect(() => {
     if (isManager) {
@@ -304,6 +316,16 @@ export default function TripsListScreen() {
           </View>
         )}
       </View>
+
+      {/* Date Filter */}
+      <DateFilterBar
+        activePreset={filterPreset}
+        onPresetChange={setFilterPreset}
+        customFrom={customFrom}
+        customTo={customTo}
+        onCustomFromChange={setCustomFrom}
+        onCustomToChange={setCustomTo}
+      />
 
       <ScrollView
         className="flex-1"

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -6,6 +6,7 @@ import { router } from "expo-router";
 import { useAuthStore } from "@/src/store";
 import { mockExpenseService } from "@/src/api/mock/expenses.mock";
 import { Expense } from "@/src/types";
+import { DateFilterBar, DateFilterPreset, passesDateFilter } from "@/src/components/DateFilterBar";
 
 const getRelativeDateLabel = (dateStr: string) => {
   const [year, month, day] = dateStr.split("-").map(Number);
@@ -23,6 +24,75 @@ const getRelativeDateLabel = (dateStr: string) => {
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   
   return `${weekdays[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}`;
+};
+
+const ExpenseCard = ({ exp }: { exp: Expense }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const parts = exp.remark.split(" | Desc: ");
+  const expenseTitle = parts.length > 1 ? parts[0] : "Expense";
+  const expenseDesc = parts.length > 1 ? parts[1] : exp.remark;
+  
+  let iconName = "receipt-outline";
+  let iconColor = "#64748B";
+  let iconBg = "bg-slate-100";
+  let iconBorder = "border-slate-200";
+
+  if (expenseTitle.includes("Refuel")) {
+    iconName = "water-outline";
+    iconColor = "#0EA5E9";
+    iconBg = "bg-sky-50";
+    iconBorder = "border-sky-100";
+  } else if (expenseTitle.includes("Maintenance")) {
+    iconName = "build-outline";
+    iconColor = "#F59E0B";
+    iconBg = "bg-amber-50";
+    iconBorder = "border-amber-100";
+  }
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.7}
+      onPress={() => setIsExpanded(!isExpanded)}
+      className="bg-white p-4 rounded-2xl mb-3 border border-border shadow-sm"
+    >
+      <View className="flex-row items-center justify-between">
+        <View className="flex-row items-center flex-1 pr-2">
+          <View className={`w-10 h-10 rounded-full ${iconBg} items-center justify-center mr-3 border ${iconBorder}`}>
+            <Ionicons name={iconName as any} size={18} color={iconColor} />
+          </View>
+          <View className="flex-1">
+            <Text className="text-text-primary font-bold text-base" numberOfLines={1}>
+              {expenseTitle}
+            </Text>
+            <Text className="text-text-secondary text-xs">
+              Truck: {exp.truckId}
+            </Text>
+          </View>
+        </View>
+        <View className="items-end">
+          <Text className="text-danger font-bold text-lg mb-0.5">
+            - ${exp.price.toFixed(2)}
+          </Text>
+          <Ionicons 
+            name={isExpanded ? "chevron-up" : "chevron-down"} 
+            size={16} 
+            color="#94A3B8" 
+          />
+        </View>
+      </View>
+      
+      {isExpanded && (
+        <View className="mt-3 pt-3 border-t border-border/50">
+          <View className="bg-surface rounded-xl p-3 border border-border/30">
+            <Text className="text-text-secondary text-sm leading-5">
+              {expenseDesc}
+            </Text>
+          </View>
+        </View>
+      )}
+    </TouchableOpacity>
+  );
 };
 
 export default function ExpensesScreen() {
@@ -50,7 +120,17 @@ export default function ExpensesScreen() {
     fetchExpenses();
   }, []);
 
-  const groupedExpenses = expenses.reduce((acc, exp) => {
+  // Date Filter State
+  const [filterPreset, setFilterPreset] = useState<DateFilterPreset>("all");
+  const [customFrom, setCustomFrom] = useState<Date | null>(null);
+  const [customTo, setCustomTo] = useState<Date | null>(null);
+
+  const filteredExpenses = useMemo(() => 
+    expenses.filter(exp => passesDateFilter(exp.date, filterPreset, customFrom, customTo)),
+    [expenses, filterPreset, customFrom, customTo]
+  );
+
+  const groupedExpenses = filteredExpenses.reduce((acc, exp) => {
     if (!acc[exp.date]) acc[exp.date] = [];
     acc[exp.date].push(exp);
     return acc;
@@ -73,6 +153,16 @@ export default function ExpensesScreen() {
           </Text>
         </View>
       </View>
+
+      {/* Date Filter */}
+      <DateFilterBar
+        activePreset={filterPreset}
+        onPresetChange={setFilterPreset}
+        customFrom={customFrom}
+        customTo={customTo}
+        onCustomFromChange={setCustomFrom}
+        onCustomToChange={setCustomTo}
+      />
 
       {/* Content */}
       {loading ? (
@@ -99,34 +189,7 @@ export default function ExpensesScreen() {
                   {group.title}
                 </Text>
                 {group.data.map((exp) => (
-                  <View
-                    key={exp.id}
-                    className="bg-white p-4 rounded-2xl mb-3 border border-border shadow-sm"
-                  >
-                    <View className="flex-row items-center justify-between mb-2">
-                      <View className="flex-row items-center flex-1 pr-2">
-                        <View className="w-10 h-10 rounded-full bg-slate-100 items-center justify-center mr-3 border border-slate-200">
-                          <Ionicons name="cart-outline" size={18} color="#64748B" />
-                        </View>
-                        <View className="flex-1">
-                          <Text className="text-text-primary font-bold text-base">
-                            Expense
-                          </Text>
-                          <Text className="text-text-secondary text-xs">
-                            Truck: {exp.truckId}
-                          </Text>
-                        </View>
-                      </View>
-                      <Text className="text-danger font-bold text-lg">
-                        - ${exp.price.toFixed(2)}
-                      </Text>
-                    </View>
-                    <View className="bg-surface rounded-xl p-3 border border-border/50">
-                      <Text className="text-text-secondary text-sm leading-5">
-                        {exp.remark}
-                      </Text>
-                    </View>
-                  </View>
+                  <ExpenseCard key={exp.id} exp={exp} />
                 ))}
               </View>
             ))
