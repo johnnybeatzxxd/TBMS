@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { mockTransferService } from "@/src/api/mock/transfers.mock";
 import { mockDriverService } from "@/src/api/mock/drivers.mock";
 import { useAuthStore } from "@/src/store";
@@ -24,8 +25,8 @@ export default function AddTransferModal() {
   const [remark, setRemark] = useState("");
   
   // Hardcoding date to today for simplicity
-  const today = new Date().toISOString().split("T")[0];
-  const [date, setDate] = useState(today);
+  const [date, setDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const [loading, setLoading] = useState(false);
 
@@ -65,8 +66,9 @@ export default function AddTransferModal() {
       return;
     }
 
-    if (!date.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      Alert.alert("Validation", "Please enter a valid date (YYYY-MM-DD).");
+    const formattedDate = date.toISOString().split("T")[0];
+    if (!formattedDate) {
+      Alert.alert("Validation", "Please select a valid date.");
       return;
     }
 
@@ -77,7 +79,7 @@ export default function AddTransferModal() {
         amount: parsedAmount,
         type,
         remark: remark.trim(),
-        date: date.trim(),
+        date: formattedDate,
       });
       router.back();
     } catch (error: any) {
@@ -231,18 +233,37 @@ export default function AddTransferModal() {
             {/* Date */}
             <View className="gap-1.5 z-0">
               <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase ml-1">
-                Date (YYYY-MM-DD) *
+                Date *
               </Text>
-              <View className="flex-row items-center bg-surface rounded-xl px-4 border border-border">
+              <TouchableOpacity
+                onPress={() => setShowDatePicker(true)}
+                className="flex-row items-center bg-surface rounded-xl px-4 py-3.5 border border-border"
+              >
                 <Ionicons name="calendar-outline" size={16} color="#64748B" />
-                <TextInput
-                  className="flex-1 py-3.5 pl-3 text-base text-text-primary"
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor="#94A3B8"
+                <Text className="flex-1 ml-3 text-base text-text-primary">
+                  {date.toISOString().split("T")[0]}
+                </Text>
+              </TouchableOpacity>
+              
+              {showDatePicker && (
+                <DateTimePicker
                   value={date}
-                  onChangeText={setDate}
+                  mode="date"
+                  display="default"
+                  onChange={(event, selectedDate) => {
+                    if (Platform.OS === "android") setShowDatePicker(false);
+                    if (selectedDate) setDate(selectedDate);
+                  }}
                 />
-              </View>
+              )}
+              {Platform.OS === "ios" && showDatePicker && (
+                <TouchableOpacity
+                  onPress={() => setShowDatePicker(false)}
+                  className="mt-2 py-2 items-center bg-slate-100 rounded-lg"
+                >
+                  <Text className="text-primary font-semibold">Done</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <View className="flex-row gap-4 mt-4 z-0">
