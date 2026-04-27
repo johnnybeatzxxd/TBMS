@@ -48,6 +48,14 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="requests"
+        options={{
+          href: isDriver ? "/requests" : null,
+          title: 'Requests',
+          tabBarIcon: ({ color }) => <Ionicons size={24} name="document-text" color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="manage"
         options={{
           href: isManager ? "/manage" : null,

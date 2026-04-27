@@ -25,6 +25,16 @@ const MANAGE_SECTIONS = [
     bgColor: "#F0F9FF",
     stat: "4 Trucks",
   },
+  {
+    id: "requests",
+    title: "Service Requests",
+    description: "Manage maintenance and driver requests",
+    icon: "clipboard-list",
+    iconLib: "material",
+    color: "#8B5CF6",
+    bgColor: "#F5F3FF",
+    stat: "3 Pending",
+  },
 ] as const;
 
 export default function ManageScreen() {
@@ -120,6 +130,8 @@ export default function ManageScreen() {
                       router.push("/drivers");
                     } else if (section.id === "trucks") {
                       router.push("/trucks" as any);
+                    } else if (section.id === "requests") {
+                      router.push("/requests");
                     }
                   }}
                 >
