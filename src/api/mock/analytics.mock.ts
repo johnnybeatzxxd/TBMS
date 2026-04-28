@@ -172,4 +172,65 @@ export const mockAnalyticsService = {
       totalDriverExpense,
     };
   },
+
+  /** Simulates downloading a pre-built CSV report from the backend */
+  downloadReport: async (params?: AnalyticsFilterParams): Promise<string> => {
+    await delay(1200); // Simulate network latency
+
+    const trips = applyFilters([...MOCK_ANALYTICS_TRIPS], params);
+    const refuels = applyFilters([...MOCK_ANALYTICS_REFUELS], params);
+    const expenses = applyFilters([...MOCK_ANALYTICS_EXPENSES], params);
+
+    const rows: string[] = [];
+
+    // CSV Header
+    rows.push("Date,Type,Truck,Summary / Site,Amount (ETB),Payment / Remark,Quantity / Volume,Misc (Road Expense)");
+
+    // Trips
+    trips.forEach(t => {
+      rows.push([
+        t.date,
+        "Trip",
+        t.truckId.replace("trk_", "Truck "),
+        `"${t.loadingSite} -> ${t.destinationSite}"`,
+        t.amount ?? 0,
+        t.paymentMethod,
+        `${t.numberOfTrips} trips, ${t.volume.replace("MCUBE", "")} M³`,
+        t.roadExpence,
+      ].join(","));
+    });
+
+    // Refuels
+    refuels.forEach(r => {
+      rows.push([
+        r.date,
+        "Fueling",
+        r.truckId.replace("trk_", "Truck "),
+        "Refuel",
+        r.price,
+        "Fuel purchase",
+        `${r.vol} Liters`,
+        "",
+      ].join(","));
+    });
+
+    // Expenses
+    expenses.forEach(e => {
+      rows.push([
+        e.date,
+        "Expense",
+        e.truckId.replace("trk_", "Truck "),
+        `"${e.remark}"`,
+        e.amount,
+        "Maintenance/Other",
+        "",
+        "",
+      ].join(","));
+    });
+
+    // Sort rows by date (skip header)
+    const header = rows[0];
+    const dataRows = rows.slice(1).sort((a, b) => b.localeCompare(a));
+    return [header, ...dataRows].join("\n");
+  },
 };

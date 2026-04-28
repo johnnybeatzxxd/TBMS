@@ -7,12 +7,15 @@ import { useAuthStore } from "@/src/store";
 import { mockAnalyticsService } from "@/src/api/mock/analytics.mock";
 import { DateFilterBar, DateFilterPreset } from "@/src/components/DateFilterBar";
 import { mockTruckService } from "@/src/api/mock/trucks.mock";
+import { shareCSV } from "@/src/utils/export";
+import { Alert } from "react-native";
 
 const formatCurrency = (n: number) => n.toLocaleString("en-US");
 
 export default function AnalyticsHubScreen() {
   const { user } = useAuthStore();
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [summary, setSummary] = useState<any>(null);
 
   // Filters State
@@ -46,6 +49,33 @@ export default function AnalyticsHubScreen() {
       setLoading(false);
     })();
   }, [selectedTruck, filterPreset, customFrom, customTo]);
+
+  const handleExport = async () => {
+    try {
+      setExporting(true);
+      // Simulates: GET /api/reports/analytics?from=...&to=...&truck=...
+      // In production, this becomes: const csv = await apiClient.get('/reports/analytics', { params })
+      const csv = await mockAnalyticsService.downloadReport({
+        truckId: selectedTruck.id,
+        preset: filterPreset,
+        customFrom,
+        customTo,
+      });
+
+      if (!csv || csv.split("\n").length <= 1) {
+        Alert.alert("No Data", "There is no data to export for the selected filters.");
+        return;
+      }
+
+      const dateStr = new Date().toISOString().split('T')[0];
+      await shareCSV(csv, `Analytics_Report_${dateStr}`);
+    } catch (error) {
+      console.error(error);
+      Alert.alert("Export Failed", "There was an error generating your report.");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   if (loading || !summary) {
     return (
@@ -109,47 +139,64 @@ export default function AnalyticsHubScreen() {
           <Ionicons name="bar-chart" size={26} color="#2563EB" />
           <Text className="text-text-primary font-bold text-xl ml-2 tracking-wide">Analytics</Text>
         </View>
-        <View className="relative z-50">
+        
+        <View className="flex-row items-center gap-3">
+          {/* Export Button */}
           <TouchableOpacity
-            onPress={() => setShowTruckMenu((v) => !v)}
-            className="flex-row items-center gap-1.5 bg-primary-50 border border-primary-100 rounded-xl px-3 py-2"
-            activeOpacity={0.8}
+            onPress={handleExport}
+            disabled={exporting}
+            className="w-10 h-10 bg-success-50 rounded-xl items-center justify-center border border-success-100"
+            activeOpacity={0.7}
           >
-            <Ionicons name="car-sport" size={14} color="#2563EB" />
-            <Text className="text-primary font-semibold text-sm">{selectedTruck.plateNumber}</Text>
-            <Ionicons name={showTruckMenu ? "chevron-up" : "chevron-down"} size={14} color="#2563EB" />
+            {exporting ? (
+              <ActivityIndicator size="small" color="#16A34A" />
+            ) : (
+              <Ionicons name="download-outline" size={20} color="#16A34A" />
+            )}
           </TouchableOpacity>
 
-          {showTruckMenu && (
-            <View className="absolute right-0 top-10 bg-white rounded-2xl border border-border shadow-lg overflow-hidden min-w-[160px] z-[999] elevation-20">
-              {trucks.map((truck) => (
-                <TouchableOpacity
-                  key={truck.id}
-                  onPress={() => {
-                    setSelectedTruck(truck);
-                    setShowTruckMenu(false);
-                  }}
-                  className={`px-4 py-3 flex-row items-center gap-2 ${
-                    selectedTruck.id === truck.id ? "bg-primary-50" : "bg-white"
-                  }`}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons
-                    name={truck.id === "all" ? "apps-outline" : "car-sport-outline"}
-                    size={16}
-                    color={selectedTruck.id === truck.id ? "#2563EB" : "#64748B"}
-                  />
-                  <Text
-                    className={`text-sm font-medium ${
-                      selectedTruck.id === truck.id ? "text-primary font-bold" : "text-text-primary"
+          <View className="relative z-50">
+            <TouchableOpacity
+              onPress={() => setShowTruckMenu((v) => !v)}
+              className="flex-row items-center gap-1.5 bg-primary-50 border border-primary-100 rounded-xl px-3 py-2"
+              activeOpacity={0.8}
+            >
+              <Ionicons name="car-sport" size={14} color="#2563EB" />
+              <Text className="text-primary font-semibold text-sm">{selectedTruck.plateNumber}</Text>
+              <Ionicons name={showTruckMenu ? "chevron-up" : "chevron-down"} size={14} color="#2563EB" />
+            </TouchableOpacity>
+
+            {showTruckMenu && (
+              <View className="absolute right-0 top-10 bg-white rounded-2xl border border-border shadow-lg overflow-hidden min-w-[160px] z-[999] elevation-20">
+                {trucks.map((truck) => (
+                  <TouchableOpacity
+                    key={truck.id}
+                    onPress={() => {
+                      setSelectedTruck(truck);
+                      setShowTruckMenu(false);
+                    }}
+                    className={`px-4 py-3 flex-row items-center gap-2 ${
+                      selectedTruck.id === truck.id ? "bg-primary-50" : "bg-white"
                     }`}
+                    activeOpacity={0.7}
                   >
-                    {truck.plateNumber}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
+                    <Ionicons
+                      name={truck.id === "all" ? "apps-outline" : "car-sport-outline"}
+                      size={16}
+                      color={selectedTruck.id === truck.id ? "#2563EB" : "#64748B"}
+                    />
+                    <Text
+                      className={`text-sm font-medium ${
+                        selectedTruck.id === truck.id ? "text-primary font-bold" : "text-text-primary"
+                      }`}
+                    >
+                      {truck.plateNumber}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
         </View>
       </View>
 
