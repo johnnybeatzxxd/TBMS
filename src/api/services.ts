@@ -9,7 +9,12 @@
  *   import { authService, truckService } from "@/src/api/services";
  */
 
-export { mockAuthService as authService } from "./mock/auth.mock";
-export { mockTruckService as truckService } from "./mock/trucks.mock";
-export { mockDriverService as driverService } from "./mock/drivers.mock";
-export { mockTripService as tripService } from "./mock/trips.mock";
+export { authService } from "./auth.service";
+export { tripService } from "./trip.service";
+export { companyService } from "./company.service";
+export { truckService } from "./truck.service";
+export { driverService } from "./driver.service";
+export { mockAnalyticsService as analyticsService } from "./mock/analytics.mock";
+export { mockRequestsService as requestService } from "./mock/requests.mock";
+export { mockExpenseService as expenseService } from "./mock/expenses.mock";
+export { mockTransferService as transferService } from "./mock/transfers.mock";

@@ -4,8 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { Driver, Truck } from "@/src/types";
-import { mockDriverService } from "@/src/api/mock/drivers.mock";
-import { mockTruckService } from "@/src/api/mock/trucks.mock";
+import { driverService, truckService } from "@/src/api/services";
 
 export default function DriversListScreen() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -21,15 +20,15 @@ export default function DriversListScreen() {
     setLoading(true);
     try {
       const [driversRes, trucksRes] = await Promise.all([
-        mockDriverService.getMyDrivers(),
-        mockTruckService.getMyTrucks(),
+        driverService.getMyDrivers(),
+        truckService.getMyTrucks(),
       ]);
-      setDrivers(driversRes.drivers);
+      setDrivers(driversRes.drivers || []);
 
       // Create a truck map for easy lookups
       const truckMap: Record<string, Truck> = {};
       
-      const truckList = "trucks" in trucksRes ? trucksRes.trucks : [];
+      const truckList = trucksRes.trucks || [];
       truckList.forEach((t) => {
         truckMap[t.id] = t;
       });
@@ -50,9 +49,9 @@ export default function DriversListScreen() {
     setActionLoading(driver.id);
     try {
       if (driver.accountActive) {
-        await mockDriverService.deactivateDriver(driver.id);
+        await driverService.deactivateDriver(driver.id);
       } else {
-        await mockDriverService.activateDriver(driver.id);
+        await driverService.activateDriver(driver.id);
       }
       await fetchData();
     } catch (error: any) {
@@ -74,7 +73,7 @@ export default function DriversListScreen() {
           onPress: async () => {
             setActionLoading(driver.id);
             try {
-              await mockDriverService.deleteDriver(driver.id);
+              await driverService.deleteDriver(driver.id);
               await fetchData();
             } catch (error: any) {
               Alert.alert("Error", error.message || "Failed to delete driver");

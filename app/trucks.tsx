@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { Truck } from "@/src/types";
-import { mockTruckService } from "@/src/api/mock/trucks.mock";
+import { truckService } from "@/src/api/services";
 
 export default function TrucksListScreen() {
   const [trucks, setTrucks] = useState<Truck[]>([]);
@@ -14,7 +14,7 @@ export default function TrucksListScreen() {
   const fetchTrucks = async () => {
     setLoading(true);
     try {
-      const res = await mockTruckService.getMyTrucks();
+      const res = await truckService.getMyTrucks();
       if ("message" in res && !("trucks" in res)) {
         setTrucks([]);
       } else if ("trucks" in res) {

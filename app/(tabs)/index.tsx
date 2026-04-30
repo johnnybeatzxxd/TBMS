@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { View, Text, TouchableOpacity, ScrollView, Modal, Alert, ActivityIndicator, SectionList } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -6,63 +6,14 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { router } from "expo-router";
 import { useAuthStore } from "@/src/store";
 import { DateFilterBar, DateFilterPreset, passesDateFilter } from "@/src/components/DateFilterBar";
-
-const getPastDateStr = (daysAgo: number) => {
-  const d = new Date();
-  d.setDate(d.getDate() - daysAgo);
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  const year = d.getFullYear();
-  return `${month}/${day}/${year}`;
-};
-
-// Dummy data for trips
-const MOCK_TRIPS = [
-  // Today
-  { id: "1", date: getPastDateStr(0), loadingSite: "4kilo", unloadingSite: "Moria", paymentMethod: "Dispatch", volume: "10MCUBE", claimed: false },
-  { id: "2", date: getPastDateStr(0), loadingSite: "Bole", unloadingSite: "Dukem", paymentMethod: "Cash", cashAmount: "850.00", volume: "16MCUBE" },
-  { id: "3", date: getPastDateStr(0), loadingSite: "Bole airport", unloadingSite: "Kality", paymentMethod: "Dispatch", volume: "16MCUBE", claimed: true },
-  { id: "3a", date: getPastDateStr(0), loadingSite: "Saris", unloadingSite: "Mexico", paymentMethod: "Cash", cashAmount: "1200.00", volume: "10MCUBE" },
-  
-  // Yesterday
-  { id: "4", date: getPastDateStr(1), loadingSite: "Entoto", unloadingSite: "Sendafa", paymentMethod: "Cash", cashAmount: "450.00", volume: "10MCUBE" },
-  { id: "5", date: getPastDateStr(1), loadingSite: "Bole", unloadingSite: "Moria", paymentMethod: "Dispatch", volume: "16MCUBE", claimed: false },
-  { id: "6", date: getPastDateStr(1), loadingSite: "4kilo", unloadingSite: "Dukem", paymentMethod: "Cash", cashAmount: "300.00", volume: "10MCUBE" },
-  { id: "6a", date: getPastDateStr(1), loadingSite: "Ayat", unloadingSite: "Summit", paymentMethod: "Dispatch", volume: "16MCUBE", claimed: false },
-
-  // 2 days ago
-  { id: "7", date: getPastDateStr(2), loadingSite: "Entoto", unloadingSite: "Kality", paymentMethod: "Dispatch", volume: "16MCUBE", claimed: true },
-  { id: "8", date: getPastDateStr(2), loadingSite: "Bole airport", unloadingSite: "Sendafa", paymentMethod: "Cash", cashAmount: "550.00", volume: "10MCUBE" },
-  { id: "9", date: getPastDateStr(2), loadingSite: "4kilo", unloadingSite: "Moria", paymentMethod: "Dispatch", volume: "16MCUBE", claimed: false },
-  { id: "9a", date: getPastDateStr(2), loadingSite: "Piazza", unloadingSite: "Hosaena", paymentMethod: "Cash", cashAmount: "1500.00", volume: "10MCUBE" },
-  
-  // 3+ days ago
-  { id: "10", date: getPastDateStr(3), loadingSite: "Bole", unloadingSite: "Dukem", paymentMethod: "Dispatch", volume: "10MCUBE", claimed: true },
-  { id: "10a", date: getPastDateStr(3), loadingSite: "Jemo", unloadingSite: "Lebu", paymentMethod: "Cash", cashAmount: "700.00", volume: "16MCUBE" },
-  { id: "11", date: getPastDateStr(4), loadingSite: "Entoto", unloadingSite: "Kality", paymentMethod: "Cash", cashAmount: "900.00", volume: "16MCUBE" },
-  { id: "11a", date: getPastDateStr(4), loadingSite: "Old Airport", unloadingSite: "Bisrate Gabriel", paymentMethod: "Dispatch", volume: "10MCUBE", claimed: false },
-  { id: "12", date: getPastDateStr(5), loadingSite: "Bole airport", unloadingSite: "Sendafa", paymentMethod: "Dispatch", volume: "10MCUBE", claimed: false },
-  { id: "13", date: getPastDateStr(6), loadingSite: "Megenagna", unloadingSite: "CMC", paymentMethod: "Cash", cashAmount: "500.00", volume: "16MCUBE" },
-  { id: "14", date: getPastDateStr(7), loadingSite: "Bambis", unloadingSite: "Kazanchis", paymentMethod: "Dispatch", volume: "10MCUBE", claimed: true },
-  { id: "15", date: getPastDateStr(8), loadingSite: "Tor Hailoch", unloadingSite: "Ayer Tena", paymentMethod: "Cash", cashAmount: "600.00", volume: "16MCUBE" },
-  { id: "16", date: getPastDateStr(9), loadingSite: "Gerji", unloadingSite: "Jackros", paymentMethod: "Dispatch", volume: "10MCUBE", claimed: false },
-  { id: "17", date: getPastDateStr(10), loadingSite: "Gurd Shola", unloadingSite: "Summit", paymentMethod: "Cash", cashAmount: "800.00", volume: "16MCUBE" },
-  { id: "18", date: getPastDateStr(11), loadingSite: "Kotebe", unloadingSite: "Kara", paymentMethod: "Dispatch", volume: "10MCUBE", claimed: false },
-];
-
-
-
-import { mockTruckService } from "@/src/api/mock/trucks.mock";
-import { Truck } from "@/src/types";
+import { tripService, truckService } from "@/src/api/services";
+import { Trip, Truck, GetTripsQuery } from "@/src/types";
 
 const ALL_TRUCKS_MOCK: Truck = { id: "all", plateNumber: "All Trucks", adminId: "" };
 
 const getRelativeDateLabel = (dateStr: string) => {
-  const parts = dateStr.split("/");
-  if (parts.length !== 3) return dateStr;
-  
-  const d = new Date(Number(parts[2]), Number(parts[0]) - 1, Number(parts[1]));
-  if (isNaN(d.getTime())) return "Invalid Date";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
 
   const today = new Date();
   const yesterday = new Date();
@@ -77,13 +28,14 @@ const getRelativeDateLabel = (dateStr: string) => {
   return `${weekdays[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}`;
 };
 
-// We will handle grouping dynamically inside the component instead of globally
-const getGroupedTrips = (trips: typeof MOCK_TRIPS) => {
+const getGroupedTrips = (trips: Trip[]) => {
   const grouped = trips.reduce((acc, trip) => {
-    if (!acc[trip.date]) acc[trip.date] = [];
-    acc[trip.date].push(trip);
+    // Group by simplified date string
+    const dStr = new Date(trip.date).toLocaleDateString("en-US");
+    if (!acc[dStr]) acc[dStr] = [];
+    acc[dStr].push(trip);
     return acc;
-  }, {} as Record<string, typeof MOCK_TRIPS>);
+  }, {} as Record<string, Trip[]>);
 
   return Object.entries(grouped).map(([date, t]) => ({
     dateStr: date,
@@ -92,9 +44,24 @@ const getGroupedTrips = (trips: typeof MOCK_TRIPS) => {
   }));
 };
 
-const TripCard = ({ trip, onDelete, isManager }: { trip: typeof MOCK_TRIPS[0], onDelete: (id: string) => void, isManager: boolean }) => {
-
+const TripCard = ({ trip, isManager, onRefresh }: { trip: Trip, isManager: boolean, onRefresh: () => void }) => {
   const [expanded, setExpanded] = useState(false);
+
+  const handleApprove = async () => {
+    try {
+      await tripService.approveTrip(trip.id);
+      Alert.alert("Success", "Cash trip approved successfully!");
+      onRefresh();
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Approval failed.");
+    }
+  };
+
+  const formattedDate = new Date(trip.date).toLocaleDateString("en-US", {
+    month: "2-digit",
+    day: "2-digit",
+    year: "numeric"
+  });
 
   return (
     <TouchableOpacity
@@ -113,7 +80,7 @@ const TripCard = ({ trip, onDelete, isManager }: { trip: typeof MOCK_TRIPS[0], o
               Destination
             </Text>
             <Text className="text-text-primary font-bold text-base" numberOfLines={1}>
-              {trip.unloadingSite}
+              {trip.destinationSite}
             </Text>
           </View>
         </View>
@@ -127,40 +94,24 @@ const TripCard = ({ trip, onDelete, isManager }: { trip: typeof MOCK_TRIPS[0], o
       {/* EXPANDED CONTENT: Date, Loading Site, Payment Method */}
       {expanded && (
         <View className="relative px-4 pb-4 bg-surface/50 border-t border-border pt-3 gap-3">
-          {/* Edit & Delete Action icons - top right */}
+          {/* Edit Action - top right */}
           {isManager && (
             <View className="absolute top-3 right-4 z-10 flex-row gap-2">
-
-            <TouchableOpacity
-              onPress={(e) => {
-                e.stopPropagation?.();
-                Alert.alert("Delete Trip", "Are you sure you want to delete this trip?", [
-                  { text: "Cancel", style: "cancel" },
-                  { text: "Delete", style: "destructive", onPress: () => onDelete(trip.id) },
-                ]);
-              }}
-              className="w-8 h-8 bg-danger-50 rounded-lg items-center justify-center border border-danger-100"
-              activeOpacity={0.7}
-            >
-              <Ionicons name="trash-outline" size={14} color="#DC2626" />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={(e) => {
-                e.stopPropagation?.();
-                const qs = `?id=${trip.id}&date=${encodeURIComponent(trip.date)}&loadingSite=${encodeURIComponent(trip.loadingSite)}&unloadingSite=${encodeURIComponent(trip.unloadingSite)}&paymentMethod=${trip.paymentMethod.toLowerCase()}&cashAmount=${trip.cashAmount || ""}&volume=${trip.volume}`;
-                router.push(`/add-trip${qs}` as any);
-              }}
-              className="w-8 h-8 bg-primary-50 rounded-lg items-center justify-center border border-primary-100"
-              activeOpacity={0.7}
-            >
-              <Ionicons name="pencil" size={14} color="#2563EB" />
-            </TouchableOpacity>
-          </View>
+              <TouchableOpacity
+                onPress={(e) => {
+                  e.stopPropagation?.();
+                  const qs = `?id=${trip.id}&date=${encodeURIComponent(formattedDate)}&loadingSite=${encodeURIComponent(trip.loadingSite)}&unloadingSite=${encodeURIComponent(trip.destinationSite)}&paymentMethod=${trip.paymentMethod.toLowerCase()}&cashAmount=${trip.amount || ""}&volume=${trip.volume}`;
+                  router.push(`/add-trip${qs}`);
+                }}
+                className="w-8 h-8 bg-primary-50 rounded-lg items-center justify-center border border-primary-100"
+                activeOpacity={0.7}
+              >
+                <Ionicons name="pencil" size={14} color="#2563EB" />
+              </TouchableOpacity>
+            </View>
           )}
 
           {/* Timeline Connector Graphic */}
-
           <View className="relative pl-2 pb-1">
             {/* Dot & Line container */}
             <View className="absolute left-4 top-2 bottom-6 w-px bg-border items-center">
@@ -185,7 +136,7 @@ const TripCard = ({ trip, onDelete, isManager }: { trip: typeof MOCK_TRIPS[0], o
                 <View className="flex-row items-center mt-0.5">
                   <Ionicons name="calendar-outline" size={12} color="#64748B" />
                   <Text className="text-text-primary text-sm font-medium ml-1">
-                    {trip.date}
+                    {formattedDate}
                   </Text>
                 </View>
               </View>
@@ -197,7 +148,7 @@ const TripCard = ({ trip, onDelete, isManager }: { trip: typeof MOCK_TRIPS[0], o
                 <View className="flex-row items-center mt-0.5">
                   <Ionicons name="cube-outline" size={12} color="#64748B" />
                   <Text className="text-text-primary text-sm font-medium ml-1">
-                    {trip.volume?.replace("MCUBE", " M³")}
+                    {trip.volume.replace("MCUBE", " M³")}
                   </Text>
                 </View>
               </View>
@@ -212,12 +163,12 @@ const TripCard = ({ trip, onDelete, isManager }: { trip: typeof MOCK_TRIPS[0], o
               </Text>
               <View
                 className={`px-2.5 py-1 rounded-md ${
-                  trip.paymentMethod === "Cash" ? "bg-success-50" : "bg-primary-50"
+                  trip.paymentMethod === "CASH" ? "bg-success-50" : "bg-primary-50"
                 }`}
               >
                 <Text
                   className={`text-xs font-bold ${
-                    trip.paymentMethod === "Cash" ? "text-success-600" : "text-primary-600"
+                    trip.paymentMethod === "CASH" ? "text-success-600" : "text-primary-600"
                   }`}
                 >
                   {trip.paymentMethod}
@@ -225,34 +176,50 @@ const TripCard = ({ trip, onDelete, isManager }: { trip: typeof MOCK_TRIPS[0], o
               </View>
             </View>
 
-            {trip.paymentMethod === "Cash" && trip.cashAmount && (
+            {trip.amount !== undefined && (
               <View className="flex-row items-center">
                 <Text className="text-text-secondary text-xs uppercase font-medium tracking-wider mr-1">
                   Amount:
                 </Text>
                 <Text className="text-success-700 font-bold text-sm">
-                  ${trip.cashAmount}
+                  ${trip.amount}
                 </Text>
               </View>
             )}
 
-            {isManager && trip.paymentMethod === "Dispatch" && (
+            {isManager && trip.paymentMethod === "CREDIT" && (
+              <View
+                className={`px-3 py-1.5 rounded-lg border ${trip.claimed ? 'bg-success-50 border-success-200' : 'bg-surface border-border'}`}
+              >
+                <Text className={`font-bold text-xs uppercase tracking-wider ${trip.claimed ? 'text-success-700' : 'text-text-secondary'}`}>
+                  {trip.claimed ? 'Claimed' : 'Unclaimed'}
+                </Text>
+              </View>
+            )}
+
+            {isManager && trip.paymentMethod === "CASH" && trip.approved === "PENDING" && (
               <TouchableOpacity
                 onPress={(e) => {
                   e.stopPropagation?.();
-                  if (trip.claimed) return;
-                  Alert.alert("Claim Dispatch", "Are you sure you want to mark this dispatch as claimed?", [
+                  Alert.alert("Approve Trip", "Are you sure you want to approve this cash amount?", [
                     { text: "Cancel", style: "cancel" },
-                    { text: "Claim", onPress: () => console.log("Claimed trip", trip.id) }
+                    { text: "Approve", onPress: handleApprove }
                   ]);
                 }}
-                className={`px-3 py-1.5 rounded-lg border ${trip.claimed ? 'bg-success-50 border-success-200' : 'bg-primary-50 border-primary-200'}`}
-                activeOpacity={trip.claimed ? 1 : 0.7}
+                className="px-3 py-1.5 rounded-lg border bg-amber-50 border-amber-200"
               >
-                <Text className={`font-bold text-xs uppercase tracking-wider ${trip.claimed ? 'text-success-700' : 'text-primary-700'}`}>
-                  {trip.claimed ? 'Claimed' : 'Claim'}
+                <Text className="font-bold text-xs uppercase tracking-wider text-amber-700">
+                  Approve Needs
                 </Text>
               </TouchableOpacity>
+            )}
+            
+            {isManager && trip.paymentMethod === "CASH" && trip.approved !== "PENDING" && (
+              <View className={`px-3 py-1.5 rounded-lg border ${trip.approved === "APPROVED" ? 'bg-success-50 border-success-200' : 'bg-red-50 border-red-200'}`}>
+                <Text className={`font-bold text-xs uppercase tracking-wider ${trip.approved === "APPROVED" ? 'text-success-700' : 'text-red-700'}`}>
+                  {trip.approved}
+                </Text>
+              </View>
             )}
           </View>
         </View>
@@ -263,63 +230,17 @@ const TripCard = ({ trip, onDelete, isManager }: { trip: typeof MOCK_TRIPS[0], o
 
 export default function TripsListScreen() {
   const { user } = useAuthStore();
-  const isManager = user?.role === "manager";
+  const isManager = user?.role === "admin" || user?.role === "manager";
   const [showTruckMenu, setShowTruckMenu] = useState(false);
   const [trucks, setTrucks] = useState<Truck[]>([ALL_TRUCKS_MOCK]);
   const [selectedTruck, setSelectedTruck] = useState<Truck>(ALL_TRUCKS_MOCK);
 
   // Trip Pagination State
-  const [trips, setTrips] = useState<typeof MOCK_TRIPS>([]);
+  const [trips, setTrips] = useState<Trip[]>([]);
   const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [loadingInitial, setLoadingInitial] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-
-  const fetchTripsPage = async (pageNumber: number) => {
-    // Simulated API call with pagination
-    await new Promise(resolve => setTimeout(resolve, 600)); // Network delay
-    const limit = 4; // Fetch 4 trips at a time so we can see the loading state easily
-    const start = (pageNumber - 1) * limit;
-    const end = start + limit;
-    return {
-      data: MOCK_TRIPS.slice(start, end),
-      totalPages: Math.ceil(MOCK_TRIPS.length / limit)
-    };
-  };
-
-  const loadTrips = async (pageNumber: number) => {
-    if (pageNumber === 1) setLoadingInitial(true);
-    else setLoadingMore(true);
-
-    try {
-      const res = await fetchTripsPage(pageNumber);
-      if (pageNumber === 1) {
-        setTrips(res.data);
-      } else {
-        setTrips(prev => {
-          const newItems = res.data.filter(item => !prev.some(p => p.id === item.id));
-          return [...prev, ...newItems];
-        });
-      }
-      setHasMore(pageNumber < res.totalPages);
-      setPage(pageNumber);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      if (pageNumber === 1) setLoadingInitial(false);
-      else setLoadingMore(false);
-    }
-  };
-
-  useEffect(() => {
-    loadTrips(1);
-  }, []);
-
-  const handleLoadMore = () => {
-    if (!loadingMore && hasMore) {
-      loadTrips(page + 1);
-    }
-  };
 
   // Date Filter State
   const [filterPreset, setFilterPreset] = useState<DateFilterPreset>("all");
@@ -328,50 +249,79 @@ export default function TripsListScreen() {
 
   // Advanced Filter Modal State
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [isApplyingFilters, setIsApplyingFilters] = useState(false);
   const [showFromPicker, setShowFromPicker] = useState(false);
   const [showToPicker, setShowToPicker] = useState(false);
   
-  const [paymentFilter, setPaymentFilter] = useState<"All" | "Cash" | "Dispatch">("All");
+  const [paymentFilter, setPaymentFilter] = useState<"All" | "CASH" | "CREDIT">("All");
   const [claimFilter, setClaimFilter] = useState<"All" | "Claimed" | "Unclaimed">("All");
 
-  const filteredTrips = useMemo(() => {
-    // If we're using "custom", check if custom dates are actually set
-    return trips.filter(trip => {
-      // 1. Date filter
-      if (!passesDateFilter(trip.date, filterPreset, customFrom, customTo)) return false;
-      
-      // 2. Payment Method filter
-      if (paymentFilter !== "All" && trip.paymentMethod !== paymentFilter) return false;
-      
-      // 3. Claim Status filter (only applicable for Admin and Dispatch trips)
-      if (isManager && paymentFilter !== "Cash" && claimFilter !== "All") {
-        if (trip.paymentMethod === "Dispatch") {
-          const isClaimed = !!trip.claimed;
-          if (claimFilter === "Claimed" && !isClaimed) return false;
-          if (claimFilter === "Unclaimed" && isClaimed) return false;
-        }
-      }
-      return true;
-    });
-  }, [trips, filterPreset, customFrom, customTo, paymentFilter, claimFilter, isManager]);
+  const buildQuery = (pageNumber: number): GetTripsQuery => {
+    let query: GetTripsQuery = {
+      page: pageNumber,
+      perpage: 10,
+    };
 
-  const tripGroups = getGroupedTrips(filteredTrips);
+    if (isManager && selectedTruck.id !== "all") {
+      query.truckId = selectedTruck.id;
+    }
+
+    if (paymentFilter !== "All") {
+      query.paymentMethod = paymentFilter;
+      
+      if (paymentFilter === "CREDIT" && claimFilter !== "All") {
+        query.claimed = claimFilter === "Claimed";
+      }
+    }
+
+    if (customFrom) {
+      query.startDate = customFrom.toISOString();
+    }
+    if (customTo) {
+      query.endDate = customTo.toISOString();
+    }
+
+    return query;
+  };
+
+  const loadTrips = useCallback(async (pageNumber: number, append = false) => {
+    if (pageNumber === 1) setLoadingInitial(true);
+    else setLoadingMore(true);
+
+    try {
+      const res = await tripService.getTrips(buildQuery(pageNumber));
+      setTrips(prev => append ? [...prev, ...res.data] : res.data);
+      setPage(res.meta.currentPage);
+      setTotalPages(res.meta.totalPages);
+    } catch (e: any) {
+      Alert.alert("Error", e.message || "Failed to load trips");
+    } finally {
+      if (pageNumber === 1) setLoadingInitial(false);
+      else setLoadingMore(false);
+    }
+  }, [selectedTruck, paymentFilter, claimFilter, customFrom, customTo, isManager]);
+
+  useEffect(() => {
+    loadTrips(1);
+  }, [loadTrips]);
+
+  const handleLoadMore = () => {
+    if (!loadingMore && !loadingInitial && page < totalPages) {
+      loadTrips(page + 1, true);
+    }
+  };
+
+  const tripGroups = getGroupedTrips(trips);
 
   useEffect(() => {
     if (isManager) {
-      mockTruckService.getMyTrucks().then((res) => {
+      // Still using mock trucks to populate list, should also switch to real service eventually if needed
+      truckService.getMyTrucks().then((res) => {
         if ("trucks" in res) {
           setTrucks([ALL_TRUCKS_MOCK, ...res.trucks]);
         }
       });
     }
   }, [isManager]);
-
-  const handleDelete = (id: string) => {
-    // We update local state to reflect deletion
-    setTrips((current: typeof MOCK_TRIPS) => current.filter((t) => t.id !== id));
-  };
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
@@ -442,8 +392,18 @@ export default function TripsListScreen() {
                 setClaimFilter("All");
                 setCustomFrom(null);
                 setCustomTo(null);
-                // Also trigger a fresh load if we want to "fetch without filters"
-                loadTrips(1);
+              } else if (preset !== "custom") {
+                // If they click 'Today' or '7d', DateFilterBar inherently gives us range but we need to track if we apply it to custom dates
+                // However DateFilterBar doesn't export the underlying range immediately, so customFrom/customTo stay null and we might need logic inside passesDateFilter.
+                // For a fully network backed approach, we need exact Date bounds from presets.
+                // Here we just map known sets:
+                const end = new Date();
+                const start = new Date();
+                if (preset === "today") start.setHours(0,0,0,0);
+                if (preset === "7d") start.setDate(end.getDate() - 7);
+                if (preset === "30d") start.setDate(end.getDate() - 30);
+                setCustomFrom(start);
+                setCustomTo(end);
               }
             }}
             customFrom={customFrom}
@@ -511,7 +471,7 @@ export default function TripsListScreen() {
               <View>
                 <Text className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Payment Method</Text>
                 <View className="flex-row gap-2">
-                  {["All", "Cash", "Dispatch"].map(method => (
+                  {["All", "CASH", "CREDIT"].map(method => (
                     <TouchableOpacity 
                       key={method}
                       onPress={() => setPaymentFilter(method as any)}
@@ -524,7 +484,7 @@ export default function TripsListScreen() {
               </View>
 
               {/* Claim Status Section */}
-              {isManager && paymentFilter !== "Cash" && (
+              {isManager && paymentFilter === "CREDIT" && (
                 <View>
                   <Text className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Claim Status</Text>
                   <View className="flex-row gap-2">
@@ -559,21 +519,13 @@ export default function TripsListScreen() {
               </TouchableOpacity>
               <TouchableOpacity 
                 activeOpacity={0.8}
-                disabled={isApplyingFilters}
-                onPress={async () => {
-                  setIsApplyingFilters(true);
-                  // Simulate network request delay
-                  await new Promise(resolve => setTimeout(resolve, 800));
-                  setIsApplyingFilters(false);
+                onPress={() => {
                   setShowAdvancedFilters(false);
+                  loadTrips(1); // Force immediate execute of new filters map
                 }}
                 className="flex-1 bg-primary rounded-xl items-center justify-center py-3 shadow-sm border border-primary-600"
               >
-                {isApplyingFilters ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text className="text-white font-bold text-sm tracking-wide">Apply</Text>
-                )}
+                <Text className="text-white font-bold text-sm tracking-wide">Apply</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -613,7 +565,7 @@ export default function TripsListScreen() {
           </Text>
         )}
         renderItem={({ item }) => (
-          <TripCard trip={item} onDelete={handleDelete} isManager={isManager} />
+          <TripCard trip={item} isManager={isManager} onRefresh={() => loadTrips(1)} />
         )}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
@@ -625,7 +577,7 @@ export default function TripsListScreen() {
               <ActivityIndicator size="small" color="#2563EB" />
               <Text className="text-text-secondary text-sm font-medium tracking-wide">Loading more trips...</Text>
             </View>
-          ) : !hasMore && trips.length > 0 ? (
+          ) : page >= totalPages && trips.length > 0 ? (
             <View className="py-6 items-center">
               <Text className="text-text-secondary/50 text-xs tracking-wide">No more trips to show</Text>
             </View>

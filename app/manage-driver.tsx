@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -12,20 +12,19 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, router } from "expo-router";
-import { mockDriverService } from "@/src/api/mock/drivers.mock";
-import { mockTruckService } from "@/src/api/mock/trucks.mock";
+import { driverService, truckService } from "@/src/api/services";
 import { Truck } from "@/src/types";
 
 export default function ManageDriverModal() {
-  const { mode, id, name: initialName, truckId: initialTruckId } = useLocalSearchParams();
+  const { mode, id, name: initialName, truckId: initialTruckId, username: initialUsername, password: initialPassword } = useLocalSearchParams();
   const isEdit = mode === "edit";
 
   const [name, setName] = useState(isEdit ? initialName?.toString() || "" : "");
-  const [username, setUsername] = useState(isEdit ? useLocalSearchParams().username?.toString() || "" : "");
-  const [password, setPassword] = useState(isEdit ? useLocalSearchParams().password?.toString() || "" : "");
+  const [username, setUsername] = useState(isEdit ? initialUsername?.toString() || "" : "");
+  const [password, setPassword] = useState(isEdit ? initialPassword?.toString() || "" : "");
   const [showPassword, setShowPassword] = useState(false);
   const [truckId, setTruckId] = useState(isEdit ? initialTruckId?.toString() || "" : "");
-  const [truckName, setTruckName] = useState(isEdit ? initialTruckId?.toString() || "" : ""); // Default to ID if name not known
+  const [truckName, setTruckName] = useState(isEdit ? initialTruckId?.toString() || "" : "");
   const [loading, setLoading] = useState(false);
 
   // Dropdown state
@@ -33,16 +32,16 @@ export default function ManageDriverModal() {
   const [showTruckMenu, setShowTruckMenu] = useState(false);
 
   // Fetch trucks for dropdown
-  useState(() => {
-    mockTruckService.getMyTrucks().then((res) => {
-      const truckList = "trucks" in res ? res.trucks : [];
+  useEffect(() => {
+    truckService.getMyTrucks().then((res) => {
+      const truckList = res.trucks || [];
       setTrucks(truckList);
       if (isEdit && initialTruckId) {
         const found = truckList.find(t => t.id === initialTruckId);
         if (found) setTruckName(`${found.plateNumber}${found.vinNumber ? ` - ${found.vinNumber}` : ""}`);
       }
-    });
-  });
+    }).catch(() => setTrucks([]));
+  }, []);
 
   const handleSubmit = async () => {
     // Basic validation
@@ -60,21 +59,16 @@ export default function ManageDriverModal() {
     try {
       if (isEdit) {
         if (!id) throw new Error("Missing driver ID for update");
-        await mockDriverService.updateDriverProfile(id.toString(), {
-          name: name.trim(),
-          username: username.trim(),
-          password: password.trim(),
-          truckId: truckId.trim(),
-        });
-        router.back();
+        await driverService.assignTruck(id.toString(), truckId.trim());
+        Alert.alert("Success", "Driver profile updated!", [{ text: "OK", onPress: () => router.back() }]);
       } else {
-        await mockDriverService.createDriver({
+        await driverService.createDriverAccount({
           name: name.trim(),
           username: username.trim(),
           password,
           truckId: truckId.trim(),
         });
-        router.back();
+        Alert.alert("Success", "Driver account created!", [{ text: "OK", onPress: () => router.back() }]);
       }
     } catch (error: any) {
       Alert.alert("Error", error.message || "Something went wrong");

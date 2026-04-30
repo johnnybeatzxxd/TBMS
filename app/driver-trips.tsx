@@ -1,79 +1,53 @@
-import { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, ActivityIndicator, SectionList, StyleSheet } from "react-native";
+import { useState, useEffect, useCallback } from "react";
+import { View, Text, TouchableOpacity, ActivityIndicator, SectionList, StyleSheet, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { tripService } from "@/src/api/services";
+import { Trip } from "@/src/types";
 
-// Temporary mock data for driver
-const getPastDateStr = (daysAgo: number) => {
-  const d = new Date();
-  d.setDate(d.getDate() - daysAgo);
+// Helper to format date string for display grouping
+const formatDateGroup = (dateString: string) => {
+  const d = new Date(dateString);
   const month = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   const year = d.getFullYear();
   return `${month}/${day}/${year}`;
 };
 
-const MOCK_TRIPS = [
-  { id: "1", date: getPastDateStr(0), loadingSite: "4kilo", unloadingSite: "Moria", paymentMethod: "Credit", volume: "10MCUBE" },
-  { id: "2", date: getPastDateStr(1), loadingSite: "Bole", unloadingSite: "Dukem", paymentMethod: "Cash", cashAmount: "850.00", volume: "16MCUBE", status: "Approved" },
-  { id: "3", date: getPastDateStr(2), loadingSite: "Entoto", unloadingSite: "Sendafa", paymentMethod: "Cash", cashAmount: "450.00", volume: "10MCUBE", status: "Declined" },
-  { id: "4", date: getPastDateStr(1), loadingSite: "Saris", unloadingSite: "Mexico", paymentMethod: "Credit", volume: "16MCUBE" },
-  { id: "5", date: getPastDateStr(0), loadingSite: "Kality", unloadingSite: "Adama", paymentMethod: "Cash", cashAmount: "1200.00", volume: "16MCUBE", status: "Pending" },
-];
-
-const generateMoreTrips = (page: number) => {
-  const result = [];
-  const statuses = ["Pending", "Approved", "Declined"];
-  for (let i = 0; i < 6; i++) {
-    const isCash = Math.random() > 0.5;
-    result.push({
-      id: `m-${page}-${i}`,
-      date: getPastDateStr(page * 2 + Math.floor(Math.random() * 3)),
-      loadingSite: ["Gotera", "Lebu", "Jemo", "Ayat", "Kera"][Math.floor(Math.random() * 5)],
-      unloadingSite: ["Bishoftu", "Modjo", "Hawassa", "Jimma", "Adama"][Math.floor(Math.random() * 5)],
-      paymentMethod: isCash ? "Cash" : "Credit",
-      volume: Math.random() > 0.5 ? "10MCUBE" : "16MCUBE",
-      cashAmount: isCash ? String(Math.floor(Math.random() * 100) * 10 + ".00") : undefined,
-      status: isCash ? statuses[Math.floor(Math.random() * 3)] : undefined
-    });
-  }
-  return result;
-};
-
-
-const getGroupedTrips = (trips: any[]) => {
+const getGroupedTrips = (trips: Trip[]) => {
   const grouped = trips.reduce((acc, trip) => {
-    if (!acc[trip.date]) acc[trip.date] = [];
-    acc[trip.date].push(trip);
+    const formattedDate = formatDateGroup(trip.date);
+    if (!acc[formattedDate]) acc[formattedDate] = [];
+    acc[formattedDate].push(trip);
     return acc;
-  }, {} as Record<string, any[]>);
+  }, {} as Record<string, Trip[]>);
 
-  // sort dates descending implicitly by ordering
+  // Sorting descending by date string assumes chronological order, typically standard string sort is fine or just relying on API order
   return Object.entries(grouped).map(([date, t]) => ({
     title: date,
-    data: t as any[], // Explicitly cast t to any[]
+    data: t,
   }));
 };
 
-const TripCard = ({ trip }: { trip: any }) => {
+const TripCard = ({ trip }: { trip: Trip }) => {
   return (
     <View className="bg-white rounded-2xl border border-border mt-3 overflow-hidden shadow-sm p-4">
       <View className="flex-row justify-between mb-3">
         <View>
           <Text className="text-text-secondary text-[10px] font-bold tracking-widest uppercase mb-1">Route</Text>
-          <Text className="text-text-primary font-bold text-base">{trip.loadingSite} - {trip.unloadingSite}</Text>
+          <Text className="text-text-primary font-bold text-base">{trip.loadingSite} - {trip.destinationSite}</Text>
         </View>
-        {trip.paymentMethod === "Cash" && trip.status ? (
+        {trip.paymentMethod === "CASH" && trip.approved ? (
           <View style={[styles.statusBadge, 
-            trip.status === "Approved" ? styles.statusApproved : 
-            trip.status === "Declined" ? styles.statusDeclined : 
+            trip.approved === "APPROVED" ? styles.statusApproved : 
+            trip.approved === "DECLINED" ? styles.statusDeclined : 
             styles.statusPending]}>
             <Text style={[styles.statusText,
-              trip.status === "Approved" ? styles.statusTextApproved : 
-              trip.status === "Declined" ? styles.statusTextDeclined : 
+              trip.approved === "APPROVED" ? styles.statusTextApproved : 
+              trip.approved === "DECLINED" ? styles.statusTextDeclined : 
               styles.statusTextPending
-            ]}>{trip.status}</Text>
+            ]}>{trip.approved}</Text>
           </View>
         ) : (
           <Ionicons name="location" size={20} color="#2563EB" />
@@ -86,9 +60,9 @@ const TripCard = ({ trip }: { trip: any }) => {
         </View>
         <View className="items-end">
           <Text className="text-text-secondary text-[10px] uppercase font-bold tracking-wider mb-1">Payment</Text>
-          <View style={[styles.badge, trip.paymentMethod === "Cash" ? styles.cashBadge : styles.creditBadge]}>
-             <Text style={[styles.badgeText, trip.paymentMethod === "Cash" ? styles.cashText : styles.creditText]}>
-               {trip.paymentMethod} {trip.cashAmount ? `$${trip.cashAmount}` : ""}
+          <View style={[styles.badge, trip.paymentMethod === "CASH" ? styles.cashBadge : styles.creditBadge]}>
+             <Text style={[styles.badgeText, trip.paymentMethod === "CASH" ? styles.cashText : styles.creditText]}>
+               {trip.paymentMethod} {trip.amount ? `$${trip.amount}` : ""}
              </Text>
           </View>
         </View>
@@ -101,31 +75,43 @@ export default function DriverTripsScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [trips, setTrips] = useState<any[]>([]);
+  const [trips, setTrips] = useState<Trip[]>([]);
   const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [tripType, setTripType] = useState<"Cash" | "Credit">("Cash");
 
-  useEffect(() => {
-    setTimeout(() => {
-      setTrips(MOCK_TRIPS);
+  const fetchTrips = useCallback(async (pageNum: number, type: "Cash" | "Credit", append = false) => {
+    try {
+      if (pageNum === 1) setLoading(true);
+      else setLoadingMore(true);
+
+      const response = await tripService.getTrips({
+        page: pageNum,
+        perpage: 10,
+        paymentMethod: type.toUpperCase() as "CASH" | "CREDIT",
+      });
+
+      setTrips(prev => append ? [...prev, ...response.data] : response.data);
+      setPage(response.meta.currentPage);
+      setTotalPages(response.meta.totalPages);
+    } catch (error: any) {
+      Alert.alert("Error", error.message || "Failed to load trips.");
+    } finally {
       setLoading(false);
-    }, 500);
+      setLoadingMore(false);
+    }
   }, []);
 
+  useEffect(() => {
+    fetchTrips(1, tripType, false);
+  }, [tripType, fetchTrips]);
+
   const loadMoreData = () => {
-    if (loadingMore) return;
-    setLoadingMore(true);
-    // simulate mock server delay
-    setTimeout(() => {
-      const newTrips = generateMoreTrips(page);
-      setTrips(prev => [...prev, ...newTrips]);
-      setPage(p => p + 1);
-      setLoadingMore(false);
-    }, 800);
+    if (loadingMore || loading || page >= totalPages) return;
+    fetchTrips(page + 1, tripType, true);
   };
 
-  const filteredTrips = trips.filter(t => t.paymentMethod === tripType);
-  const tripGroups = getGroupedTrips(filteredTrips);
+  const tripGroups = getGroupedTrips(trips);
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>

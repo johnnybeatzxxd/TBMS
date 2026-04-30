@@ -12,28 +12,35 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { truckService } from "@/src/api/services";
+import { companyService } from "@/src/api/services";
 
-export default function AddTruckModal() {
-  const [plateNumber, setPlateNumber] = useState("");
-  const [vinNumber, setVinNumber] = useState("");
+export default function AddCompanyModal() {
+  const [name, setName] = useState("");
+  const [balance, setBalance] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
-    if (!plateNumber.trim()) {
-      Alert.alert("Error", "Plate number is required.");
+    if (!name.trim()) {
+      Alert.alert("Error", "Company name is required.");
+      return;
+    }
+    
+    // Default to 0 if balance is omitted
+    const startingBalance = balance.trim() ? Number(balance) : 0;
+    if (isNaN(startingBalance)) {
+      Alert.alert("Error", "Starting balance must be a valid number.");
       return;
     }
 
     setLoading(true);
     try {
-      await truckService.addTruck({
-        plateNumber: plateNumber.trim().toUpperCase(),
-        vinNumber: vinNumber.trim().toUpperCase() || "",
+      await companyService.addCompany({
+        name: name.trim(),
+        currentBalance: startingBalance,
       });
       router.back();
     } catch (error: any) {
-      Alert.alert("Error", error.message || "Failed to add truck");
+      Alert.alert("Error", error.message || "Failed to add company");
     } finally {
       setLoading(false);
     }
@@ -48,7 +55,7 @@ export default function AddTruckModal() {
             <Ionicons name="close" size={24} color="#0F172A" />
           </TouchableOpacity>
           <Text className="text-text-primary font-bold text-xl">
-            Add Truck
+            Register Company
           </Text>
           <View className="w-10 h-10" />
         </View>
@@ -58,36 +65,38 @@ export default function AddTruckModal() {
             
             <View className="gap-1">
               <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase ml-1">
-                Plate Number *
+                Company Name *
               </Text>
               <View className="flex-row items-center bg-surface rounded-xl px-4 border border-border">
-                <Ionicons name="barcode-outline" size={16} color="#64748B" />
+                <Ionicons name="domain" size={16} color="#64748B" />
                 <TextInput
-                  className="flex-1 py-3.5 pl-3 text-base text-text-primary uppercase"
-                  placeholder="e.g. KAA 001A"
+                  className="flex-1 py-3.5 pl-3 text-base text-text-primary"
+                  placeholder="e.g. Acme Logistics"
                   placeholderTextColor="#94A3B8"
-                  value={plateNumber}
-                  onChangeText={setPlateNumber}
-                  autoCapitalize="characters"
+                  value={name}
+                  onChangeText={setName}
                 />
               </View>
             </View>
 
             <View className="gap-1">
               <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase ml-1">
-                VIN Number (Optional)
+                Starting Debt Balance (Optional)
               </Text>
               <View className="flex-row items-center bg-surface rounded-xl px-4 border border-border">
-                <Ionicons name="finger-print-outline" size={16} color="#64748B" />
+                <Text className="text-text-secondary font-semibold text-base">$</Text>
                 <TextInput
-                  className="flex-1 py-3.5 pl-3 text-base text-text-primary uppercase"
-                  placeholder="e.g. VIN12345678"
+                  className="flex-1 py-3.5 pl-3 text-base text-text-primary"
+                  placeholder="0.00"
                   placeholderTextColor="#94A3B8"
-                  value={vinNumber}
-                  onChangeText={setVinNumber}
-                  autoCapitalize="characters"
+                  keyboardType="numeric"
+                  value={balance}
+                  onChangeText={setBalance}
                 />
               </View>
+              <Text className="text-[10px] text-text-secondary mt-1 ml-1 leading-tight">
+                Any pre-existing debt this company owes you.
+              </Text>
             </View>
 
             <View className="flex-row gap-4 mt-2">
@@ -102,13 +111,13 @@ export default function AddTruckModal() {
               <TouchableOpacity
                 onPress={handleSubmit}
                 disabled={loading}
-                className="flex-1 bg-sky-500 rounded-xl py-4 items-center justify-center shadow-sm shadow-sky-500"
+                className="flex-1 bg-amber-500 rounded-xl py-4 items-center justify-center shadow-sm shadow-amber-500"
               >
                 {loading ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
                   <Text className="text-white font-bold text-base tracking-wide">
-                    Add Truck
+                    Register
                   </Text>
                 )}
               </TouchableOpacity>

@@ -4,6 +4,7 @@ export * from "./trip.types";
 export * from "./driver.types";
 export * from "./expense.types";
 export * from "./transfer.types";
+export * from "./company.types";
 
 // Generic API response wrapper
 export interface ApiResponse<T> {

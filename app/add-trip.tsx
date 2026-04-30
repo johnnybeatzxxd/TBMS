@@ -15,6 +15,9 @@ import DateTimePicker, {
 } from "@react-native-community/datetimepicker";
 import { router, useLocalSearchParams } from "expo-router";
 
+import { tripService, companyService } from "@/src/api/services";
+import { Company, AddTripPayload, UpdateTripPayload } from "@/src/types";
+
 type Volume = "10MCUBE" | "16MCUBE";
 
 export default function AddTripModal() {
@@ -60,7 +63,7 @@ export default function AddTripModal() {
 
   const [companies, setCompanies] = useState<{id: string, name: string}[]>([]);
   const [isLoadingCompanies, setIsLoadingCompanies] = useState(false);
-  const [selectedCompany, setSelectedCompany] = useState("");
+  const [selectedCompany, setSelectedCompany] = useState<string>("");
   const [companyDropdownOpen, setCompanyDropdownOpen] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -68,16 +71,10 @@ export default function AddTripModal() {
   useEffect(() => {
     if (tripType === "credit" && companies.length === 0) {
       setIsLoadingCompanies(true);
-      // Simulate API fetch delay
-      setTimeout(() => {
-        setCompanies([
-          { id: "c1", name: "Dangote Cement" },
-          { id: "c2", name: "Derba Midroc" },
-          { id: "c3", name: "Habesha Cement" },
-          { id: "c4", name: "National Cement" },
-        ]);
-        setIsLoadingCompanies(false);
-      }, 1000);
+      tripService.getAllowedCompanies()
+        .then(data => setCompanies(data))
+        .catch(err => Alert.alert("Companies Error", err.message || "Failed to load companies"))
+        .finally(() => setIsLoadingCompanies(false));
     }
   }, [tripType]);
 
@@ -119,14 +116,37 @@ export default function AddTripModal() {
     
     setIsSubmitting(true);
 
-    // TODO: connect to API
-    await new Promise((r) => setTimeout(r, 1200));
-    setIsSubmitting(false);
-    Alert.alert(
-      "Success",
-      isEditMode ? "Trip updated successfully!" : "Trip logged successfully!",
-      [{ text: "OK", onPress: () => router.back() }]
-    );
+    try {
+      const payload: AddTripPayload = {
+        date: tripDate,
+        loadingSite: loadingSite.trim(),
+        destinationSite: unloadingSite.trim(),
+        volume: volume === "10MCUBE" ? "MCUBE10" : "MCUBE16",
+        paymentMethod: tripType === "cash" ? "CASH" : "CREDIT",
+        amount: tripType === "cash" ? Number(cashAmount) : Number(paymentAmount),
+        roadExpence: roadExpense ? Number(roadExpense) : 0,
+        companyId: tripType === "credit" ? selectedCompany : undefined,
+      };
+
+      if (isEditMode && params.id) {
+        const updatePayload: UpdateTripPayload = {
+          ...payload
+        };
+        await tripService.updateTrip(params.id, updatePayload);
+      } else {
+        await tripService.addTrip(payload);
+      }
+
+      Alert.alert(
+        "Success",
+        isEditMode ? "Trip updated successfully!" : "Trip logged successfully!",
+        [{ text: "OK", onPress: () => router.back() }]
+      );
+    } catch (error: any) {
+      Alert.alert("Submission Failed", error.message || "Failed to process the trip.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
