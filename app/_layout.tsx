@@ -21,6 +21,18 @@ export default function RootLayout() {
         <Stack.Screen name="drivers" options={{ headerShown: false }} />
         <Stack.Screen name="trucks" options={{ headerShown: false }} />
         <Stack.Screen name="analytics" options={{ headerShown: false }} />
+        <Stack.Screen name="driver-dashboard" options={{ headerShown: false }} />
+        <Stack.Screen name="driver-trips" options={{ headerShown: false }} />
+        <Stack.Screen name="driver-expenses" options={{ headerShown: false }} />
+        <Stack.Screen name="driver-refuels" options={{ headerShown: false }} />
+        <Stack.Screen name="driver-transfers" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="add-refuel"
+          options={{
+            presentation: "modal",
+            headerShown: false,
+          }}
+        />
         <Stack.Screen
           name="manage-driver"
           options={{

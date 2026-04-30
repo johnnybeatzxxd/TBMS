@@ -24,7 +24,11 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     // TEMPORARY BYPASS: set mock user with selected role then navigate
     setMockUser(role);
-    router.replace("/(tabs)");
+    if (role === "driver") {
+      router.replace("/driver-dashboard");
+    } else {
+      router.replace("/(tabs)");
+    }
   };
 
   return (

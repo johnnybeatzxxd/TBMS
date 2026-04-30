@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -15,12 +15,12 @@ import DateTimePicker, {
 } from "@react-native-community/datetimepicker";
 import { router, useLocalSearchParams } from "expo-router";
 
-type PaymentMethod = "dispatch" | "cash";
 type Volume = "10MCUBE" | "16MCUBE";
 
 export default function AddTripModal() {
   const params = useLocalSearchParams<{
     id?: string;
+    tripType?: string;
     date?: string;
     loadingSite?: string;
     unloadingSite?: string;
@@ -29,7 +29,6 @@ export default function AddTripModal() {
     volume?: string;
     roadExpense?: string;
   }>();
-
 
   const isEditMode = !!params.id;
 
@@ -43,18 +42,44 @@ export default function AddTripModal() {
     return new Date();
   };
 
+  const tripType: "cash" | "credit" = 
+    params.tripType === "credit" || params.paymentMethod === "dispatch" || params.paymentMethod === "credit" 
+      ? "credit" 
+      : "cash";
+  
   const [tripDate, setTripDate] = useState(parseDate(params.date));
   const [showDatePicker, setShowDatePicker] = useState(false);
+  
   const [loadingSite, setLoadingSite] = useState(params.loadingSite || "");
   const [unloadingSite, setUnloadingSite] = useState(params.unloadingSite || "");
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
-    (params.paymentMethod as PaymentMethod) || "cash"
-  );
   const [volume, setVolume] = useState<Volume>((params.volume as Volume) || "10MCUBE");
+  
   const [cashAmount, setCashAmount] = useState(params.cashAmount || "");
+  const [paymentAmount, setPaymentAmount] = useState("");
   const [roadExpense, setRoadExpense] = useState(params.roadExpense || "");
+
+  const [companies, setCompanies] = useState<{id: string, name: string}[]>([]);
+  const [isLoadingCompanies, setIsLoadingCompanies] = useState(false);
+  const [selectedCompany, setSelectedCompany] = useState("");
+  const [companyDropdownOpen, setCompanyDropdownOpen] = useState(false);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  useEffect(() => {
+    if (tripType === "credit" && companies.length === 0) {
+      setIsLoadingCompanies(true);
+      // Simulate API fetch delay
+      setTimeout(() => {
+        setCompanies([
+          { id: "c1", name: "Dangote Cement" },
+          { id: "c2", name: "Derba Midroc" },
+          { id: "c3", name: "Habesha Cement" },
+          { id: "c4", name: "National Cement" },
+        ]);
+        setIsLoadingCompanies(false);
+      }, 1000);
+    }
+  }, [tripType]);
 
   const onDateChange = (_: DateTimePickerEvent, selected?: Date) => {
     setShowDatePicker(false);
@@ -73,16 +98,26 @@ export default function AddTripModal() {
       Alert.alert("Validation Error", "Please fill in both loading and unloading sites.");
       return;
     }
-    if (paymentMethod === "cash" && (!cashAmount || isNaN(Number(cashAmount)))) {
+    if (tripType === "cash" && (!cashAmount || isNaN(Number(cashAmount)))) {
       Alert.alert("Validation Error", "Please enter a valid cash amount.");
       return;
+    }
+    if (tripType === "credit") {
+      if (!selectedCompany) {
+        Alert.alert("Validation Error", "Please select a company.");
+        return;
+      }
+      if (!paymentAmount || isNaN(Number(paymentAmount))) {
+        Alert.alert("Validation Error", "Please enter a valid payment amount.");
+        return;
+      }
     }
     if (roadExpense && isNaN(Number(roadExpense))) {
       Alert.alert("Validation Error", "Please enter a valid road expense amount.");
       return;
     }
+    
     setIsSubmitting(true);
-
 
     // TODO: connect to API
     await new Promise((r) => setTimeout(r, 1200));
@@ -102,7 +137,7 @@ export default function AddTripModal() {
           <Ionicons name="chevron-back" size={28} color="#2563EB" />
         </TouchableOpacity>
         <Text className="text-text-primary font-bold text-lg tracking-wide">
-          {isEditMode ? "Edit Trip" : "New Trip"}
+          {isEditMode ? "Edit Trip" : tripType === "cash" ? "New Cash Trip" : "New Credit Trip"}
         </Text>
         <View className="w-10 h-10" />
       </View>
@@ -115,7 +150,7 @@ export default function AddTripModal() {
       >
         {/* Trip Date */}
         <View className="bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
-          <View className="px-4 pt-4 pb-2">
+          <View className="px-4 pt-4 pb-4">
             <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase mb-2">
               Trip Date *
             </Text>
@@ -139,7 +174,6 @@ export default function AddTripModal() {
               onChange={onDateChange}
             />
           )}
-          <View className="h-4" />
         </View>
 
         {/* Volume Selection */}
@@ -185,6 +219,57 @@ export default function AddTripModal() {
             </View>
           </View>
         </View>
+
+        {/* Company Dropdown (Credit Only) */}
+        {tripType === "credit" && (
+          <View className="bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
+            <View className="flex-row items-center gap-2 px-4 pt-4 pb-3 border-b border-border bg-primary-50">
+              <Ionicons name="business-outline" size={16} color="#2563EB" />
+              <Text className="text-primary font-semibold text-xs tracking-widest uppercase">
+                Client Company
+              </Text>
+            </View>
+            <View className="p-4">
+              <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase mb-2">
+                Company *
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  if (!isLoadingCompanies) setCompanyDropdownOpen(!companyDropdownOpen);
+                }}
+                className="flex-row items-center gap-3 bg-surface rounded-xl px-4 py-3.5 border border-border"
+                activeOpacity={0.7}
+              >
+                <Ionicons name="business-outline" size={18} color="#2563EB" />
+                <Text className={`font-medium flex-1 ${selectedCompany ? 'text-text-primary' : 'text-text-secondary'}`}>
+                  {selectedCompany ? companies.find(c => c.id === selectedCompany)?.name : "Select Company..."}
+                </Text>
+                {isLoadingCompanies ? (
+                  <ActivityIndicator size="small" color="#2563EB" />
+                ) : (
+                  <Ionicons name={companyDropdownOpen ? "chevron-up" : "chevron-down"} size={16} color="#64748B" />
+                )}
+              </TouchableOpacity>
+              
+              {companyDropdownOpen && !isLoadingCompanies && (
+                <View className="mt-2 bg-white border border-border rounded-xl px-1 py-1">
+                  {companies.map((c, idx) => (
+                    <TouchableOpacity
+                      key={c.id}
+                      onPress={() => {
+                        setSelectedCompany(c.id);
+                        setCompanyDropdownOpen(false);
+                      }}
+                      className={`px-4 py-3.5 ${idx !== companies.length - 1 ? "border-b border-border/60" : ""}`}
+                    >
+                      <Text className="text-text-primary text-base font-medium">{c.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+          </View>
+        )}
 
         {/* Route Details */}
         <View className="bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
@@ -240,80 +325,34 @@ export default function AddTripModal() {
           </View>
         </View>
 
-        {/* Payment Method */}
+        {/* Financial Details */}
         <View className="bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
           <View className="flex-row items-center gap-2 px-4 pt-4 pb-3 border-b border-border bg-primary-50">
-            <Ionicons name="card-outline" size={16} color="#2563EB" />
+            <Ionicons name="cash-outline" size={16} color="#2563EB" />
             <Text className="text-primary font-semibold text-xs tracking-widest uppercase">
-              Payment Method
+              Financial Information
             </Text>
           </View>
           <View className="p-4 gap-4">
-            {/* Toggle */}
-            <View className="flex-row bg-surface rounded-xl overflow-hidden border border-border">
-              <TouchableOpacity
-                onPress={() => setPaymentMethod("cash")}
-                className={`flex-1 py-3 items-center rounded-xl ${
-                  paymentMethod === "cash" ? "bg-primary-700" : "bg-transparent"
-                }`}
-                activeOpacity={0.8}
-              >
-                <Text
-                  className={`font-bold text-sm tracking-widest uppercase ${
-                    paymentMethod === "cash" ? "text-white" : "text-text-secondary"
-                  }`}
-                >
-                  Cash
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setPaymentMethod("dispatch")}
-                className={`flex-1 py-3 items-center rounded-xl ${
-                  paymentMethod === "dispatch" ? "bg-primary-700" : "bg-transparent"
-                }`}
-                activeOpacity={0.8}
-              >
-                <Text
-                  className={`font-bold text-sm tracking-widest uppercase ${
-                    paymentMethod === "dispatch" ? "text-white" : "text-text-secondary"
-                  }`}
-                >
-                  Dispatch
-                </Text>
-              </TouchableOpacity>
+            {/* Amount input (Changes based on trip type) */}
+            <View>
+              <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase mb-2">
+                {tripType === "cash" ? "Cash Amount *" : "Payment Amount *"}
+              </Text>
+              <View className="flex-row items-center bg-surface rounded-xl px-4 border border-border">
+                <Text className="text-text-secondary font-semibold text-base">$</Text>
+                <TextInput
+                  className="flex-1 text-text-primary py-3.5 pl-3 text-base"
+                  placeholder="0.00"
+                  placeholderTextColor="#94A3B8"
+                  keyboardType="numeric"
+                  value={tripType === "cash" ? cashAmount : paymentAmount}
+                  onChangeText={tripType === "cash" ? setCashAmount : setPaymentAmount}
+                />
+              </View>
             </View>
 
-            {/* Amount input (Only shown when payment method is Cash) */}
-            {paymentMethod === "cash" && (
-              <View>
-                <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase mb-2">
-                  Cash Amount *
-                </Text>
-                <View className="flex-row items-center bg-surface rounded-xl px-4 border border-border">
-                  <Text className="text-text-secondary font-semibold text-base">$</Text>
-                  <TextInput
-                    className="flex-1 text-text-primary py-3.5 pl-3 text-base"
-                    placeholder="0.00"
-                    placeholderTextColor="#94A3B8"
-                    keyboardType="numeric"
-                    value={cashAmount}
-                    onChangeText={setCashAmount}
-                  />
-                </View>
-              </View>
-            )}
-          </View>
-        </View>
-
-        {/* Road Expense */}
-        <View className="bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
-          <View className="flex-row items-center gap-2 px-4 pt-4 pb-3 border-b border-border bg-primary-50">
-            <Ionicons name="car-outline" size={16} color="#2563EB" />
-            <Text className="text-primary font-semibold text-xs tracking-widest uppercase">
-              Additional Expenses
-            </Text>
-          </View>
-          <View className="p-4">
+            {/* Road Expense */}
             <View>
               <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase mb-2">
                 Road Expense
@@ -322,17 +361,16 @@ export default function AddTripModal() {
                 <Text className="text-text-secondary font-semibold text-base">$</Text>
                 <TextInput
                   className="flex-1 text-text-primary py-3.5 pl-3 text-base"
-                  placeholder="0"
+                  placeholder="0.00"
                   placeholderTextColor="#94A3B8"
-                  keyboardType="number-pad"
+                  keyboardType="numeric"
                   value={roadExpense}
-                  onChangeText={(text) => setRoadExpense(text.replace(/[^0-9]/g, ""))}
+                  onChangeText={(text) => setRoadExpense(text.replace(/[^0-9.]/g, ""))}
                 />
               </View>
             </View>
           </View>
         </View>
-
 
         {/* Submit Button */}
         <TouchableOpacity
