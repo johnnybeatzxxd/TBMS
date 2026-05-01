@@ -63,14 +63,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <Ionicons size={24} name="settings" color={color} />,
         }}
       />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          href: isDriver ? "/profile" : null,
-          title: 'Profile',
-          tabBarIcon: ({ color }) => <Ionicons size={24} name="person" color={color} />,
-        }}
-      />
+
       <Tabs.Screen
         name="analytics"
         options={{

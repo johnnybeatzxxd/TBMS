@@ -28,19 +28,21 @@ export default function ManageDriverModal() {
   const [loading, setLoading] = useState(false);
 
   // Dropdown state
-  const [trucks, setTrucks] = useState<Truck[]>([]);
+  const [trucks, setTrucks] = useState<{id: string; plateNumber: string}[]>([]);
   const [showTruckMenu, setShowTruckMenu] = useState(false);
+  const [loadingTrucks, setLoadingTrucks] = useState(true);
 
-  // Fetch trucks for dropdown
+  // Fetch unassigned trucks immediately when form opens
   useEffect(() => {
-    truckService.getMyTrucks().then((res) => {
+    setLoadingTrucks(true);
+    truckService.getUnassignedTrucks().then((res) => {
       const truckList = res.trucks || [];
       setTrucks(truckList);
       if (isEdit && initialTruckId) {
         const found = truckList.find(t => t.id === initialTruckId);
-        if (found) setTruckName(`${found.plateNumber}${found.vinNumber ? ` - ${found.vinNumber}` : ""}`);
+        if (found) setTruckName(found.plateNumber);
       }
-    }).catch(() => setTrucks([]));
+    }).catch(() => setTrucks([])).finally(() => setLoadingTrucks(false));
   }, []);
 
   const handleSubmit = async () => {
@@ -132,9 +134,14 @@ export default function ManageDriverModal() {
 
                 {showTruckMenu && (
                   <View className="absolute top-14 left-0 right-0 bg-white border border-border shadow-md rounded-xl max-h-48 z-50 overflow-hidden">
-                    {trucks.length === 0 ? (
+                    {loadingTrucks ? (
+                      <View className="p-4 items-center flex-row justify-center gap-2">
+                        <ActivityIndicator size="small" color="#2563EB" />
+                        <Text className="text-text-secondary text-sm">Loading trucks...</Text>
+                      </View>
+                    ) : trucks.length === 0 ? (
                       <View className="p-4 items-center">
-                        <Text className="text-text-secondary">Loading trucks...</Text>
+                        <Text className="text-text-secondary">No available trucks</Text>
                       </View>
                     ) : (
                       trucks.map((truck) => (
@@ -142,7 +149,7 @@ export default function ManageDriverModal() {
                           key={truck.id}
                           onPress={() => {
                             setTruckId(truck.id);
-                            setTruckName(`${truck.plateNumber}${truck.vinNumber ? ` - ${truck.vinNumber}` : ""}`);
+                            setTruckName(truck.plateNumber);
                             setShowTruckMenu(false);
                           }}
                           className={`flex-row items-center px-4 py-3 border-b border-border-light ${
@@ -150,7 +157,7 @@ export default function ManageDriverModal() {
                           }`}
                         >
                           <Text className={`flex-1 text-sm ${truckId === truck.id ? "text-primary font-semibold" : "text-text-primary"}`}>
-                            {truck.plateNumber}{truck.vinNumber ? ` - ${truck.vinNumber}` : ""}
+                            {truck.plateNumber}
                           </Text>
                           {truckId === truck.id && (
                             <Ionicons name="checkmark-circle" size={16} color="#2563EB" />

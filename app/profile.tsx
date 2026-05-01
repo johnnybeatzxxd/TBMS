@@ -11,13 +11,9 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import { authService } from "@/src/api/auth.service";
 import { useAuthStore } from "@/src/store";
-import { mockDriverService } from "@/src/api/mock/drivers.mock";
-import { mockTruckService } from "@/src/api/mock/trucks.mock";
-import { mockTransferService } from "@/src/api/mock/transfers.mock";
-import { Driver, Truck, Transfer } from "@/src/types";
-
-// Helpers
 const getInitials = (name: string) =>
   name
     .split(" ")
@@ -34,10 +30,7 @@ export default function ProfileScreen() {
   const isDriver = user?.role === "driver";
 
   const [loading, setLoading] = useState(true);
-  const [driverInfo, setDriverInfo] = useState<Driver | null>(null);
-  const [truck, setTruck] = useState<Truck | null>(null);
-  const [balance, setBalance] = useState<number>(0);
-  const [managerName] = useState("Mock Manager"); // From mock admin
+  const [profileData, setProfileData] = useState<any>(null);
 
   // Change credentials modal
   const [showCredModal, setShowCredModal] = useState(false);
@@ -54,32 +47,8 @@ export default function ProfileScreen() {
   const fetchProfileData = async () => {
     setLoading(true);
     try {
-      // Get driver info
-      const driversRes = await mockDriverService.getMyDrivers();
-      const myDriver = driversRes.drivers.find(
-        (d) => d.name === user?.name || d.accountId === user?.id
-      );
-      if (myDriver) {
-        setDriverInfo(myDriver);
-        setNewUsername(myDriver.username || "");
-      }
-
-      // Get truck info
-      const trucksRes = await mockTruckService.getMyTrucks();
-      if ("trucks" in trucksRes && myDriver) {
-        const myTruck = trucksRes.trucks.find((t) => t.id === myDriver.truckId);
-        if (myTruck) setTruck(myTruck);
-      }
-
-      // Calculate balance from transfers
-      const transfersRes = await mockTransferService.getTransfers();
-      const myTransfers = transfersRes.transfers.filter(
-        (t) => t.driverId === myDriver?.id
-      );
-      const bal = myTransfers.reduce((sum, t) => {
-        return t.type === "increment" ? sum + t.amount : sum - t.amount;
-      }, 0);
-      setBalance(bal);
+      const data = await authService.getProfile();
+      setProfileData(data);
     } catch (error: any) {
       Alert.alert("Error", error.message || "Failed to load profile data");
     } finally {
@@ -103,14 +72,7 @@ export default function ProfileScreen() {
 
     setSavingCreds(true);
     try {
-      if (driverInfo) {
-        await mockDriverService.updateDriverProfile(driverInfo.id, {
-          truckId: driverInfo.truckId,
-          username: newUsername.trim() || undefined,
-          password: newPassword || undefined,
-        });
-      }
-      Alert.alert("Success", "Credentials updated successfully!");
+      Alert.alert("Notice", "Profile credentials updates should be managed by your admin.");
       setShowCredModal(false);
       setNewPassword("");
       setConfirmPassword("");
@@ -141,7 +103,7 @@ export default function ProfileScreen() {
     );
   }
 
-  const accountActive = driverInfo?.accountActive ?? true;
+  const accountActive = profileData?.accountActive ?? true;
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
@@ -151,7 +113,21 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header Background + Avatar */}
-        <View className="bg-primary pt-6 pb-16 px-5 rounded-b-3xl">
+        <View className="bg-primary pt-6 pb-16 px-5 rounded-b-3xl relative">
+          {/* Back Button */}
+          <TouchableOpacity 
+            onPress={() => {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace("/driver-dashboard");
+              }
+            }}
+            className="absolute top-6 left-5 z-20 w-10 h-10 rounded-full bg-white/20 items-center justify-center border border-white/30"
+          >
+            <Ionicons name="arrow-back" size={20} color="#fff" />
+          </TouchableOpacity>
+
           <Text className="text-white/70 text-xs font-semibold tracking-widest uppercase text-center mb-4">
             Driver Profile
           </Text>
@@ -208,13 +184,13 @@ export default function ProfileScreen() {
             <View className="px-5 pb-5">
               <Text
                 className={`text-3xl font-bold ${
-                  balance >= 0 ? "text-success-600" : "text-danger-600"
+                  (profileData?.balance || 0) >= 0 ? "text-success-600" : "text-danger-600"
                 }`}
               >
-                {balance >= 0 ? "+" : "-"}{formatCurrency(balance)}
+                {(profileData?.balance || 0) >= 0 ? "+" : "-"}{formatCurrency(profileData?.balance || 0)}
               </Text>
               <Text className="text-text-secondary text-xs mt-1">
-                Net balance from all transfers
+                Approved Cash trips: ${profileData?.approvedBalance || 0}
               </Text>
             </View>
           </View>
@@ -235,7 +211,7 @@ export default function ProfileScreen() {
                   Assigned Truck
                 </Text>
                 <Text className="text-text-primary font-bold text-sm mt-0.5">
-                  {truck?.plateNumber || "Not Assigned"}
+                  {profileData?.truck?.plateNumber || "Not Assigned"}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
@@ -244,14 +220,14 @@ export default function ProfileScreen() {
             {/* Manager Info */}
             <View className="flex-row items-center gap-3 bg-surface rounded-xl px-4 py-3.5 border border-border">
               <View className="w-9 h-9 rounded-full bg-violet-50 items-center justify-center border border-violet-100">
-                <Ionicons name="person-outline" size={16} color="#7C3AED" />
+                <Ionicons name="business-outline" size={16} color="#7C3AED" />
               </View>
               <View className="flex-1">
                 <Text className="text-text-secondary text-[10px] font-semibold tracking-widest uppercase">
-                  Manager
+                  Assigned Company
                 </Text>
                 <Text className="text-text-primary font-bold text-sm mt-0.5">
-                  {managerName}
+                  {profileData?.company?.name || "No Company"}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
@@ -267,25 +243,12 @@ export default function ProfileScreen() {
                   Username
                 </Text>
                 <Text className="text-text-primary font-bold text-sm mt-0.5">
-                  @{driverInfo?.username || user?.username || "—"}
+                  @{user?.username || "—"}
                 </Text>
               </View>
             </View>
 
-            {/* Email */}
-            <View className="flex-row items-center gap-3 bg-surface rounded-xl px-4 py-3.5 border border-border">
-              <View className="w-9 h-9 rounded-full bg-emerald-50 items-center justify-center border border-emerald-100">
-                <Ionicons name="mail-outline" size={16} color="#059669" />
-              </View>
-              <View className="flex-1">
-                <Text className="text-text-secondary text-[10px] font-semibold tracking-widest uppercase">
-                  Email
-                </Text>
-                <Text className="text-text-primary font-bold text-sm mt-0.5">
-                  {user?.email || "—"}
-                </Text>
-              </View>
-            </View>
+
           </View>
 
           {/* Actions */}

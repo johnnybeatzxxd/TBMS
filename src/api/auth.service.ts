@@ -103,4 +103,16 @@ export const authService = {
       return false;
     }
   },
+
+  /**
+   * Retrieves the comprehensive profile of the authenticated user.
+   */
+  async getProfile(): Promise<any> {
+    const res = await apiFetch("/auth/get-profile");
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || "Failed to fetch profile");
+    }
+    return res.json();
+  },
 };

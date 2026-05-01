@@ -9,8 +9,6 @@ import { DateFilterBar, DateFilterPreset, passesDateFilter } from "@/src/compone
 import { tripService, truckService } from "@/src/api/services";
 import { Trip, Truck, GetTripsQuery } from "@/src/types";
 
-const ALL_TRUCKS_MOCK: Truck = { id: "all", plateNumber: "All Trucks", adminId: "" };
-
 const getRelativeDateLabel = (dateStr: string) => {
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return dateStr;
@@ -44,16 +42,23 @@ const getGroupedTrips = (trips: Trip[]) => {
   }));
 };
 
-const TripCard = ({ trip, isManager, onRefresh }: { trip: Trip, isManager: boolean, onRefresh: () => void }) => {
+const TripCard = ({ trip, isManager, onRefresh, activePaymentFilter }: { trip: Trip, isManager: boolean, onRefresh: () => void, activePaymentFilter: "CASH" | "CREDIT" }) => {
   const [expanded, setExpanded] = useState(false);
+  const [approving, setApproving] = useState(false);
+
+  // Determine the trip type: use companyId presence or fall back to the active filter
+  const tripPaymentType = trip.companyId ? "CREDIT" : (trip.paymentMethod || activePaymentFilter);
 
   const handleApprove = async () => {
+    setApproving(true);
     try {
       await tripService.approveTrip(trip.id);
-      Alert.alert("Success", "Cash trip approved successfully!");
+      Alert.alert("Success", "Trip approved successfully!");
       onRefresh();
     } catch (err: any) {
       Alert.alert("Error", err.message || "Approval failed.");
+    } finally {
+      setApproving(false);
     }
   };
 
@@ -63,165 +68,242 @@ const TripCard = ({ trip, isManager, onRefresh }: { trip: Trip, isManager: boole
     year: "numeric"
   });
 
+  const volumeLabel = trip.volume === "MCUBE10" ? "10 M³" : trip.volume === "MCUBE16" ? "16 M³" : trip.volume;
+  const isPending = tripPaymentType === "CASH" && trip.approved !== "APPROVED";
+
   return (
     <TouchableOpacity
       activeOpacity={0.8}
       onPress={() => setExpanded(!expanded)}
-      className="bg-white rounded-2xl border border-border mt-3 overflow-hidden shadow-sm"
+      className={`bg-white rounded-2xl border mt-3 overflow-hidden shadow-sm ${isPending ? "border-amber-300" : "border-border"}`}
     >
-      {/* ALWAYS VISIBLE: Unloading Site */}
+      {/* ALWAYS VISIBLE: Header Row */}
       <View className="flex-row items-center justify-between p-4 bg-white">
-        <View className="flex-row items-center flex-1 pr-4">
-          <View className="w-10 h-10 bg-primary-50 rounded-xl items-center justify-center mr-3">
-            <Ionicons name="location" size={20} color="#2563EB" />
+        <View className="flex-row items-center flex-1 pr-3">
+          <View className={`w-10 h-10 rounded-xl items-center justify-center mr-3 ${tripPaymentType === "CREDIT" ? "bg-primary-50" : "bg-success-50"}`}>
+            <Ionicons name={tripPaymentType === "CREDIT" ? "business" : "cash"} size={20} color={tripPaymentType === "CREDIT" ? "#2563EB" : "#16A34A"} />
           </View>
           <View className="flex-1">
-            <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase mb-0.5">
-              Destination
-            </Text>
             <Text className="text-text-primary font-bold text-base" numberOfLines={1}>
               {trip.destinationSite}
             </Text>
+            <View className="flex-row items-center gap-2 mt-0.5">
+              <Text className="text-text-secondary text-xs">{formattedDate}</Text>
+              <View className="w-1 h-1 rounded-full bg-border" />
+              <Text className="text-text-secondary text-xs">{volumeLabel}</Text>
+              {trip.amount !== undefined && (
+                <>
+                  <View className="w-1 h-1 rounded-full bg-border" />
+                  <Text className="text-success-700 text-xs font-bold">${trip.amount}</Text>
+                </>
+              )}
+            </View>
           </View>
         </View>
-        <Ionicons
-          name={expanded ? "chevron-up" : "chevron-down"}
-          size={20}
-          color="#94A3B8"
-        />
+
+        <View className="flex-row items-center gap-2">
+          {/* Status indicator */}
+          {tripPaymentType === "CASH" && (
+            <View className={`w-2 h-2 rounded-full ${
+              trip.approved === "APPROVED" ? "bg-success" : "bg-amber-400"
+            }`} />
+          )}
+          {tripPaymentType === "CREDIT" && (
+            <View className={`w-2 h-2 rounded-full ${trip.claimed ? "bg-success" : "bg-amber-400"}`} />
+          )}
+          <Ionicons
+            name={expanded ? "chevron-up" : "chevron-down"}
+            size={20}
+            color="#94A3B8"
+          />
+        </View>
       </View>
 
-      {/* EXPANDED CONTENT: Date, Loading Site, Payment Method */}
+      {/* EXPANDED CONTENT */}
       {expanded && (
-        <View className="relative px-4 pb-4 bg-surface/50 border-t border-border pt-3 gap-3">
-          {/* Edit Action - top right */}
+        <View className="border-t border-border">
+          {/* Route Details */}
+          <View className="px-4 pt-3 pb-3">
+            <View className="relative pl-2 pb-1">
+              <View className="absolute left-4 top-2 bottom-6 w-px bg-border items-center">
+                <View className="w-2.5 h-2.5 rounded-full bg-primary-100 absolute -top-1" />
+                <View className="w-2 h-2 rounded-full border border-primary bg-white absolute -bottom-1" />
+              </View>
+              <View className="ml-8 gap-4">
+                <View>
+                  <Text className="text-text-secondary text-[10px] font-semibold tracking-widest uppercase">Loading Site</Text>
+                  <Text className="text-text-primary text-sm font-medium mt-0.5">{trip.loadingSite}</Text>
+                </View>
+                <View>
+                  <Text className="text-text-secondary text-[10px] font-semibold tracking-widest uppercase">Unloading Site</Text>
+                  <Text className="text-text-primary text-sm font-medium mt-0.5">{trip.destinationSite}</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* Detail Grid */}
+          <View className="bg-surface/50 px-4 py-3 gap-3">
+            <View className="flex-row gap-3">
+              {/* Date */}
+              <View className="flex-1 bg-white rounded-xl p-3 border border-border">
+                <Text className="text-text-secondary text-[10px] font-bold tracking-widest uppercase mb-1">Trip Date</Text>
+                <View className="flex-row items-center">
+                  <Ionicons name="calendar-outline" size={14} color="#64748B" />
+                  <Text className="text-text-primary text-sm font-medium ml-1.5">{formattedDate}</Text>
+                </View>
+              </View>
+              {/* Volume */}
+              <View className="flex-1 bg-white rounded-xl p-3 border border-border">
+                <Text className="text-text-secondary text-[10px] font-bold tracking-widest uppercase mb-1">Volume</Text>
+                <View className="flex-row items-center">
+                  <Ionicons name="cube-outline" size={14} color="#64748B" />
+                  <Text className="text-text-primary text-sm font-medium ml-1.5">{volumeLabel}</Text>
+                </View>
+              </View>
+            </View>
+
+            <View className="flex-row gap-3">
+              {/* Amount */}
+              <View className="flex-1 bg-white rounded-xl p-3 border border-border">
+                <Text className="text-text-secondary text-[10px] font-bold tracking-widest uppercase mb-1">
+                  {tripPaymentType === "CASH" ? "Cash Amount" : "Credit Amount"}
+                </Text>
+                <Text className="text-success-700 text-base font-bold">
+                  ${trip.amount ?? 0}
+                </Text>
+              </View>
+              {/* Road Expense */}
+              <View className="flex-1 bg-white rounded-xl p-3 border border-border">
+                <Text className="text-text-secondary text-[10px] font-bold tracking-widest uppercase mb-1">Road Expense</Text>
+                <Text className="text-text-primary text-base font-bold">
+                  ${trip.roadExpence ?? 0}
+                </Text>
+              </View>
+            </View>
+
+            {/* Payment Method + Status Row */}
+            <View className="flex-row gap-3">
+              <View className="flex-1 bg-white rounded-xl p-3 border border-border">
+                <Text className="text-text-secondary text-[10px] font-bold tracking-widest uppercase mb-1">Payment</Text>
+                <View className={`self-start px-2.5 py-1 rounded-md ${tripPaymentType === "CASH" ? "bg-success-50" : "bg-primary-50"}`}>
+                  <Text className={`text-xs font-bold ${tripPaymentType === "CASH" ? "text-success-600" : "text-primary-600"}`}>
+                    {tripPaymentType}
+                  </Text>
+                </View>
+              </View>
+              <View className="flex-1 bg-white rounded-xl p-3 border border-border">
+                <Text className="text-text-secondary text-[10px] font-bold tracking-widest uppercase mb-1">Status</Text>
+                {tripPaymentType === "CASH" ? (
+                  <View className={`self-start px-2.5 py-1 rounded-md ${
+                    trip.approved === "APPROVED" ? "bg-success-50" : "bg-amber-50"
+                  }`}>
+                    <Text className={`text-xs font-bold ${
+                      trip.approved === "APPROVED" ? "text-success-700" : "text-amber-700"
+                    }`}>
+                      {trip.approved === "APPROVED" ? "APPROVED" : "PENDING"}
+                    </Text>
+                  </View>
+                ) : (
+                  <View className={`self-start px-2.5 py-1 rounded-md ${trip.claimed ? "bg-success-50" : "bg-amber-50"}`}>
+                    <Text className={`text-xs font-bold ${trip.claimed ? "text-success-700" : "text-amber-700"}`}>
+                      {trip.claimed ? "Claimed" : "Unclaimed"}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+
+            {/* Company Info (Credit Trips) */}
+            {tripPaymentType === "CREDIT" && (trip.contractedCompany || trip.company || trip.companyId) && (
+              <View className="bg-white rounded-xl p-3 border border-border">
+                <Text className="text-text-secondary text-[10px] font-bold tracking-widest uppercase mb-1">Company</Text>
+                <View className="flex-row items-center">
+                  <Ionicons name="business-outline" size={14} color="#2563EB" />
+                  <Text className="text-primary font-semibold text-sm ml-1.5">
+                    {trip.contractedCompany?.name || trip.company?.name || trip.companyId}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* Driver Info */}
+            {isManager && trip.driver && (
+              <View className="bg-white rounded-xl p-3 border border-border">
+                <Text className="text-text-secondary text-[10px] font-bold tracking-widest uppercase mb-1">Driver</Text>
+                <View className="flex-row items-center">
+                  <Ionicons name="person-outline" size={14} color="#64748B" />
+                  <Text className="text-text-primary font-medium text-sm ml-1.5">
+                    {trip.driver.name}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* Truck Info */}
+            {isManager && trip.truck && (
+              <View className="bg-white rounded-xl p-3 border border-border">
+                <Text className="text-text-secondary text-[10px] font-bold tracking-widest uppercase mb-1">Truck</Text>
+                <View className="flex-row items-center">
+                  <MaterialCommunityIcons name="truck" size={16} color="#64748B" />
+                  <Text className="text-text-primary font-medium text-sm ml-1.5">
+                    {trip.truck.plateNumber}
+                  </Text>
+                </View>
+              </View>
+            )}
+          </View>
+
+          {/* Action Bar (Admin Only) */}
           {isManager && (
-            <View className="absolute top-3 right-4 z-10 flex-row gap-2">
+            <View className="px-4 py-3 bg-white border-t border-border flex-row items-center gap-3">
+              {/* Edit Button */}
               <TouchableOpacity
                 onPress={(e) => {
                   e.stopPropagation?.();
-                  const qs = `?id=${trip.id}&date=${encodeURIComponent(formattedDate)}&loadingSite=${encodeURIComponent(trip.loadingSite)}&unloadingSite=${encodeURIComponent(trip.destinationSite)}&paymentMethod=${trip.paymentMethod.toLowerCase()}&cashAmount=${trip.amount || ""}&volume=${trip.volume}`;
-                  router.push(`/add-trip${qs}`);
+                  // Determine trip type: if trip has companyId it's credit, otherwise use the paymentMethod field
+                  const isCreditTrip = !!trip.companyId || trip.paymentMethod === "CREDIT";
+                  const tripTypeParam = isCreditTrip ? "credit" : "cash";
+                  const qs = `?id=${trip.id}&tripType=${tripTypeParam}&date=${encodeURIComponent(formattedDate)}&loadingSite=${encodeURIComponent(trip.loadingSite)}&unloadingSite=${encodeURIComponent(trip.destinationSite)}&paymentMethod=${isCreditTrip ? "CREDIT" : "CASH"}&cashAmount=${trip.amount || ""}&volume=${trip.volume}&roadExpense=${trip.roadExpence || 0}`;
+                  router.push(`/add-trip${qs}` as any);
                 }}
-                className="w-8 h-8 bg-primary-50 rounded-lg items-center justify-center border border-primary-100"
+                className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-xl bg-primary-50 border border-primary-100"
                 activeOpacity={0.7}
               >
-                <Ionicons name="pencil" size={14} color="#2563EB" />
+                <Ionicons name="pencil" size={16} color="#2563EB" />
+                <Text className="text-primary font-bold text-sm">Edit Trip</Text>
               </TouchableOpacity>
+
+              {/* Accept Button (only for pending CASH trips) */}
+              {tripPaymentType === "CASH" && trip.approved !== "APPROVED" && (
+                <TouchableOpacity
+                  onPress={(e) => {
+                    e.stopPropagation?.();
+                    Alert.alert(
+                      "Approve Trip", 
+                      `Approve this cash trip for $${trip.amount || 0}?`, 
+                      [
+                        { text: "Cancel", style: "cancel" },
+                        { text: "Approve", onPress: handleApprove }
+                      ]
+                    );
+                  }}
+                  disabled={approving}
+                  className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-xl bg-success-50 border border-success-200"
+                  activeOpacity={0.7}
+                >
+                  {approving ? (
+                    <ActivityIndicator size="small" color="#16A34A" />
+                  ) : (
+                    <>
+                      <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
+                      <Text className="text-success-700 font-bold text-sm">Accept</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
             </View>
           )}
-
-          {/* Timeline Connector Graphic */}
-          <View className="relative pl-2 pb-1">
-            {/* Dot & Line container */}
-            <View className="absolute left-4 top-2 bottom-6 w-px bg-border items-center">
-              <View className="w-2.5 h-2.5 rounded-full bg-primary-100 absolute -top-1" />
-              <View className="w-2 h-2 rounded-full border border-primary bg-white absolute -bottom-1" />
-            </View>
-
-            <View className="ml-8 gap-4">
-              <View>
-                <Text className="text-text-secondary text-[10px] font-semibold tracking-widest uppercase">
-                  Loading Site
-                </Text>
-                <Text className="text-text-primary text-sm font-medium mt-0.5">
-                  {trip.loadingSite}
-                </Text>
-              </View>
-
-              <View>
-                <Text className="text-text-secondary text-[10px] font-semibold tracking-widest uppercase">
-                  Trip Date
-                </Text>
-                <View className="flex-row items-center mt-0.5">
-                  <Ionicons name="calendar-outline" size={12} color="#64748B" />
-                  <Text className="text-text-primary text-sm font-medium ml-1">
-                    {formattedDate}
-                  </Text>
-                </View>
-              </View>
-
-              <View>
-                <Text className="text-text-secondary text-[10px] font-semibold tracking-widest uppercase">
-                  Volume
-                </Text>
-                <View className="flex-row items-center mt-0.5">
-                  <Ionicons name="cube-outline" size={12} color="#64748B" />
-                  <Text className="text-text-primary text-sm font-medium ml-1">
-                    {trip.volume.replace("MCUBE", " M³")}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </View>
-
-          {/* Payment Method Badge */}
-          <View className="flex-row items-center justify-between mt-1 pt-3 border-t border-border/50">
-            <View className="flex-row items-center">
-              <Text className="text-text-secondary text-xs uppercase font-medium tracking-wider mr-2">
-                Payment
-              </Text>
-              <View
-                className={`px-2.5 py-1 rounded-md ${
-                  trip.paymentMethod === "CASH" ? "bg-success-50" : "bg-primary-50"
-                }`}
-              >
-                <Text
-                  className={`text-xs font-bold ${
-                    trip.paymentMethod === "CASH" ? "text-success-600" : "text-primary-600"
-                  }`}
-                >
-                  {trip.paymentMethod}
-                </Text>
-              </View>
-            </View>
-
-            {trip.amount !== undefined && (
-              <View className="flex-row items-center">
-                <Text className="text-text-secondary text-xs uppercase font-medium tracking-wider mr-1">
-                  Amount:
-                </Text>
-                <Text className="text-success-700 font-bold text-sm">
-                  ${trip.amount}
-                </Text>
-              </View>
-            )}
-
-            {isManager && trip.paymentMethod === "CREDIT" && (
-              <View
-                className={`px-3 py-1.5 rounded-lg border ${trip.claimed ? 'bg-success-50 border-success-200' : 'bg-surface border-border'}`}
-              >
-                <Text className={`font-bold text-xs uppercase tracking-wider ${trip.claimed ? 'text-success-700' : 'text-text-secondary'}`}>
-                  {trip.claimed ? 'Claimed' : 'Unclaimed'}
-                </Text>
-              </View>
-            )}
-
-            {isManager && trip.paymentMethod === "CASH" && trip.approved === "PENDING" && (
-              <TouchableOpacity
-                onPress={(e) => {
-                  e.stopPropagation?.();
-                  Alert.alert("Approve Trip", "Are you sure you want to approve this cash amount?", [
-                    { text: "Cancel", style: "cancel" },
-                    { text: "Approve", onPress: handleApprove }
-                  ]);
-                }}
-                className="px-3 py-1.5 rounded-lg border bg-amber-50 border-amber-200"
-              >
-                <Text className="font-bold text-xs uppercase tracking-wider text-amber-700">
-                  Approve Needs
-                </Text>
-              </TouchableOpacity>
-            )}
-            
-            {isManager && trip.paymentMethod === "CASH" && trip.approved !== "PENDING" && (
-              <View className={`px-3 py-1.5 rounded-lg border ${trip.approved === "APPROVED" ? 'bg-success-50 border-success-200' : 'bg-red-50 border-red-200'}`}>
-                <Text className={`font-bold text-xs uppercase tracking-wider ${trip.approved === "APPROVED" ? 'text-success-700' : 'text-red-700'}`}>
-                  {trip.approved}
-                </Text>
-              </View>
-            )}
-          </View>
         </View>
       )}
     </TouchableOpacity>
@@ -231,9 +313,21 @@ const TripCard = ({ trip, isManager, onRefresh }: { trip: Trip, isManager: boole
 export default function TripsListScreen() {
   const { user } = useAuthStore();
   const isManager = user?.role === "admin" || user?.role === "manager";
+
+  // Initialize trucks from cached profile
+  const cachedTrucks: Truck[] = (user?.profile?.trucks || []).map((t: any) => ({
+    id: t.id,
+    plateNumber: t.plateNumber,
+    vinNumber: t.vinNumber,
+    brand: t.brand,
+    model: t.model,
+    adminId: t.adminId || user?.id || "",
+  }));
+
   const [showTruckMenu, setShowTruckMenu] = useState(false);
-  const [trucks, setTrucks] = useState<Truck[]>([ALL_TRUCKS_MOCK]);
-  const [selectedTruck, setSelectedTruck] = useState<Truck>(ALL_TRUCKS_MOCK);
+  const [trucks, setTrucks] = useState<Truck[]>(cachedTrucks);
+  const [selectedTruck, setSelectedTruck] = useState<Truck>(cachedTrucks[0] || { id: "", plateNumber: "No Trucks", adminId: "" });
+  const [refreshingTrucks, setRefreshingTrucks] = useState(false);
 
   // Trip Pagination State
   const [trips, setTrips] = useState<Trip[]>([]);
@@ -252,25 +346,22 @@ export default function TripsListScreen() {
   const [showFromPicker, setShowFromPicker] = useState(false);
   const [showToPicker, setShowToPicker] = useState(false);
   
-  const [paymentFilter, setPaymentFilter] = useState<"All" | "CASH" | "CREDIT">("All");
+  const [paymentFilter, setPaymentFilter] = useState<"CASH" | "CREDIT">("CASH");
   const [claimFilter, setClaimFilter] = useState<"All" | "Claimed" | "Unclaimed">("All");
 
   const buildQuery = (pageNumber: number): GetTripsQuery => {
     let query: GetTripsQuery = {
       page: pageNumber,
       perpage: 10,
+      paymentMethod: paymentFilter,
     };
 
-    if (isManager && selectedTruck.id !== "all") {
+    if (isManager && selectedTruck.id) {
       query.truckId = selectedTruck.id;
     }
 
-    if (paymentFilter !== "All") {
-      query.paymentMethod = paymentFilter;
-      
-      if (paymentFilter === "CREDIT" && claimFilter !== "All") {
-        query.claimed = claimFilter === "Claimed";
-      }
+    if (paymentFilter === "CREDIT" && claimFilter !== "All") {
+      query.claimed = claimFilter === "Claimed";
     }
 
     if (customFrom) {
@@ -312,16 +403,31 @@ export default function TripsListScreen() {
 
   const tripGroups = getGroupedTrips(trips);
 
-  useEffect(() => {
-    if (isManager) {
-      // Still using mock trucks to populate list, should also switch to real service eventually if needed
-      truckService.getMyTrucks().then((res) => {
-        if ("trucks" in res) {
-          setTrucks([ALL_TRUCKS_MOCK, ...res.trucks]);
+  // Refresh trucks from API only when dropdown is opened
+  const handleOpenTruckDropdown = async () => {
+    setShowTruckMenu((v) => !v);
+    if (!showTruckMenu && isManager) {
+      setRefreshingTrucks(true);
+      try {
+        const res = await truckService.getMyTrucks();
+        if ("trucks" in res && res.trucks.length > 0) {
+          const mapped: Truck[] = res.trucks.map((t: any) => ({
+            id: t.id,
+            plateNumber: t.plateNumber,
+            vinNumber: t.vinNumber,
+            brand: t.brand,
+            model: t.model,
+            adminId: t.adminId || user?.id || "",
+          }));
+          setTrucks(mapped);
         }
-      });
+      } catch (e) {
+        // Silently fail — keep cached trucks
+      } finally {
+        setRefreshingTrucks(false);
+      }
     }
-  }, [isManager]);
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
@@ -334,13 +440,17 @@ export default function TripsListScreen() {
         {isManager && (
           <View className="relative">
             <TouchableOpacity
-              onPress={() => setShowTruckMenu((v) => !v)}
+              onPress={handleOpenTruckDropdown}
               className="flex-row items-center gap-1.5 bg-primary-50 border border-primary-100 rounded-xl px-3 py-2"
               activeOpacity={0.8}
             >
               <Ionicons name="car-sport" size={14} color="#2563EB" />
               <Text className="text-primary font-semibold text-sm">{selectedTruck.plateNumber}</Text>
-              <Ionicons name={showTruckMenu ? "chevron-up" : "chevron-down"} size={14} color="#2563EB" />
+              {refreshingTrucks ? (
+                <ActivityIndicator size={12} color="#2563EB" />
+              ) : (
+                <Ionicons name={showTruckMenu ? "chevron-up" : "chevron-down"} size={14} color="#2563EB" />
+              )}
             </TouchableOpacity>
 
             {showTruckMenu && (
@@ -349,6 +459,7 @@ export default function TripsListScreen() {
                   <TouchableOpacity
                     key={truck.id}
                     onPress={() => {
+                      setTrips([]);
                       setSelectedTruck(truck);
                       setShowTruckMenu(false);
                     }}
@@ -358,7 +469,7 @@ export default function TripsListScreen() {
                     activeOpacity={0.7}
                   >
                     <Ionicons
-                      name={truck.id === "all" ? "apps-outline" : "car-sport-outline"}
+                      name="car-sport-outline"
                       size={16}
                       color={selectedTruck.id === truck.id ? "#2563EB" : "#64748B"}
                     />
@@ -380,6 +491,46 @@ export default function TripsListScreen() {
         )}
       </View>
 
+      {/* Cash / Credit Toggle */}
+      {isManager && (
+        <View className="bg-white px-5 pt-3 pb-2 border-b border-border" style={{ zIndex: 2, elevation: 1 }}>
+          <View className="flex-row bg-surface rounded-xl p-1 border border-border">
+            <TouchableOpacity
+              onPress={() => {
+                setTrips([]);
+                setPaymentFilter("CASH");
+              }}
+              className={`flex-1 flex-row items-center justify-center gap-2 py-2.5 rounded-lg ${
+                paymentFilter === "CASH" ? "bg-white border border-border" : ""
+              }`}
+              style={paymentFilter === "CASH" ? { elevation: 1, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 } : {}}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="cash" size={16} color={paymentFilter === "CASH" ? "#16A34A" : "#94A3B8"} />
+              <Text className={`font-bold text-sm ${
+                paymentFilter === "CASH" ? "text-success-700" : "text-text-secondary"
+              }`}>Cash</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                setTrips([]);
+                setPaymentFilter("CREDIT");
+              }}
+              className={`flex-1 flex-row items-center justify-center gap-2 py-2.5 rounded-lg ${
+                paymentFilter === "CREDIT" ? "bg-white border border-border" : ""
+              }`}
+              style={paymentFilter === "CREDIT" ? { elevation: 1, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 } : {}}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="business" size={16} color={paymentFilter === "CREDIT" ? "#2563EB" : "#94A3B8"} />
+              <Text className={`font-bold text-sm ${
+                paymentFilter === "CREDIT" ? "text-primary" : "text-text-secondary"
+              }`}>Credit</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       {/* Filter Section */}
       <View className="bg-white flex-row items-center border-b border-border shadow-sm" style={{ zIndex: 1, elevation: 0 }}>
         <View className="flex-1">
@@ -388,15 +539,10 @@ export default function TripsListScreen() {
             onPresetChange={(preset) => {
               setFilterPreset(preset);
               if (preset === "all") {
-                setPaymentFilter("All");
                 setClaimFilter("All");
                 setCustomFrom(null);
                 setCustomTo(null);
               } else if (preset !== "custom") {
-                // If they click 'Today' or '7d', DateFilterBar inherently gives us range but we need to track if we apply it to custom dates
-                // However DateFilterBar doesn't export the underlying range immediately, so customFrom/customTo stay null and we might need logic inside passesDateFilter.
-                // For a fully network backed approach, we need exact Date bounds from presets.
-                // Here we just map known sets:
                 const end = new Date();
                 const start = new Date();
                 if (preset === "today") start.setHours(0,0,0,0);
@@ -415,7 +561,7 @@ export default function TripsListScreen() {
         </View>
         <TouchableOpacity 
           onPress={() => {
-            setFilterPreset("custom"); // Automatically switch to custom if opening Advanced Modal
+            setFilterPreset("custom");
             setShowAdvancedFilters(true);
           }}
           className="w-10 h-10 bg-primary-50 rounded-lg items-center justify-center border border-primary-100 mr-4"
@@ -467,21 +613,7 @@ export default function TripsListScreen() {
                 </View>
               </View>
 
-              {/* Payment Method Section */}
-              <View>
-                <Text className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Payment Method</Text>
-                <View className="flex-row gap-2">
-                  {["All", "CASH", "CREDIT"].map(method => (
-                    <TouchableOpacity 
-                      key={method}
-                      onPress={() => setPaymentFilter(method as any)}
-                      className={`px-3 py-1.5 rounded-full border ${paymentFilter === method ? "bg-primary border-primary" : "bg-surface border-border"}`}
-                    >
-                      <Text className={`text-xs font-semibold ${paymentFilter === method ? "text-white" : "text-text-secondary"}`}>{method}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
+              {/* Claim Status shown when Credit is selected */}
 
               {/* Claim Status Section */}
               {isManager && paymentFilter === "CREDIT" && (
@@ -507,7 +639,6 @@ export default function TripsListScreen() {
               <TouchableOpacity 
                 activeOpacity={0.8}
                 onPress={() => {
-                  setPaymentFilter("All");
                   setClaimFilter("All");
                   setFilterPreset("all");
                   setCustomFrom(null);
@@ -565,7 +696,7 @@ export default function TripsListScreen() {
           </Text>
         )}
         renderItem={({ item }) => (
-          <TripCard trip={item} isManager={isManager} onRefresh={() => loadTrips(1)} />
+          <TripCard trip={item} isManager={isManager} onRefresh={() => loadTrips(1)} activePaymentFilter={paymentFilter} />
         )}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
@@ -597,14 +728,6 @@ export default function TripsListScreen() {
         }
       />
 
-      {/* Floating Action Button (Alternative Add Button) */}
-      <TouchableOpacity
-        activeOpacity={0.8}
-        onPress={() => router.push("/add-trip")}
-        className="absolute bottom-6 right-6 w-14 h-14 bg-primary rounded-full items-center justify-center shadow-lg border border-primary-600 elevation-5"
-      >
-        <Ionicons name="add" size={30} color="#fff" />
-      </TouchableOpacity>
     </SafeAreaView>
   );
 }

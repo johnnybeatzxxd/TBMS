@@ -1,33 +1,26 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { Company } from "@/src/types";
 import { companyService } from "@/src/api/services";
+import { useCachedFetch } from "@/src/hooks/useCachedFetch";
 
 export default function CompaniesListScreen() {
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const fetchCompanies = async () => {
-    setLoading(true);
-    try {
-      const res = await companyService.getCompanies();
-      setCompanies(res || []);
-    } catch (error: any) {
-      Alert.alert("Error", error.message || "Failed to load companies");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: companies, isLoading: loading, error, refetch } = useCachedFetch<Company[]>(
+    "COMPANIES", 
+    companyService.getCompanies, 
+    []
+  );
 
-  // Refetch when screen comes back into focus (e.g. after adding a company or editing trucks)
+  // Refetch silently when screen comes back into focus
   useFocusEffect(
     useCallback(() => {
-      fetchCompanies();
-    }, [])
+      refetch();
+    }, [refetch])
   );
 
   const displayCompanies = useMemo(() => {

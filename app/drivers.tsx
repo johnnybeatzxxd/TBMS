@@ -1,49 +1,54 @@
-import { useEffect, useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { Driver, Truck } from "@/src/types";
 import { driverService, truckService } from "@/src/api/services";
+import { useCachedFetch } from "@/src/hooks/useCachedFetch";
 
 export default function DriversListScreen() {
-  const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [trucks, setTrucks] = useState<Record<string, Truck>>({});
-  const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   // Filter & Search states
   const [searchQuery, setSearchQuery] = useState("");
   const [filterTab, setFilterTab] = useState<"All" | "Active" | "Inactive">("All");
 
+  const { data: driversRes, isLoading: driversLoading, refetch: refetchDrivers } = useCachedFetch(
+    "DRIVERS", 
+    driverService.getMyDrivers, 
+    { drivers: [] } as any
+  );
+  
+  const { data: trucksRes, isLoading: trucksLoading, refetch: refetchTrucks } = useCachedFetch(
+    "TRUCKS", 
+    truckService.getMyTrucks, 
+    { trucks: [] } as any
+  );
+
+  const drivers = driversRes?.drivers || [];
+  const truckList = trucksRes?.trucks || [];
+
+  const trucks = useMemo(() => {
+    const map: Record<string, Truck> = {};
+    truckList.forEach((t: Truck) => {
+      map[t.id] = t;
+    });
+    return map;
+  }, [truckList]);
+
+  const loading = driversLoading || trucksLoading;
+
   const fetchData = async () => {
-    setLoading(true);
-    try {
-      const [driversRes, trucksRes] = await Promise.all([
-        driverService.getMyDrivers(),
-        truckService.getMyTrucks(),
-      ]);
-      setDrivers(driversRes.drivers || []);
-
-      // Create a truck map for easy lookups
-      const truckMap: Record<string, Truck> = {};
-      
-      const truckList = trucksRes.trucks || [];
-      truckList.forEach((t) => {
-        truckMap[t.id] = t;
-      });
-      setTrucks(truckMap);
-
-    } catch (error: any) {
-      Alert.alert("Error", error.message || "Failed to load data");
-    } finally {
-      setLoading(false);
-    }
+    await Promise.all([refetchDrivers(), refetchTrucks()]);
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      refetchDrivers();
+      refetchTrucks();
+    }, [refetchDrivers, refetchTrucks])
+  );
 
   const handleToggleStatus = async (driver: Driver) => {
     setActionLoading(driver.id);
@@ -88,7 +93,7 @@ export default function DriversListScreen() {
 
   // Filtered and Seached List
   const displayDrivers = useMemo(() => {
-    return drivers.filter((d) => {
+    return drivers.filter((d: Driver) => {
       // 1. Tab Filtering
       if (filterTab === "Active" && !d.accountActive) return false;
       if (filterTab === "Inactive" && d.accountActive) return false;
@@ -179,7 +184,7 @@ export default function DriversListScreen() {
               <Text className="text-text-secondary font-medium mt-4">No drivers found.</Text>
             </View>
           ) : (
-            displayDrivers.map((driver) => {
+            displayDrivers.map((driver: Driver) => {
               const assignedTruck = trucks[driver.truckId];
 
               return (

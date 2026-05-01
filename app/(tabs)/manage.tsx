@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
-import { router } from "expo-router";
+import { useCallback } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCachedFetch } from "@/src/hooks/useCachedFetch";
 import { View, Text, TouchableOpacity, ScrollView, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -53,39 +54,42 @@ export default function ManageScreen() {
   const { user, logout } = useAuthStore();
   const isAdmin = user?.role === "admin";
 
-  const [activeDrivers, setActiveDrivers] = useState<number | string>("...");
-  const [activeTrucks, setActiveTrucks] = useState<number | string>("...");
-  const [tripsToday, setTripsToday] = useState<number | string>("...");
+  const fetchActiveDrivers = useCallback(async () => {
+    const res = await driverService.getMyDrivers();
+    return (res.drivers || []).filter(d => d.accountActive).length;
+  }, []);
 
-  useEffect(() => {
-    if (isAdmin) {
-      // Fetch active drivers
-      driverService.getMyDrivers().then(res => {
-        const drivers = res.drivers || [];
-        const activeCount = drivers.filter(d => d.accountActive).length;
-        setActiveDrivers(activeCount);
-      }).catch(() => setActiveDrivers(0));
+  const fetchActiveTrucks = useCallback(async () => {
+    const res = await truckService.getMyTrucks();
+    return (res.trucks || []).length;
+  }, []);
 
-      // Fetch active trucks
-      truckService.getMyTrucks().then(res => {
-        const trucks = res.trucks || [];
-        setActiveTrucks(trucks.length);
-      }).catch(() => setActiveTrucks(0));
+  const fetchTripsToday = useCallback(async () => {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+    
+    const res = await tripService.getTrips({
+      startDate: start.toISOString(),
+      endDate: end.toISOString()
+    });
+    return res.meta.totalItems;
+  }, []);
 
-      // Fetch trips today
-      const start = new Date();
-      start.setHours(0, 0, 0, 0);
-      const end = new Date();
-      end.setHours(23, 59, 59, 999);
-      
-      tripService.getTrips({
-        startDate: start.toISOString(),
-        endDate: end.toISOString()
-      }).then(res => {
-        setTripsToday(res.meta.totalItems);
-      }).catch(() => setTripsToday(0));
-    }
-  }, [isAdmin]);
+  const { data: activeDrivers, refetch: refetchDrivers } = useCachedFetch<number | string>("STAT_DRIVERS", fetchActiveDrivers, "...");
+  const { data: activeTrucks, refetch: refetchTrucks } = useCachedFetch<number | string>("STAT_TRUCKS", fetchActiveTrucks, "...");
+  const { data: tripsToday, refetch: refetchTrips } = useCachedFetch<number | string>("STAT_TRIPS", fetchTripsToday, "...");
+
+  useFocusEffect(
+    useCallback(() => {
+      if (isAdmin) {
+        refetchDrivers();
+        refetchTrucks();
+        refetchTrips();
+      }
+    }, [isAdmin, refetchDrivers, refetchTrucks, refetchTrips])
+  );
 
   const handleLogout = () => {
     Alert.alert("Sign Out", "Are you sure you want to log out?", [

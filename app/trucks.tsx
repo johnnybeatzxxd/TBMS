@@ -1,43 +1,38 @@
-import { useEffect, useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { router, useFocusEffect } from "expo-router";
 import { Truck } from "@/src/types";
 import { truckService } from "@/src/api/services";
+import { useCachedFetch } from "@/src/hooks/useCachedFetch";
 
 export default function TrucksListScreen() {
-  const [trucks, setTrucks] = useState<Truck[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const fetchTrucks = async () => {
-    setLoading(true);
-    try {
-      const res = await truckService.getMyTrucks();
-      if ("message" in res && !("trucks" in res)) {
-        setTrucks([]);
-      } else if ("trucks" in res) {
-        setTrucks(res.trucks as Truck[]);
-      }
-    } catch (error: any) {
-      Alert.alert("Error", error.message || "Failed to load trucks");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: trucksRes, isLoading: loading, refetch } = useCachedFetch(
+    "TRUCKS",
+    truckService.getMyTrucks,
+    { trucks: [] } as any
+  );
+  
+  const trucks = trucksRes?.trucks || [];
 
-  useEffect(() => {
-    fetchTrucks();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+    }, [refetch])
+  );
 
   const displayTrucks = useMemo(() => {
     if (!searchQuery) return trucks;
     const q = searchQuery.toLowerCase();
     return trucks.filter(
-      (t) =>
+      (t: Truck) =>
         t.plateNumber.toLowerCase().includes(q) ||
-        (t.vinNumber && t.vinNumber.toLowerCase().includes(q))
+        (t.vinNumber && t.vinNumber.toLowerCase().includes(q)) ||
+        (t.brand && t.brand.toLowerCase().includes(q)) ||
+        (t.model && t.model.toLowerCase().includes(q))
     );
   }, [trucks, searchQuery]);
 
@@ -63,7 +58,7 @@ export default function TrucksListScreen() {
           <Ionicons name="search" size={18} color="#64748B" />
           <TextInput
             className="flex-1 ml-2 text-text-primary text-sm py-1.5"
-            placeholder="Search by plate or VIN..."
+            placeholder="Search by plate, VIN, brand..."
             placeholderTextColor="#94A3B8"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -96,23 +91,48 @@ export default function TrucksListScreen() {
               </Text>
             </View>
           ) : (
-            displayTrucks.map((truck) => (
-              <View
+            displayTrucks.map((truck: Truck) => (
+              <TouchableOpacity
                 key={truck.id}
-                className="bg-white rounded-2xl border border-border shadow-sm p-4 flex-row items-center"
+                activeOpacity={0.85}
+                onPress={() => {
+                  router.push({
+                    pathname: "/add-truck",
+                    params: {
+                      id: truck.id,
+                      plateNumber: truck.plateNumber,
+                      vinNumber: truck.vinNumber || "",
+                      brand: truck.brand || "",
+                      model: truck.model || "",
+                    }
+                  } as any);
+                }}
+                className="bg-white rounded-2xl border border-border shadow-sm p-4"
               >
-                <View className="w-12 h-12 bg-sky-50 rounded-full items-center justify-center mr-4 border border-sky-100">
-                  <Ionicons name="car" size={24} color="#0EA5E9" />
+                <View className="flex-row items-center">
+                  <View className="w-12 h-12 bg-sky-50 rounded-full items-center justify-center mr-4 border border-sky-100">
+                    <MaterialCommunityIcons name="truck" size={24} color="#0EA5E9" />
+                  </View>
+                  <View className="flex-1 gap-0.5">
+                    <Text className="text-text-primary font-bold text-lg">
+                      {truck.plateNumber}
+                    </Text>
+                    {truck.brand || truck.model ? (
+                      <Text className="text-text-secondary text-sm font-medium">
+                        {[truck.brand, truck.model].filter(Boolean).join(" ")}
+                      </Text>
+                    ) : null}
+                    {truck.vinNumber ? (
+                      <Text className="text-text-tertiary text-xs">
+                        VIN: {truck.vinNumber}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <View className="bg-sky-50 p-2 rounded-full border border-sky-100 ml-2">
+                    <Ionicons name="pencil" size={16} color="#0EA5E9" />
+                  </View>
                 </View>
-                <View className="flex-1">
-                  <Text className="text-text-primary font-bold text-lg">
-                    {truck.plateNumber}
-                  </Text>
-                  <Text className="text-text-secondary text-xs mt-0.5">
-                    VIN: {truck.vinNumber || "N/A"}
-                  </Text>
-                </View>
-              </View>
+              </TouchableOpacity>
             ))
           )}
         </ScrollView>

@@ -51,7 +51,11 @@ export default function DriverDashboardScreen() {
     <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
       {/* Header */}
       <View className="flex-row items-center justify-between px-6 pt-4 pb-6 bg-white border-b border-border shadow-sm rounded-b-3xl elevation-10 z-50">
-        <View className="flex-row items-center gap-3">
+        <TouchableOpacity 
+          className="flex-row items-center gap-3 flex-1" 
+          activeOpacity={0.7}
+          onPress={() => router.push("/profile")}
+        >
           <View className="w-14 h-14 rounded-full bg-primary-100 items-center justify-center border-2 border-primary-200">
             <Ionicons name="person" size={24} color="#2563EB" />
           </View>
@@ -63,7 +67,7 @@ export default function DriverDashboardScreen() {
               {user?.name || "Driver"}
             </Text>
           </View>
-        </View>
+        </TouchableOpacity>
 
         <TouchableOpacity
           onPress={handleLogout}

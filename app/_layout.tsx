@@ -48,6 +48,7 @@ export default function RootLayout() {
         <Stack.Screen name="companies" options={{ headerShown: false }} />
         <Stack.Screen name="company-details" options={{ headerShown: false }} />
         <Stack.Screen name="analytics" options={{ headerShown: false }} />
+        <Stack.Screen name="profile" options={{ headerShown: false }} />
         <Stack.Screen name="driver-dashboard" options={{ headerShown: false }} />
         <Stack.Screen name="driver-trips" options={{ headerShown: false }} />
         <Stack.Screen name="driver-expenses" options={{ headerShown: false }} />

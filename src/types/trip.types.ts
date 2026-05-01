@@ -13,6 +13,12 @@ export interface Trip {
   driverId: string;
   companyId?: string; 
 
+  // Nested relation objects (if returned by API)
+  company?: { id: string; name: string };
+  contractedCompany?: { id: string; name: string };
+  driver?: { id: string; name: string };
+  truck?: { id: string; plateNumber: string };
+
   // Status Fields
   approved?: "PENDING" | "APPROVED" | "DECLINED"; // for Cash trips
   claimed?: boolean; // for Credit trips
@@ -30,6 +36,7 @@ export interface AddTripPayload {
   amount?: number;
   roadExpence?: number;
   companyId?: string;
+  receiptPic?: string;
 }
 
 export interface UpdateTripPayload {
@@ -40,6 +47,7 @@ export interface UpdateTripPayload {
   volume?: "MCUBE10" | "MCUBE16";
   amount?: number;
   roadExpence?: number;
+  receiptPic?: string;
 }
 
 export interface GetTripsQuery {

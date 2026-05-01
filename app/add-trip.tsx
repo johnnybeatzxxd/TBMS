@@ -17,6 +17,7 @@ import { router, useLocalSearchParams } from "expo-router";
 
 import { tripService, companyService } from "@/src/api/services";
 import { Company, AddTripPayload, UpdateTripPayload } from "@/src/types";
+import { useCachedFetch } from "@/src/hooks/useCachedFetch";
 
 type Volume = "10MCUBE" | "16MCUBE";
 
@@ -45,38 +46,35 @@ export default function AddTripModal() {
     return new Date();
   };
 
-  const tripType: "cash" | "credit" = 
-    params.tripType === "credit" || params.paymentMethod === "dispatch" || params.paymentMethod === "credit" 
-      ? "credit" 
+  const tripType: "cash" | "credit" =
+    params.tripType?.toLowerCase() === "credit" || 
+    params.paymentMethod?.toLowerCase() === "dispatch" || 
+    params.paymentMethod?.toLowerCase() === "credit"
+      ? "credit"
       : "cash";
-  
+
   const [tripDate, setTripDate] = useState(parseDate(params.date));
   const [showDatePicker, setShowDatePicker] = useState(false);
-  
+
   const [loadingSite, setLoadingSite] = useState(params.loadingSite || "");
   const [unloadingSite, setUnloadingSite] = useState(params.unloadingSite || "");
   const [volume, setVolume] = useState<Volume>((params.volume as Volume) || "10MCUBE");
-  
+
   const [cashAmount, setCashAmount] = useState(params.cashAmount || "");
   const [paymentAmount, setPaymentAmount] = useState("");
   const [roadExpense, setRoadExpense] = useState(params.roadExpense || "");
 
-  const [companies, setCompanies] = useState<{id: string, name: string}[]>([]);
-  const [isLoadingCompanies, setIsLoadingCompanies] = useState(false);
+  // Use the cached fetch hook to aggressively load allowed companies in case we need them
+  const { data: companies, isLoading: isLoadingCompanies } = useCachedFetch<{ id: string, name: string }[]>(
+    "ALLOWED_COMPANIES",
+    tripService.getAllowedCompanies,
+    []
+  );
+
   const [selectedCompany, setSelectedCompany] = useState<string>("");
   const [companyDropdownOpen, setCompanyDropdownOpen] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (tripType === "credit" && companies.length === 0) {
-      setIsLoadingCompanies(true);
-      tripService.getAllowedCompanies()
-        .then(data => setCompanies(data))
-        .catch(err => Alert.alert("Companies Error", err.message || "Failed to load companies"))
-        .finally(() => setIsLoadingCompanies(false));
-    }
-  }, [tripType]);
 
   const onDateChange = (_: DateTimePickerEvent, selected?: Date) => {
     setShowDatePicker(false);
@@ -113,7 +111,7 @@ export default function AddTripModal() {
       Alert.alert("Validation Error", "Please enter a valid road expense amount.");
       return;
     }
-    
+
     setIsSubmitting(true);
 
     try {
@@ -126,6 +124,7 @@ export default function AddTripModal() {
         amount: tripType === "cash" ? Number(cashAmount) : Number(paymentAmount),
         roadExpence: roadExpense ? Number(roadExpense) : 0,
         companyId: tripType === "credit" ? selectedCompany : undefined,
+        receiptPic: tripType === "credit" ? "-" : undefined,
       };
 
       if (isEditMode && params.id) {
@@ -208,30 +207,26 @@ export default function AddTripModal() {
             <View className="flex-row bg-surface rounded-xl overflow-hidden border border-border">
               <TouchableOpacity
                 onPress={() => setVolume("10MCUBE")}
-                className={`flex-1 py-3 items-center rounded-xl ${
-                  volume === "10MCUBE" ? "bg-primary-700" : "bg-transparent"
-                }`}
+                className={`flex-1 py-3 items-center rounded-xl ${volume === "10MCUBE" ? "bg-primary-700" : "bg-transparent"
+                  }`}
                 activeOpacity={0.8}
               >
                 <Text
-                  className={`font-bold text-sm tracking-widest uppercase ${
-                    volume === "10MCUBE" ? "text-white" : "text-text-secondary"
-                  }`}
+                  className={`font-bold text-sm tracking-widest uppercase ${volume === "10MCUBE" ? "text-white" : "text-text-secondary"
+                    }`}
                 >
                   10M³
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => setVolume("16MCUBE")}
-                className={`flex-1 py-3 items-center rounded-xl ${
-                  volume === "16MCUBE" ? "bg-primary-700" : "bg-transparent"
-                }`}
+                className={`flex-1 py-3 items-center rounded-xl ${volume === "16MCUBE" ? "bg-primary-700" : "bg-transparent"
+                  }`}
                 activeOpacity={0.8}
               >
                 <Text
-                  className={`font-bold text-sm tracking-widest uppercase ${
-                    volume === "16MCUBE" ? "text-white" : "text-text-secondary"
-                  }`}
+                  className={`font-bold text-sm tracking-widest uppercase ${volume === "16MCUBE" ? "text-white" : "text-text-secondary"
+                    }`}
                 >
                   16M³
                 </Text>
@@ -270,7 +265,7 @@ export default function AddTripModal() {
                   <Ionicons name={companyDropdownOpen ? "chevron-up" : "chevron-down"} size={16} color="#64748B" />
                 )}
               </TouchableOpacity>
-              
+
               {companyDropdownOpen && !isLoadingCompanies && (
                 <View className="mt-2 bg-white border border-border rounded-xl px-1 py-1">
                   {companies.map((c, idx) => (
