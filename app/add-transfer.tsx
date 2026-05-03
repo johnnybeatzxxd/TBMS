@@ -14,14 +14,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { mockTransferService } from "@/src/api/mock/transfers.mock";
+import { transferService } from "@/src/api/services";
 import { mockDriverService } from "@/src/api/mock/drivers.mock";
 import { useAuthStore } from "@/src/store";
 
 export default function AddTransferModal() {
   const [driverId, setDriverId] = useState("");
   const [amount, setAmount] = useState("");
-  const [type, setType] = useState<"increment" | "decrement">("increment");
   const [remark, setRemark] = useState("");
   
   // Hardcoding date to today for simplicity
@@ -74,10 +73,9 @@ export default function AddTransferModal() {
 
     setLoading(true);
     try {
-      await mockTransferService.addTransfer({
-        driverId,
+      await transferService.addTransfer({
+        driverId: isDriver ? undefined : driverId, // driverId undefined if it's the driver doing it
         amount: parsedAmount,
-        type,
         remark: remark.trim(),
         date: formattedDate,
       });
@@ -157,41 +155,7 @@ export default function AddTransferModal() {
               </View>
             )}
 
-            {/* Type Selection */}
-            <View className="gap-1.5 z-0">
-              <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase ml-1">
-                Transfer Type *
-              </Text>
-              <View className="flex-row gap-3">
-                <TouchableOpacity
-                  onPress={() => setType("increment")}
-                  className={`flex-1 flex-row items-center justify-center py-3 rounded-xl border ${
-                    type === "increment" 
-                      ? "bg-success-50 border-success-500" 
-                      : "bg-surface border-border"
-                  }`}
-                >
-                  <Ionicons name="arrow-up" size={16} color={type === "increment" ? "#16A34A" : "#64748B"} />
-                  <Text className={`ml-1 font-semibold text-sm ${type === "increment" ? "text-success-700" : "text-text-secondary"}`}>
-                    Credit (Add)
-                  </Text>
-                </TouchableOpacity>
 
-                <TouchableOpacity
-                  onPress={() => setType("decrement")}
-                  className={`flex-1 flex-row items-center justify-center py-3 rounded-xl border ${
-                    type === "decrement" 
-                      ? "bg-danger-50 border-danger-500" 
-                      : "bg-surface border-border"
-                  }`}
-                >
-                  <Ionicons name="arrow-down" size={16} color={type === "decrement" ? "#DC2626" : "#64748B"} />
-                  <Text className={`ml-1 font-semibold text-sm ${type === "decrement" ? "text-danger-700" : "text-text-secondary"}`}>
-                    Debit (Subtract)
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
 
             {/* Amount */}
             <View className="gap-1.5 z-0">

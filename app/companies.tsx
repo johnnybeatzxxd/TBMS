@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert, TextInput } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert, TextInput, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
@@ -16,9 +16,18 @@ export default function CompaniesListScreen() {
     []
   );
 
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
+  }, [refetch]);
+
   // Refetch silently when screen comes back into focus
   useFocusEffect(
     useCallback(() => {
+      const { useAuthStore } = require("@/src/store/authStore");
+      if (!useAuthStore.getState().isAuthenticated) return;
       refetch();
     }, [refetch])
   );
@@ -73,6 +82,7 @@ export default function CompaniesListScreen() {
           className="flex-1"
           contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563EB" />}
         >
           {displayCompanies.length === 0 ? (
             <View className="items-center py-10">

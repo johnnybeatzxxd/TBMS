@@ -1,31 +1,48 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from "react-native";
+import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { mockTruckService } from "@/src/api/mock/trucks.mock";
 
 export default function AddRefuelScreen() {
   const [loading, setLoading] = useState(false);
-  const [trucks, setTrucks] = useState<any[]>([]);
 
   // Form State
-  const [truckId, setTruckId] = useState("");
   const [volume, setVolume] = useState("");
   const [price, setPrice] = useState("");
+  const [images, setImages] = useState<string[]>([]);
 
-  useEffect(() => {
-    (async () => {
-      const res = await mockTruckService.getMyTrucks();
-      if ("trucks" in res && res.trucks.length > 0) {
-        setTrucks(res.trucks);
-        setTruckId(res.trucks[0].id); // Auto-select first truck
+  const pickImage = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (permissionResult.granted === false) {
+        Alert.alert("Permission Required", "Please allow access to your photos to upload receipts.");
+        return;
       }
-    })();
-  }, []);
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setImages((prev) => [...prev, result.assets[0].uri]);
+      }
+    } catch (error) {
+      console.error("Error picking image:", error);
+      Alert.alert("Error", "Failed to pick an image.");
+    }
+  };
+
+  const removeImage = (index: number) => {
+    setImages((prev) => prev.filter((_, i) => i !== index));
+  };
 
   const handleSubmit = async () => {
-    if (!truckId) return Alert.alert("Error", "Please select a truck.");
     if (!volume || isNaN(Number(volume))) return Alert.alert("Error", "Please enter a valid volume.");
     if (!price || isNaN(Number(price))) return Alert.alert("Error", "Please enter a valid price.");
 
@@ -78,31 +95,6 @@ export default function AddRefuelScreen() {
 
           {/* Form Fields */}
           <View className="gap-6 z-50">
-            
-            {/* Truck Selection */}
-            {trucks.length > 1 && (
-              <View>
-                <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase mb-2 ml-1">
-                  Select Truck *
-                </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row gap-3">
-                  {trucks.map((t) => (
-                    <TouchableOpacity
-                       key={t.id}
-                       onPress={() => setTruckId(t.id)}
-                       className={`px-4 py-3 rounded-2xl border ${
-                         truckId === t.id ? "bg-amber-50 border-amber-500" : "bg-white border-border"
-                       }`}
-                       activeOpacity={0.7}
-                    >
-                      <Text className={`font-semibold ${
-                         truckId === t.id ? "text-amber-600" : "text-text-primary"
-                      }`}>{t.plateNumber}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            )}
 
             {/* Volume Field */}
             <View className="z-0">
@@ -137,6 +129,38 @@ export default function AddRefuelScreen() {
                   className="bg-white border border-border rounded-xl h-14 pl-10 pr-4 text-base font-medium text-text-primary shadow-sm"
                 />
               </View>
+            </View>
+
+            {/* Images Selection (Optional) */}
+            <View className="z-0 pb-6">
+              <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase mb-2 ml-1">
+                Receipt / Optional Photos ({images.length}/2)
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row gap-3">
+                {images.map((imgUri, index) => (
+                  <View key={index} className="relative w-24 h-24 rounded-2xl overflow-hidden border border-border shadow-sm">
+                    <Image source={imgUri} className="w-full h-full" contentFit="cover" />
+                    <TouchableOpacity
+                      onPress={() => removeImage(index)}
+                      className="absolute top-1 right-1 bg-black/50 w-6 h-6 rounded-full items-center justify-center backdrop-blur-sm"
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="close" size={16} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+
+                {images.length < 2 && (
+                  <TouchableOpacity
+                    onPress={pickImage}
+                    className="w-24 h-24 rounded-2xl border-2 border-dashed border-border bg-surface items-center justify-center"
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="add" size={28} color="#94A3B8" />
+                    <Text className="text-text-secondary text-xs font-bold mt-1">Add Image</Text>
+                  </TouchableOpacity>
+                )}
+              </ScrollView>
             </View>
 
           </View>

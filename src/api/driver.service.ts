@@ -54,14 +54,14 @@ export const driverService = {
     }
   },
 
-  async assignTruck(id: string, truckId: string): Promise<void> {
+  async updateDriverProfile(id: string, payload: any): Promise<void> {
     const res = await apiFetch(`/admin/driver-account/update-driver-profile/${id}`, {
       method: "POST",
-      body: JSON.stringify({ truckId }),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || "Failed to assign truck");
+      throw new Error(err.message || "Failed to update driver profile");
     }
   }
 };

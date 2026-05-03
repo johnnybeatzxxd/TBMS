@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { View, Text, TouchableOpacity, ScrollView, SectionList, ActivityIndicator, Dimensions } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, SectionList, ActivityIndicator, Dimensions, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
@@ -139,6 +139,7 @@ export default function RequestsScreen() {
   const isManager = user?.role === "manager" || user?.role === "admin";
   
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [trucks, setTrucks] = useState<any[]>([{ id: "all", plateNumber: "All Trucks" }]);
   const [selectedTruck, setSelectedTruck] = useState<any>({ id: "all", plateNumber: "All Trucks" });
@@ -173,8 +174,16 @@ export default function RequestsScreen() {
     setLoading(false);
   }, [filterPreset, customFrom, customTo, selectedTruck, user]);
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadRequests();
+    setRefreshing(false);
+  }, [loadRequests]);
+
   useFocusEffect(
     useCallback(() => {
+      const { useAuthStore } = require("@/src/store/authStore");
+      if (!useAuthStore.getState().isAuthenticated) return;
       loadRequests();
     }, [loadRequests])
   );
@@ -300,6 +309,7 @@ export default function RequestsScreen() {
           sections={groupedData}
           keyExtractor={(item) => item.id}
           showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563EB" />}
           ListEmptyComponent={
             <View className="items-center justify-center py-10 mt-10">
               <View className="w-20 h-20 bg-primary-50 rounded-full items-center justify-center mb-4">

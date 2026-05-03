@@ -6,6 +6,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -39,8 +40,17 @@ export default function CompanyDetailsScreen() {
     }
   };
 
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchData();
+    setRefreshing(false);
+  };
+
   useFocusEffect(
     useCallback(() => {
+      const { useAuthStore } = require("@/src/store/authStore");
+      if (!useAuthStore.getState().isAuthenticated) return;
       if (id) fetchData();
     }, [id])
   );
@@ -139,6 +149,7 @@ export default function CompanyDetailsScreen() {
         className="flex-1"
         contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563EB" />}
       >
         {/* Balance Card */}
         <View className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">

@@ -1,7 +1,7 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from "@react-navigation/native";
 import { Stack, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import "react-native-reanimated";
 import "../global.css";
 
@@ -15,6 +15,7 @@ export const unstable_settings = {
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const { restoreSession, isAuthenticated, isLoading, user } = useAuthStore();
+  const hasBootstrapped = useRef(false);
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -25,18 +26,29 @@ export default function RootLayout() {
         role: state.user?.role,
       });
 
-      if (state.isAuthenticated && state.user) {
-        if (state.user.role === "driver") {
-          router.replace("/driver-dashboard");
+      // Small delay to ensure the Stack navigator has mounted
+      setTimeout(() => {
+        if (state.isAuthenticated && state.user) {
+          if (state.user.role === "driver") {
+            router.replace("/driver-dashboard");
+          } else {
+            router.replace("/(tabs)");
+          }
         } else {
-          router.replace("/(tabs)");
+          router.replace("/(auth)/login");
         }
-      } else {
-        router.replace("/(auth)/login");
-      }
+        hasBootstrapped.current = true;
+      }, 0);
     };
     bootstrap();
   }, []);
+
+  // Reactive auth guard — redirect to login whenever auth is lost (only after bootstrap)
+  useEffect(() => {
+    if (hasBootstrapped.current && !isLoading && !isAuthenticated) {
+      router.replace("/(auth)/login");
+    }
+  }, [isAuthenticated, isLoading]);
 
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>

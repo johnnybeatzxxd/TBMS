@@ -23,7 +23,8 @@
       "navigationBar": {
         "barStyle": "dark-content",
         "backgroundColor": "#FFFFFF"
-      }
+      },
+      "package": "com.johnnybeatz.TruckBusinessManagmentSystem"
     },
     "web": {
       "output": "static",
@@ -49,6 +50,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "047d9e8d-7863-46c5-8b28-53770728d15f"
+      }
     }
   }
 }

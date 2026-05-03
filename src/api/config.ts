@@ -8,26 +8,10 @@
  * since React Native's fetch doesn't reliably handle cookies on Android.
  */
 
-import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
-import Constants from "expo-constants";
 
-// Dynamically determine the local IP address if running via Expo Dev Server
-// hostUri typically looks like "192.168.1.5:8081"
-const getLocalApiUrl = () => {
-  const hostUri = Constants.expoConfig?.hostUri;
-  if (hostUri) {
-    const ipAddress = hostUri.split(":")[0];
-    return `http://${ipAddress}:3000`;
-  }
-  return Platform.select({
-    android: "http://10.0.2.2:3000",
-    ios: "http://localhost:3000",
-    default: "http://localhost:3000",
-  });
-};
-
-export const API_BASE_URL = getLocalApiUrl();
+// Production API URL (deployed on Koyeb)
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || "https://worthy-lotti-student-alx-2b98831d.koyeb.app";
 
 const SESSION_COOKIE_KEY = "sessionCookie";
 
@@ -68,10 +52,10 @@ export const apiFetch = async (
   options: RequestInit = {}
 ): Promise<Response> => {
   const url = `${API_BASE_URL}${endpoint}`;
-  
+
   // Retrieve stored session cookie
   const sessionCookie = await getSessionCookie();
-  
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string> || {}),
@@ -87,6 +71,18 @@ export const apiFetch = async (
     credentials: "include",
     headers,
   });
+
+  // Global 401 interception — force logout on unauthorized responses
+  if (response.status === 401 && !endpoint.includes("/auth/login")) {
+    const { useAuthStore } = require("@/src/store/authStore");
+    const { isAuthenticated } = useAuthStore.getState();
+    if (isAuthenticated) {
+      useAuthStore.getState().logout();
+    }
+    // Return a never-resolving promise so all downstream code silently stops
+    // (no error alerts will be shown to the user)
+    return new Promise<Response>(() => {});
+  }
 
   return response;
 };

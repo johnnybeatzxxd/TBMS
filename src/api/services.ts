@@ -17,4 +17,4 @@ export { driverService } from "./driver.service";
 export { mockAnalyticsService as analyticsService } from "./mock/analytics.mock";
 export { mockRequestsService as requestService } from "./mock/requests.mock";
 export { mockExpenseService as expenseService } from "./mock/expenses.mock";
-export { mockTransferService as transferService } from "./mock/transfers.mock";
+export { transferService } from "./transfer.service";

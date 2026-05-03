@@ -1,16 +1,19 @@
 export interface Transfer {
-  id: string;
+  _id: string;
   driverId: string;
+  adminId?: string;
   amount: number;
-  type: "increment" | "decrement";
   remark: string;
   date: string;
+  sender: "ADMIN" | "DRIVER";
+  status: "PENDING" | "APPROVED";
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface AddTransferPayload {
-  driverId: string;
+  driverId?: string;
   amount: number;
-  type: "increment" | "decrement";
   remark: string;
   date: string;
 }

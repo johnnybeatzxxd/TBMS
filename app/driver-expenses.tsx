@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, ActivityIndicator, SectionList } from "react-native";
+import { View, Text, TouchableOpacity, ActivityIndicator, SectionList, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -57,6 +57,14 @@ const ExpenseCard = ({ expense }: { expense: typeof MOCK_EXPENSES[0] }) => {
 export default function DriverExpensesScreen() {
   const [loading, setLoading] = useState(true);
   const [expenses, setExpenses] = useState<typeof MOCK_EXPENSES>([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    setExpenses(MOCK_EXPENSES);
+    setRefreshing(false);
+  };
 
   useEffect(() => {
     setTimeout(() => {
@@ -84,6 +92,7 @@ export default function DriverExpensesScreen() {
         </View>
       ) : (
         <SectionList
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#DC2626" />}
           sections={sections}
           keyExtractor={(item, index) => item.id + index}
           renderSectionHeader={({ section: { title } }) => (

@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
-import { View, Text, TouchableOpacity, ActivityIndicator, SectionList, StyleSheet, Alert } from "react-native";
+import { View, Text, TouchableOpacity, ActivityIndicator, SectionList, StyleSheet, Alert, RefreshControl } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { tripService } from "@/src/api/services";
 import { Trip } from "@/src/types";
+import { useCachedFetch } from "@/src/hooks/useCachedFetch";
 
 // Helper to format date string for display grouping
 const formatDateGroup = (dateString: string) => {
@@ -30,39 +32,70 @@ const getGroupedTrips = (trips: Trip[]) => {
   }));
 };
 
-const TripCard = ({ trip }: { trip: Trip }) => {
+const TripCard = ({ trip, companiesMap }: { trip: Trip, companiesMap: Record<string, string> }) => {
+  const paymentMethodDisplay = trip.paymentMethod || (trip.companyId ? "CREDIT" : "CASH");
+  const isCredit = paymentMethodDisplay === "CREDIT";
+  const companyName = trip.contractedCompany?.name || trip.company?.name || companiesMap[trip.companyId || ""];
+
+  let paymentBgClass = "bg-primary-50";
+  let paymentTextClass = "text-primary-600";
+  
+  if (paymentMethodDisplay === "CASH") {
+    if (trip.approved === "APPROVED") {
+      paymentBgClass = "bg-success-50";
+      paymentTextClass = "text-success-600";
+    } else if (trip.approved === "DECLINED") {
+      paymentBgClass = "bg-danger-50";
+      paymentTextClass = "text-danger-600";
+    } else {
+      paymentBgClass = "bg-amber-50";
+      paymentTextClass = "text-amber-500";
+    }
+  }
+
   return (
     <View className="bg-white rounded-2xl border border-border mt-3 overflow-hidden shadow-sm p-4">
       <View className="flex-row justify-between mb-3">
-        <View>
+        <View className="flex-1 mr-4">
           <Text className="text-text-secondary text-[10px] font-bold tracking-widest uppercase mb-1">Route</Text>
           <Text className="text-text-primary font-bold text-base">{trip.loadingSite} - {trip.destinationSite}</Text>
+          {isCredit && companyName && (
+            <View className="flex-row items-center mt-1">
+              <Ionicons name="business-outline" size={12} color="#64748B" />
+              <Text className="text-text-secondary text-[11px] font-medium ml-1">{companyName}</Text>
+            </View>
+          )}
         </View>
-        {trip.paymentMethod === "CASH" && trip.approved ? (
-          <View style={[styles.statusBadge, 
-            trip.approved === "APPROVED" ? styles.statusApproved : 
-            trip.approved === "DECLINED" ? styles.statusDeclined : 
-            styles.statusPending]}>
-            <Text style={[styles.statusText,
-              trip.approved === "APPROVED" ? styles.statusTextApproved : 
-              trip.approved === "DECLINED" ? styles.statusTextDeclined : 
-              styles.statusTextPending
-            ]}>{trip.approved}</Text>
-          </View>
-        ) : (
-          <Ionicons name="location" size={20} color="#2563EB" />
-        )}
+        <Ionicons 
+          name="location" 
+          size={20} 
+          color={
+             paymentMethodDisplay === "CASH" 
+               ? trip.approved === "APPROVED" ? "#16A34A"
+               : trip.approved === "DECLINED" ? "#DC2626"
+               : "#F59E0B"
+               : "#2563EB"
+          } 
+        />
       </View>
       <View className="flex-row justify-between pt-3 border-t border-border/50">
-        <View>
+        <View className="flex-1">
           <Text className="text-text-secondary text-[10px] uppercase font-bold tracking-wider mb-1">Volume</Text>
           <Text className="text-text-primary text-sm font-semibold">{trip.volume?.replace("MCUBE", " M³")}</Text>
         </View>
-        <View className="items-end">
+        
+        {trip.roadExpence != null && (
+          <View className="flex-1 items-center border-l border-r border-border/30 px-2">
+            <Text className="text-text-secondary text-[10px] uppercase font-bold tracking-wider mb-1">Road Expense</Text>
+            <Text className="text-danger-600 text-sm font-semibold">${trip.roadExpence}</Text>
+          </View>
+        )}
+
+        <View className="flex-1 items-end">
           <Text className="text-text-secondary text-[10px] uppercase font-bold tracking-wider mb-1">Payment</Text>
-          <View style={[styles.badge, trip.paymentMethod === "CASH" ? styles.cashBadge : styles.creditBadge]}>
-             <Text style={[styles.badgeText, trip.paymentMethod === "CASH" ? styles.cashText : styles.creditText]}>
-               {trip.paymentMethod} {trip.amount ? `$${trip.amount}` : ""}
+          <View className={`px-2.5 py-1 rounded-md mt-0.5 ${paymentBgClass}`}>
+             <Text className={`text-xs font-bold ${paymentTextClass}`}>
+               {paymentMethodDisplay} {trip.amount ? `$${trip.amount}` : ""}
              </Text>
           </View>
         </View>
@@ -73,12 +106,19 @@ const TripCard = ({ trip }: { trip: Trip }) => {
 
 export default function DriverTripsScreen() {
   const router = useRouter();
+  const { data: companiesList } = useCachedFetch<{ id: string, name: string }[]>("ALLOWED_COMPANIES", tripService.getAllowedCompanies, []);
+  
+  const companiesMap = companiesList.reduce((acc, c) => {
+    acc[c.id] = c.name;
+    return acc;
+  }, {} as Record<string, string>);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [tripType, setTripType] = useState<"Cash" | "Credit">("Cash");
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchTrips = useCallback(async (pageNum: number, type: "Cash" | "Credit", append = false) => {
     try {
@@ -102,9 +142,24 @@ export default function DriverTripsScreen() {
     }
   }, []);
 
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    setTrips([]);
+    fetchTrips(1, tripType, false).finally(() => setRefreshing(false));
+  }, [tripType, fetchTrips]);
+
   useEffect(() => {
     fetchTrips(1, tripType, false);
   }, [tripType, fetchTrips]);
+
+  // Automatically reload when screen is focused (e.g. coming back from adding a trip)
+  useFocusEffect(
+    useCallback(() => {
+      const { useAuthStore } = require("@/src/store/authStore");
+      if (!useAuthStore.getState().isAuthenticated) return;
+      fetchTrips(1, tripType, false);
+    }, [tripType, fetchTrips])
+  );
 
   const loadMoreData = () => {
     if (loadingMore || loading || page >= totalPages) return;
@@ -116,12 +171,26 @@ export default function DriverTripsScreen() {
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
       {/* Header */}
-      <View className="flex-row items-center px-5 pt-2 pb-4 bg-white border-b border-border shadow-sm" style={{ zIndex: 50 }}>
-        <TouchableOpacity onPress={() => router.back()} className="w-10 h-10 bg-surface rounded-xl items-center justify-center mr-3 border border-border">
-          <Ionicons name="arrow-back" size={20} color="#334155" />
+      <View className="flex-row items-center justify-between px-5 pt-2 pb-4 bg-white border-b border-border shadow-sm" style={{ zIndex: 50 }}>
+        <View className="flex-row items-center">
+          <TouchableOpacity onPress={() => router.back()} className="w-10 h-10 bg-surface rounded-xl items-center justify-center mr-3 border border-border">
+            <Ionicons name="arrow-back" size={20} color="#334155" />
+          </TouchableOpacity>
+          <MaterialCommunityIcons name="road-variant" size={26} color="#2563EB" />
+          <Text className="text-text-primary font-bold text-xl ml-2">My Trips</Text>
+        </View>
+        <TouchableOpacity
+          onPress={handleRefresh}
+          disabled={refreshing}
+          className="w-10 h-10 bg-primary-50 rounded-xl items-center justify-center border border-primary-100"
+          activeOpacity={0.7}
+        >
+          {refreshing ? (
+            <ActivityIndicator size={16} color="#2563EB" />
+          ) : (
+            <Ionicons name="refresh" size={18} color="#2563EB" />
+          )}
         </TouchableOpacity>
-        <MaterialCommunityIcons name="road-variant" size={26} color="#2563EB" />
-        <Text className="text-text-primary font-bold text-xl ml-2">My Trips</Text>
       </View>
 
       {/* Cash / Credit Switch */}
@@ -153,6 +222,7 @@ export default function DriverTripsScreen() {
         </View>
       ) : (
         <SectionList
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#2563EB" />}
           sections={tripGroups}
           keyExtractor={(item, index) => item.id + index}
           onEndReached={loadMoreData}
@@ -162,7 +232,7 @@ export default function DriverTripsScreen() {
               {title}
             </Text>
           )}
-          renderItem={({ item }) => <TripCard trip={item} />}
+          renderItem={({ item }) => <TripCard trip={item} companiesMap={companiesMap} />}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={

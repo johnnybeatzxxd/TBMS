@@ -7,6 +7,8 @@ export interface Driver {
   username?: string;
   password?: string;
   accountActive: boolean;
+  licenseRenewalDate?: string;
+  oilChangeDate?: string;
 }
 
 export interface CreateDriverPayload {
@@ -14,11 +16,15 @@ export interface CreateDriverPayload {
   username?: string;
   password?: string;
   truckId: string;
+  licenseRenewalDate?: string;
+  oilChangeDate?: string;
 }
 
 export interface UpdateDriverPayload {
   name?: string;
   username?: string;
   password?: string;
-  truckId: string;
+  truckId?: string;
+  licenseRenewalDate?: string;
+  oilChangeDate?: string;
 }

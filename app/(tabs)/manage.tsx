@@ -1,7 +1,7 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { router, useFocusEffect } from "expo-router";
 import { useCachedFetch } from "@/src/hooks/useCachedFetch";
-import { View, Text, TouchableOpacity, ScrollView, Alert } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, Alert, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuthStore } from "@/src/store";
@@ -53,6 +53,7 @@ const MANAGE_SECTIONS = [
 export default function ManageScreen() {
   const { user, logout } = useAuthStore();
   const isAdmin = user?.role === "admin";
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchActiveDrivers = useCallback(async () => {
     const res = await driverService.getMyDrivers();
@@ -83,6 +84,8 @@ export default function ManageScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      const { useAuthStore } = require("@/src/store/authStore");
+      if (!useAuthStore.getState().isAuthenticated) return;
       if (isAdmin) {
         refetchDrivers();
         refetchTrucks();
@@ -91,15 +94,25 @@ export default function ManageScreen() {
     }, [isAdmin, refetchDrivers, refetchTrucks, refetchTrips])
   );
 
+  const onRefresh = useCallback(async () => {
+    if (!isAdmin) return;
+    setRefreshing(true);
+    await Promise.all([
+      refetchDrivers(),
+      refetchTrucks(),
+      refetchTrips()
+    ]);
+    setRefreshing(false);
+  }, [isAdmin, refetchDrivers, refetchTrucks, refetchTrips]);
+
   const handleLogout = () => {
     Alert.alert("Sign Out", "Are you sure you want to log out?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Sign Out",
         style: "destructive",
-        onPress: async () => {
-          await logout();
-          router.replace("/(auth)/login");
+        onPress: () => {
+          logout();
         },
       },
     ]);
@@ -125,6 +138,7 @@ export default function ManageScreen() {
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563EB" />}
       >
         {/* Header Background + Avatar */}
         <View className="bg-primary pt-6 pb-20 px-5 rounded-b-[40px]">

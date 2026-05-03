@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert, SectionList } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert, SectionList, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -118,6 +118,13 @@ export default function ExpensesScreen() {
   const isDriver = user?.role === "driver";
   const isAdminOrManager = user?.role === "admin" || user?.role === "manager";
 
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadInitialData();
+    setRefreshing(false);
+  };
+
   const loadInitialData = async () => {
     setLoadingInitial(true);
     setPage(1);
@@ -228,6 +235,7 @@ export default function ExpensesScreen() {
 
       {/* Content */}
       <SectionList
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563EB" />}
         sections={expenseGroups}
         keyExtractor={(item, index) => item.id + index}
         renderSectionHeader={({ section: { title } }) => (

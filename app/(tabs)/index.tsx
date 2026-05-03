@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { View, Text, TouchableOpacity, ScrollView, Modal, Alert, ActivityIndicator, SectionList } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, Modal, Alert, ActivityIndicator, SectionList, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { router } from "expo-router";
@@ -391,9 +392,19 @@ export default function TripsListScreen() {
     }
   }, [selectedTruck, paymentFilter, claimFilter, customFrom, customTo, isManager]);
 
-  useEffect(() => {
-    loadTrips(1);
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadTrips(1);
+    setRefreshing(false);
   }, [loadTrips]);
+
+  // Automatically reload trips when returning from another screen (like Add Trip)
+  useFocusEffect(
+    useCallback(() => {
+      loadTrips(1);
+    }, [loadTrips])
+  );
 
   const handleLoadMore = () => {
     if (!loadingMore && !loadingInitial && page < totalPages) {
@@ -688,6 +699,7 @@ export default function TripsListScreen() {
       </Modal>
 
       <SectionList
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563EB" />}
         sections={tripGroups}
         keyExtractor={(item, index) => item.id + index}
         renderSectionHeader={({ section: { title } }) => (

@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from "react";
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert, SectionList } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert, SectionList, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useAuthStore } from "@/src/store";
-import { mockTransferService } from "@/src/api/mock/transfers.mock";
-import { Transfer } from "@/src/types";
+import { transferService } from "@/src/api/services";
+import { Transfer } from "@/src/types/transfer.types";
 import { DateFilterBar, DateFilterPreset, passesDateFilter } from "@/src/components/DateFilterBar";
 
 const getRelativeDateLabel = (dateStr: string) => {
@@ -26,8 +26,10 @@ const getRelativeDateLabel = (dateStr: string) => {
   return `${weekdays[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}`;
 };
 
-const TransferCard = ({ tx }: { tx: Transfer }) => {
+const TransferCard = ({ tx, isManager, onApprove, onDelete }: { tx: Transfer, isManager: boolean, onApprove: (id: string)=>void, onDelete: (id: string)=>void }) => {
   const [expanded, setExpanded] = useState(false);
+  
+  const isIncrement = tx.sender === "ADMIN" || tx.sender === "manager" as any;
 
   return (
     <TouchableOpacity
@@ -39,13 +41,13 @@ const TransferCard = ({ tx }: { tx: Transfer }) => {
         <View className="flex-row items-center flex-1 pr-3">
           <View 
             className={`w-10 h-10 rounded-full items-center justify-center mr-3 border ${
-              tx.type === "increment" ? "bg-success-50 border-success-100" : "bg-danger-50 border-danger-100"
+              isIncrement ? "bg-success-50 border-success-100" : "bg-danger-50 border-danger-100"
             }`}
           >
             <Ionicons 
-              name={tx.type === "increment" ? "arrow-up" : "arrow-down"} 
+              name={isIncrement ? "arrow-up" : "arrow-down"} 
               size={18} 
-              color={tx.type === "increment" ? "#16A34A" : "#DC2626"} 
+              color={isIncrement ? "#16A34A" : "#DC2626"} 
             />
           </View>
           <View className="flex-1">
@@ -53,35 +55,73 @@ const TransferCard = ({ tx }: { tx: Transfer }) => {
               Transfer
             </Text>
             <Text className="text-text-secondary text-xs mt-0.5" numberOfLines={1}>
-              Driver Details: {tx.driverId}
+              Auth: {tx.sender}
             </Text>
           </View>
         </View>
         <View className="items-end">
           <Text 
             className={`font-bold text-lg ${
-              tx.type === "increment" ? "text-success-600" : "text-danger-600"
+              isIncrement ? "text-success-600" : "text-danger-600"
             }`}
           >
-            {tx.type === "increment" ? "+" : "-"} ${tx.amount.toFixed(2)}
+            {isIncrement ? "+" : "-"} ${tx.amount.toFixed(2)}
           </Text>
-          <Ionicons
-            name={expanded ? "chevron-up" : "chevron-down"}
-            size={16}
-            color="#94A3B8"
-            style={{ marginTop: 2 }}
-          />
+          
+          <View className="flex-row items-center mt-1">
+            <View className={`px-2 py-0.5 rounded mr-2 ${tx.status === "APPROVED" ? "bg-success-100" : "bg-amber-100"}`}>
+               <Text className={`text-[10px] font-bold uppercase tracking-wider ${tx.status === "APPROVED" ? "text-success-700" : "text-amber-700"}`}>
+                  {tx.status}
+               </Text>
+            </View>
+            <Ionicons
+              name={expanded ? "chevron-up" : "chevron-down"}
+              size={16}
+              color="#94A3B8"
+            />
+          </View>
         </View>
       </View>
 
       {/* EXPANDED CONTENT: Full Remark */}
       {expanded && (
         <View className="mt-3 pt-3 border-t border-border/50">
-          <View className="bg-surface rounded-xl p-3 border border-border/50">
+          <View className="bg-surface rounded-xl p-3 border border-border/50 mb-2">
             <Text className="text-text-secondary text-sm leading-5">
               {tx.remark}
             </Text>
           </View>
+          
+          {isManager && tx.status === "PENDING" && (
+            <View className="flex-row gap-3 pt-2">
+              <TouchableOpacity
+                className="flex-1 bg-success-500 py-2.5 rounded-xl items-center"
+                activeOpacity={0.8}
+                onPress={(e) => { e.stopPropagation(); onApprove(tx._id || (tx as any).id); }}
+              >
+                <Text className="text-white font-bold text-sm">Approve</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="flex-[0.7] bg-white border border-danger-500 py-2.5 rounded-xl items-center"
+                activeOpacity={0.8}
+                onPress={(e) => { e.stopPropagation(); onDelete(tx._id || (tx as any).id); }}
+              >
+                <Text className="text-danger-600 font-bold text-sm">Delete</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {isManager && tx.status === "APPROVED" && (
+            <View className="flex-row justify-end pt-2">
+               <TouchableOpacity
+                className="px-4 py-2 bg-danger-50 border border-danger-200 rounded-lg items-center"
+                activeOpacity={0.8}
+                onPress={(e) => { e.stopPropagation(); onDelete(tx._id || (tx as any).id); }}
+              >
+                <Text className="text-danger-600 font-semibold text-xs">Delete Record</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       )}
     </TouchableOpacity>
@@ -97,24 +137,32 @@ export default function TransfersScreen() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
 
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadInitialData();
+    setRefreshing(false);
+  };
+
   // Date Filter State
   const [filterPreset, setFilterPreset] = useState<DateFilterPreset>("all");
   const [customFrom, setCustomFrom] = useState<Date | null>(null);
   const [customTo, setCustomTo] = useState<Date | null>(null);
 
+  const isManager = user?.role === "admin" || (user?.role as string) === "manager";
+
   const loadInitialData = async () => {
     setLoadingInitial(true);
     setPage(1);
     try {
-      const res = await mockTransferService.getTransfers();
-      // Apply filters first if we wanted backend-like behavior, but here we sort and slice
-      const sorted = [...res.transfers].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      setAllTransfers(sorted);
-      
-      const limit = 6;
-      const initialSlice = sorted.slice(0, limit);
-      setDisplayedTransfers(initialSlice);
-      setHasMore(sorted.length > limit);
+      const res = await transferService.getTransfers({
+         page: 1,
+         perpage: 10,
+         dateFrom: filterPreset !== "all" && customFrom ? customFrom.toISOString().split("T")[0] : undefined,
+         dateTo: filterPreset !== "all" && customTo ? customTo.toISOString().split("T")[0] : undefined,
+      });
+      setDisplayedTransfers(res.transfers);
+      setHasMore(res.meta?.currentPage < res.meta?.totalPages);
     } catch (error: any) {
       Alert.alert("Error", error.message || "Failed to load transfers");
     } finally {
@@ -126,46 +174,55 @@ export default function TransfersScreen() {
     if (loadingMore || !hasMore) return;
 
     setLoadingMore(true);
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 800));
     
-    const nextPage = page + 1;
-    const limit = 6;
-    const start = (nextPage - 1) * limit;
-    const end = start + limit;
-    
-    const nextSlice = filteredDataFull.slice(start, end);
-    
-    if (nextSlice.length > 0) {
-      setDisplayedTransfers(prev => {
-        const newItems = nextSlice.filter(item => !prev.some(p => p.id === item.id));
-        return [...prev, ...newItems];
+    try {
+      const nextPage = page + 1;
+      const res = await transferService.getTransfers({
+         page: nextPage,
+         perpage: 10,
+         dateFrom: filterPreset !== "all" && customFrom ? customFrom.toISOString().split("T")[0] : undefined,
+         dateTo: filterPreset !== "all" && customTo ? customTo.toISOString().split("T")[0] : undefined,
       });
+      
+      const newItems = res.transfers.filter(item => !displayedTransfers.some(p => (p._id || (p as any).id) === (item._id || (item as any).id)));
+      setDisplayedTransfers(prev => [...prev, ...newItems]);
       setPage(nextPage);
-      setHasMore(filteredDataFull.length > end);
-    } else {
-      setHasMore(false);
+      setHasMore(res.meta?.currentPage < res.meta?.totalPages);
+    } catch (error) {
+       // silently fail load more
     }
     setLoadingMore(false);
+  };
+
+  const handleApprove = async (id: string) => {
+    try {
+      await transferService.approveTransfer(id);
+      setDisplayedTransfers(prev => prev.map(t => (t._id || (t as any).id) === id ? { ...t, status: "APPROVED" } : t));
+    } catch (error: any) {
+      Alert.alert("Error", error.message || "Failed to approve transfer.");
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    Alert.alert("Confirm Delete", "Are you sure you want to delete this transfer? This action is irreversible.", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Delete", style: "destructive", onPress: async () => {
+         try {
+           await transferService.deleteTransfer(id);
+           setDisplayedTransfers(prev => prev.filter(t => (t._id || (t as any).id) !== id));
+         } catch (error: any) {
+           Alert.alert("Error", error.message || "Failed to delete transfer.");
+         }
+      }}
+    ]);
   };
 
   useEffect(() => {
     loadInitialData();
   }, []);
 
-  // When filters change, reset pagination
-  const filteredDataFull = useMemo(() =>
-    allTransfers.filter(tx => passesDateFilter(tx.date, filterPreset, customFrom, customTo)),
-    [allTransfers, filterPreset, customFrom, customTo]
-  );
-
-  useEffect(() => {
-    const limit = 6;
-    const firstSlice = filteredDataFull.slice(0, limit);
-    setDisplayedTransfers(firstSlice);
-    setPage(1);
-    setHasMore(filteredDataFull.length > limit);
-  }, [filteredDataFull]);
+  // With real API, date filtering is done server-side on loadInitialData
+  // so we don't need the local filteredDataFull effect loop
 
   const groupedTransfers = displayedTransfers.reduce((acc, tx) => {
     if (!acc[tx.date]) acc[tx.date] = [];
@@ -210,8 +267,9 @@ export default function TransfersScreen() {
 
       {/* Content */}
       <SectionList
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563EB" />}
         sections={transferGroups}
-        keyExtractor={(item, index) => item.id + index}
+        keyExtractor={(item, index) => item._id + index}
         renderSectionHeader={({ section: { title } }) => (
           <Text className="text-text-secondary font-bold text-xs tracking-widest uppercase ml-5 mb-2 mt-6">
             {title}
@@ -219,7 +277,7 @@ export default function TransfersScreen() {
         )}
         renderItem={({ item }) => (
           <View className="px-4">
-            <TransferCard tx={item} />
+            <TransferCard tx={item} isManager={isManager} onApprove={handleApprove} onDelete={handleDelete} />
           </View>
         )}
         contentContainerStyle={{ paddingBottom: 100 }}

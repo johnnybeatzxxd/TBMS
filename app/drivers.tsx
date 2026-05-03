@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert, TextInput } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert, TextInput, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
@@ -43,8 +43,17 @@ export default function DriversListScreen() {
     await Promise.all([refetchDrivers(), refetchTrucks()]);
   };
 
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchData();
+    setRefreshing(false);
+  };
+
   useFocusEffect(
     useCallback(() => {
+      const { useAuthStore } = require("@/src/store/authStore");
+      if (!useAuthStore.getState().isAuthenticated) return;
       refetchDrivers();
       refetchTrucks();
     }, [refetchDrivers, refetchTrucks])
@@ -174,9 +183,10 @@ export default function DriversListScreen() {
         </View>
       ) : (
         <ScrollView
-          className="flex-1"
-          contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 100 }}
+          className="flex-1 mb-24 mt-2"
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 80, gap: 12 }}
           showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563EB" />}
         >
           {displayDrivers.length === 0 ? (
             <View className="items-center py-10">
@@ -276,7 +286,7 @@ export default function DriversListScreen() {
                     {/* Edit Button */}
                     <TouchableOpacity
                       onPress={() => {
-                        const qs = `?mode=edit&id=${driver.id}&name=${encodeURIComponent(driver.name)}&truckId=${encodeURIComponent(driver.truckId)}&username=${encodeURIComponent(driver.username || "")}&password=${encodeURIComponent(driver.password || "")}`;
+                        const qs = `?mode=edit&id=${driver.id}&name=${encodeURIComponent(driver.name)}&truckId=${encodeURIComponent(driver.truckId)}&username=${encodeURIComponent(driver.username || "")}&password=${encodeURIComponent(driver.password || "")}&licenseRenewalDate=${encodeURIComponent(driver.licenseRenewalDate || "")}&oilChangeDate=${encodeURIComponent(driver.oilChangeDate || "")}`;
                         router.push(`/manage-driver${qs}` as any);
                       }}
                       className="w-10 h-10 items-center justify-center bg-primary-50 rounded-full border border-primary-100"

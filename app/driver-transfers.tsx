@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, ActivityIndicator, SectionList } from "react-native";
+import { View, Text, TouchableOpacity, ActivityIndicator, SectionList, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -59,6 +59,14 @@ const TransferCard = ({ transfer }: { transfer: typeof MOCK_TRANSFERS[0] }) => {
 export default function DriverTransfersScreen() {
   const [loading, setLoading] = useState(true);
   const [transfers, setTransfers] = useState<typeof MOCK_TRANSFERS>([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    setTransfers(MOCK_TRANSFERS);
+    setRefreshing(false);
+  };
 
   useEffect(() => {
     setTimeout(() => {
@@ -86,6 +94,7 @@ export default function DriverTransfersScreen() {
         </View>
       ) : (
         <SectionList
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#16A34A" />}
           sections={sections}
           keyExtractor={(item, index) => item.id + index}
           renderSectionHeader={({ section: { title } }) => (

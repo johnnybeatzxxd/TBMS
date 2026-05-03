@@ -47,20 +47,12 @@ export const useAuthStore = create<AuthStore>((set) => ({
   },
 
   logout: async () => {
-    set({ isLoading: true });
-    try {
-      await authService.logout();
-    } catch {
-      // Even if server logout fails, clear local state
-    } finally {
-      await SecureStore.deleteItemAsync(USER_PROFILE_KEY);
-      set({
-        user: null,
-        isAuthenticated: false,
-        isLoading: false,
-        error: null,
-      });
-    }
+    // 1. Immediately clear local state — don't wait for the API
+    await SecureStore.deleteItemAsync(USER_PROFILE_KEY);
+    set({ user: null, isAuthenticated: false, isLoading: false, error: null });
+
+    // 2. Fire-and-forget: notify the server, but never block on it
+    authService.logout().catch(() => {});
   },
 
   restoreSession: async () => {

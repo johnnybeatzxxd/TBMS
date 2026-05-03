@@ -14,14 +14,18 @@ import DateTimePicker, {
   DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
 import { router, useLocalSearchParams } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { tripService, companyService } from "@/src/api/services";
 import { Company, AddTripPayload, UpdateTripPayload } from "@/src/types";
 import { useCachedFetch } from "@/src/hooks/useCachedFetch";
+import { useAuthStore } from "@/src/store";
 
 type Volume = "10MCUBE" | "16MCUBE";
 
 export default function AddTripModal() {
+  const user = useAuthStore((s) => s.user);
+
   const params = useLocalSearchParams<{
     id?: string;
     tripType?: string;
@@ -61,8 +65,60 @@ export default function AddTripModal() {
   const [volume, setVolume] = useState<Volume>((params.volume as Volume) || "10MCUBE");
 
   const [cashAmount, setCashAmount] = useState(params.cashAmount || "");
-  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentAmount, setPaymentAmount] = useState(params.cashAmount || "");
   const [roadExpense, setRoadExpense] = useState(params.roadExpense || "");
+
+  // Auto-complete logic
+  const [savedLocations, setSavedLocations] = useState<string[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState<string[]>([]);
+  const [unloadingSuggestions, setUnloadingSuggestions] = useState<string[]>([]);
+  const [showLoadingSuggestions, setShowLoadingSuggestions] = useState(false);
+  const [showUnloadingSuggestions, setShowUnloadingSuggestions] = useState(false);
+
+  useEffect(() => {
+    if (user?.id) {
+      AsyncStorage.getItem(`@locations_${user.id}`).then(val => {
+        if (val) setSavedLocations(JSON.parse(val));
+      }).catch(() => {});
+    }
+  }, [user?.id]);
+
+  const saveNewLocations = async (loc1: string, loc2: string) => {
+    if (!user?.id) return;
+    let updated = [...savedLocations];
+    let changed = false;
+    
+    if (loc1 && !updated.includes(loc1)) { updated.push(loc1); changed = true; }
+    if (loc2 && !updated.includes(loc2)) { updated.push(loc2); changed = true; }
+
+    if (changed) {
+      setSavedLocations(updated);
+      await AsyncStorage.setItem(`@locations_${user.id}`, JSON.stringify(updated)).catch(() => {});
+    }
+  };
+
+  const handleLoadingSiteChange = (text: string) => {
+    setLoadingSite(text);
+    if (text.length >= 1) {
+      const filtered = savedLocations.filter(loc => loc.toLowerCase().startsWith(text.toLowerCase()) && loc !== text);
+      setLoadingSuggestions(filtered);
+      setShowLoadingSuggestions(filtered.length > 0);
+    } else {
+      setShowLoadingSuggestions(false);
+    }
+  };
+
+  const handleUnloadingSiteChange = (text: string) => {
+    setUnloadingSite(text);
+    if (text.length >= 1) {
+      const filtered = savedLocations.filter(loc => loc.toLowerCase().startsWith(text.toLowerCase()) && loc !== text);
+      setUnloadingSuggestions(filtered);
+      setShowUnloadingSuggestions(filtered.length > 0);
+    } else {
+      setShowUnloadingSuggestions(false);
+    }
+  };
+
 
   // Use the cached fetch hook to aggressively load allowed companies in case we need them
   const { data: companies, isLoading: isLoadingCompanies } = useCachedFetch<{ id: string, name: string }[]>(
@@ -97,13 +153,9 @@ export default function AddTripModal() {
       Alert.alert("Validation Error", "Please enter a valid cash amount.");
       return;
     }
-    if (tripType === "credit") {
+    if (tripType === "credit" && !isEditMode) {
       if (!selectedCompany) {
         Alert.alert("Validation Error", "Please select a company.");
-        return;
-      }
-      if (!paymentAmount || isNaN(Number(paymentAmount))) {
-        Alert.alert("Validation Error", "Please enter a valid payment amount.");
         return;
       }
     }
@@ -129,12 +181,20 @@ export default function AddTripModal() {
 
       if (isEditMode && params.id) {
         const updatePayload: UpdateTripPayload = {
-          ...payload
+          date: payload.date,
+          loadingSite: payload.loadingSite,
+          destinationSite: payload.destinationSite,
+          volume: payload.volume,
+          paymentMethod: payload.paymentMethod,
+          amount: payload.amount,
+          roadExpence: payload.roadExpence,
         };
         await tripService.updateTrip(params.id, updatePayload);
       } else {
         await tripService.addTrip(payload);
       }
+
+      await saveNewLocations(payload.loadingSite, payload.destinationSite);
 
       Alert.alert(
         "Success",
@@ -235,8 +295,8 @@ export default function AddTripModal() {
           </View>
         </View>
 
-        {/* Company Dropdown (Credit Only) */}
-        {tripType === "credit" && (
+        {/* Company Dropdown (Credit Only, hidden in edit mode) */}
+        {tripType === "credit" && !isEditMode && (
           <View className="bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
             <View className="flex-row items-center gap-2 px-4 pt-4 pb-3 border-b border-border bg-primary-50">
               <Ionicons name="business-outline" size={16} color="#2563EB" />
@@ -287,16 +347,17 @@ export default function AddTripModal() {
         )}
 
         {/* Route Details */}
-        <View className="bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
-          <View className="flex-row items-center gap-2 px-4 pt-4 pb-3 border-b border-border bg-primary-50">
+        <View className="bg-white rounded-2xl border border-border shadow-sm z-[100]">
+          <View className="flex-row items-center gap-2 px-4 pt-4 pb-3 border-b border-border bg-primary-50 overflow-hidden rounded-t-[15px]">
             <Ionicons name="git-branch-outline" size={16} color="#2563EB" />
             <Text className="text-primary font-semibold text-xs tracking-widest uppercase">
               Route Details
             </Text>
           </View>
-          <View className="p-4 gap-4">
+          <View className="p-4 gap-4 z-50">
+            
             {/* Loading Site */}
-            <View>
+            <View className="relative z-50">
               <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase mb-2">
                 Loading Site *
               </Text>
@@ -307,13 +368,36 @@ export default function AddTripModal() {
                   placeholder="Enter Facility Name or City"
                   placeholderTextColor="#94A3B8"
                   value={loadingSite}
-                  onChangeText={setLoadingSite}
+                  onChangeText={handleLoadingSiteChange}
+                  onFocus={() => {
+                     if (loadingSuggestions.length > 0) setShowLoadingSuggestions(true);
+                     setShowUnloadingSuggestions(false);
+                  }}
+                  onBlur={() => setTimeout(() => setShowLoadingSuggestions(false), 200)}
                 />
               </View>
+              {showLoadingSuggestions && (
+                <View className="absolute top-[80px] left-0 right-0 bg-white border border-border rounded-xl shadow-lg z-[100] overflow-hidden max-h-40">
+                  <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                    {loadingSuggestions.map((s, i) => (
+                      <TouchableOpacity
+                        key={i}
+                        onPress={() => {
+                          setLoadingSite(s);
+                          setShowLoadingSuggestions(false);
+                        }}
+                        className={`px-4 py-3 ${i !== loadingSuggestions.length - 1 ? 'border-b border-border/50' : ''}`}
+                      >
+                        <Text className="text-text-primary font-medium">{s}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
             </View>
 
             {/* Divider with arrow */}
-            <View className="flex-row items-center px-2">
+            <View className="flex-row items-center px-2 z-10">
               <View className="flex-1 h-px bg-border" />
               <View className="mx-3 w-7 h-7 rounded-full bg-primary-100 items-center justify-center">
                 <Ionicons name="arrow-down" size={14} color="#2563EB" />
@@ -322,7 +406,7 @@ export default function AddTripModal() {
             </View>
 
             {/* Unloading Site */}
-            <View>
+            <View className="relative z-40">
               <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase mb-2">
                 Unloading Site *
               </Text>
@@ -333,15 +417,39 @@ export default function AddTripModal() {
                   placeholder="Enter Facility Name or City"
                   placeholderTextColor="#94A3B8"
                   value={unloadingSite}
-                  onChangeText={setUnloadingSite}
+                  onChangeText={handleUnloadingSiteChange}
+                  onFocus={() => {
+                     if (unloadingSuggestions.length > 0) setShowUnloadingSuggestions(true);
+                     setShowLoadingSuggestions(false);
+                  }}
+                  onBlur={() => setTimeout(() => setShowUnloadingSuggestions(false), 200)}
                 />
               </View>
+              {showUnloadingSuggestions && (
+                <View className="absolute top-[80px] left-0 right-0 bg-white border border-border rounded-xl shadow-lg z-[100] overflow-hidden max-h-40">
+                  <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                    {unloadingSuggestions.map((s, i) => (
+                      <TouchableOpacity
+                        key={i}
+                        onPress={() => {
+                          setUnloadingSite(s);
+                          setShowUnloadingSuggestions(false);
+                        }}
+                        className={`px-4 py-3 ${i !== unloadingSuggestions.length - 1 ? 'border-b border-border/50' : ''}`}
+                      >
+                        <Text className="text-text-primary font-medium">{s}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
             </View>
+
           </View>
         </View>
 
         {/* Financial Details */}
-        <View className="bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
+        <View className="bg-white rounded-2xl border border-border overflow-hidden shadow-sm z-10">
           <View className="flex-row items-center gap-2 px-4 pt-4 pb-3 border-b border-border bg-primary-50">
             <Ionicons name="cash-outline" size={16} color="#2563EB" />
             <Text className="text-primary font-semibold text-xs tracking-widest uppercase">
@@ -391,7 +499,7 @@ export default function AddTripModal() {
         <TouchableOpacity
           onPress={handleSubmit}
           disabled={isSubmitting}
-          className="bg-primary rounded-2xl py-4 items-center flex-row justify-center gap-3 shadow-sm"
+          className="bg-primary rounded-2xl py-4 items-center flex-row justify-center gap-3 shadow-sm z-0"
           activeOpacity={0.85}
           style={{ marginTop: 4, marginBottom: 32 }}
         >

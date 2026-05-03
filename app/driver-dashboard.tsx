@@ -1,15 +1,78 @@
-import { View, Text, TouchableOpacity, ScrollView } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { View, Text, TouchableOpacity, ScrollView, Animated } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useAuthStore } from "@/src/store";
 
+const TIPS = [
+  "Drive Safe and take regular breaks!",
+  "Pay attention to detail when logging routes!",
+  "Always confirm the Unloading Destination!",
+  "Make sure to securely park the truck!"
+];
+
+const AnimatedTips = () => {
+  const [index, setIndex] = useState(0);
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateY, {
+          toValue: -15,
+          duration: 400,
+          useNativeDriver: true,
+        })
+      ]).start(() => {
+        setIndex((prev) => (prev + 1) % TIPS.length);
+        translateY.setValue(15);
+        Animated.parallel([
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 400,
+            useNativeDriver: true,
+          }),
+          Animated.timing(translateY, {
+            toValue: 0,
+            duration: 400,
+            useNativeDriver: true,
+          })
+        ]).start();
+      });
+    }, 4500);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <View className="h-10 justify-center items-center w-full px-2">
+      <Animated.Text
+        style={{
+          opacity: fadeAnim,
+          transform: [{ translateY }],
+        }}
+        className="text-text-primary text-xl font-black tracking-tight text-center"
+        numberOfLines={1}
+        adjustsFontSizeToFit
+      >
+        {TIPS[index]}
+      </Animated.Text>
+    </View>
+  );
+};
+
 export default function DriverDashboardScreen() {
   const { user, logout } = useAuthStore();
 
-  const handleLogout = async () => {
-    await logout();
-    router.replace("/(auth)/login");
+  const handleLogout = () => {
+    logout();
   };
 
   const actionButtons = [
@@ -84,11 +147,9 @@ export default function DriverDashboardScreen() {
         contentContainerStyle={{ padding: 24, paddingBottom: 100, flexGrow: 1, justifyContent: "center" }}
         showsVerticalScrollIndicator={false}
       >
-        <View className="items-center mb-10">
-           <Text className="text-text-primary text-2xl font-black tracking-tight text-center">
-             What do you need to log today?
-           </Text>
-           <Text className="text-text-secondary text-base mt-2 text-center max-w-xs">
+        <View className="items-center mb-10 gap-2">
+           <AnimatedTips />
+           <Text className="text-text-secondary text-base text-center max-w-xs">
              Tap a box below to quickly submit your records.
            </Text>
         </View>

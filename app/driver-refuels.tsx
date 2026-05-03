@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, ActivityIndicator, SectionList } from "react-native";
+import { View, Text, TouchableOpacity, ActivityIndicator, SectionList, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -54,6 +54,14 @@ const RefuelCard = ({ refuel }: { refuel: typeof MOCK_REFUELS[0] }) => {
 export default function DriverRefuelsScreen() {
   const [loading, setLoading] = useState(true);
   const [refuels, setRefuels] = useState<typeof MOCK_REFUELS>([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    setRefuels(MOCK_REFUELS);
+    setRefreshing(false);
+  };
 
   useEffect(() => {
     setTimeout(() => {
@@ -81,6 +89,7 @@ export default function DriverRefuelsScreen() {
         </View>
       ) : (
         <SectionList
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#F59E0B" />}
           sections={sections}
           keyExtractor={(item, index) => item.id + index}
           renderSectionHeader={({ section: { title } }) => (
