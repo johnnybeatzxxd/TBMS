@@ -211,7 +211,7 @@ export default function RequestsScreen() {
   }, [requests]);
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
+    <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
       {/* Header */}
       <View className="bg-primary z-50 elevation-10 shadow-sm relative pt-4 pb-20 px-5 rounded-b-[40px]">
         {/* Title Row */}

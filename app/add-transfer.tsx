@@ -14,8 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { transferService } from "@/src/api/services";
-import { mockDriverService } from "@/src/api/mock/drivers.mock";
+import { transferService, driverService } from "@/src/api/services";
 import { useAuthStore } from "@/src/store";
 
 export default function AddTransferModal() {
@@ -42,9 +41,9 @@ export default function AddTransferModal() {
       setDriverId(user.id);
       setDriverName(user.name);
     } else {
-      mockDriverService.getMyDrivers().then((res) => {
+      driverService.getMyDrivers().then((res) => {
         setDrivers(res.drivers.map(d => ({ id: d.id, name: d.name })));
-      });
+      }).catch(() => setDrivers([]));
     }
   }, [isDriver, user]);
 
@@ -88,7 +87,7 @@ export default function AddTransferModal() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
+    <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
       <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === "ios" ? "padding" : "height"}>
         {/* Header */}
         <View className="flex-row items-center justify-between px-4 pt-2 pb-4 bg-white border-b border-border shadow-sm">

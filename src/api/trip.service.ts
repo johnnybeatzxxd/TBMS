@@ -64,10 +64,10 @@ export const tripService = {
   },
 
   /**
-   * Approve a pending Cash Trip (Admin only)
+   * Approve a pending Trip (Admin only)
    */
-  async approveTrip(tripId: string): Promise<void> {
-    const res = await apiFetch(`/trip/approve-trip/${tripId}`, {
+  async approveTrip(tripId: string, tripType: "CASH" | "CREDIT" = "CASH"): Promise<{ message: string; updatedTrip: Trip; newDriverBalnce?: number }> {
+    const res = await apiFetch(`/trip/approve-trip/${tripId}/${tripType}`, {
       method: "PUT",
     });
 
@@ -75,6 +75,7 @@ export const tripService = {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.message || "Failed to approve trip");
     }
+    return res.json();
   },
 
   /**

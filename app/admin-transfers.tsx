@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useAuthStore } from "@/src/store";
-import { transferService } from "@/src/api/services";
+import { transferService, driverService } from "@/src/api/services";
 import { Transfer } from "@/src/types/transfer.types";
 import { DateFilterBar, DateFilterPreset, passesDateFilter } from "@/src/components/DateFilterBar";
 
@@ -26,7 +26,7 @@ const getRelativeDateLabel = (dateStr: string) => {
   return `${weekdays[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}`;
 };
 
-const TransferCard = ({ tx, isManager, onApprove, onDelete }: { tx: Transfer, isManager: boolean, onApprove: (id: string)=>void, onDelete: (id: string)=>void }) => {
+const TransferCard = ({ tx, isManager, onApprove, onDelete, driverName }: { tx: Transfer, isManager: boolean, onApprove: (id: string)=>void, onDelete: (id: string)=>void, driverName?: string }) => {
   const [expanded, setExpanded] = useState(false);
   
   const isIncrement = tx.sender === "ADMIN" || tx.sender === "manager" as any;
@@ -86,10 +86,27 @@ const TransferCard = ({ tx, isManager, onApprove, onDelete }: { tx: Transfer, is
       {/* EXPANDED CONTENT: Full Remark */}
       {expanded && (
         <View className="mt-3 pt-3 border-t border-border/50">
-          <View className="bg-surface rounded-xl p-3 border border-border/50 mb-2">
-            <Text className="text-text-secondary text-sm leading-5">
-              {tx.remark}
-            </Text>
+          <View className="bg-surface rounded-xl p-3 border border-border/50 mb-2 gap-2">
+            <View className="flex-row items-center justify-between">
+               <Text className="text-text-secondary text-xs uppercase font-bold tracking-widest">Driver</Text>
+               <Text className="text-text-primary text-sm font-medium">{driverName || tx.driverId || "N/A"}</Text>
+            </View>
+            <View className="flex-row items-center justify-between pt-2 border-t border-border/30">
+               <Text className="text-text-secondary text-xs uppercase font-bold tracking-widest">Sender</Text>
+               <Text className="text-text-primary text-sm font-medium">{tx.sender}</Text>
+            </View>
+            <View className="flex-row items-center justify-between pt-2 border-t border-border/30">
+               <Text className="text-text-secondary text-xs uppercase font-bold tracking-widest">Status</Text>
+               <Text className="text-text-primary text-sm font-medium">{tx.status || (tx as any).approved}</Text>
+            </View>
+            <View className="flex-row items-center justify-between pt-2 border-t border-border/30">
+               <Text className="text-text-secondary text-xs uppercase font-bold tracking-widest">Date</Text>
+               <Text className="text-text-primary text-sm font-medium">{tx.date ? tx.date.split("T")[0] : "N/A"}</Text>
+            </View>
+            <View className="flex-col pt-2 border-t border-border/30 gap-1">
+               <Text className="text-text-secondary text-xs uppercase font-bold tracking-widest">Remark</Text>
+               <Text className="text-text-primary text-[13px] leading-5">{tx.remark || "N/A"}</Text>
+            </View>
           </View>
           
           {isManager && tx.status === "PENDING" && (
@@ -136,6 +153,7 @@ export default function TransfersScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [driverMap, setDriverMap] = useState<Record<string, string>>({});
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = async () => {
@@ -165,6 +183,7 @@ export default function TransfersScreen() {
       setHasMore(res.meta?.currentPage < res.meta?.totalPages);
     } catch (error: any) {
       Alert.alert("Error", error.message || "Failed to load transfers");
+      setHasMore(false);
     } finally {
       setLoadingInitial(false);
     }
@@ -196,8 +215,12 @@ export default function TransfersScreen() {
 
   const handleApprove = async (id: string) => {
     try {
-      await transferService.approveTransfer(id);
-      setDisplayedTransfers(prev => prev.map(t => (t._id || (t as any).id) === id ? { ...t, status: "APPROVED" } : t));
+      const res = await transferService.approveTransfer(id);
+      if (res.updatedTransfer) {
+        setDisplayedTransfers(prev => prev.map(t => (t._id || (t as any).id) === id ? { ...t, ...res.updatedTransfer, status: "APPROVED" } : t));
+      } else {
+        setDisplayedTransfers(prev => prev.map(t => (t._id || (t as any).id) === id ? { ...t, status: "APPROVED" } : t));
+      }
     } catch (error: any) {
       Alert.alert("Error", error.message || "Failed to approve transfer.");
     }
@@ -219,6 +242,13 @@ export default function TransfersScreen() {
 
   useEffect(() => {
     loadInitialData();
+    if (isManager) {
+      driverService.getMyDrivers().then(res => {
+        const map: Record<string, string> = {};
+        res.drivers.forEach((d: any) => { map[d.id || d._id] = d.name; });
+        setDriverMap(map);
+      }).catch(() => console.log("Silent fail driver map load"));
+    }
   }, []);
 
   // With real API, date filtering is done server-side on loadInitialData
@@ -237,7 +267,7 @@ export default function TransfersScreen() {
   }));
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
+    <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
       {/* Header */}
       <View className="flex-row items-center justify-between px-5 pt-2 pb-4 bg-white border-b border-border shadow-sm">
         <View className="flex-row items-center">
@@ -269,7 +299,7 @@ export default function TransfersScreen() {
       <SectionList
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563EB" />}
         sections={transferGroups}
-        keyExtractor={(item, index) => item._id + index}
+        keyExtractor={(item, index) => String((item as any)._id || (item as any).id || index) + "-" + index}
         renderSectionHeader={({ section: { title } }) => (
           <Text className="text-text-secondary font-bold text-xs tracking-widest uppercase ml-5 mb-2 mt-6">
             {title}
@@ -277,7 +307,7 @@ export default function TransfersScreen() {
         )}
         renderItem={({ item }) => (
           <View className="px-4">
-            <TransferCard tx={item} isManager={isManager} onApprove={handleApprove} onDelete={handleDelete} />
+            <TransferCard tx={item} isManager={isManager} onApprove={handleApprove} onDelete={handleDelete} driverName={driverMap[item.driverId]} />
           </View>
         )}
         contentContainerStyle={{ paddingBottom: 100 }}

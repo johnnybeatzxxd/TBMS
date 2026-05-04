@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Switch } from "react-native";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { refuelService } from "@/src/api/services";
 
 export default function AddRefuelScreen() {
   const [loading, setLoading] = useState(false);
@@ -13,6 +14,11 @@ export default function AddRefuelScreen() {
   const [volume, setVolume] = useState("");
   const [price, setPrice] = useState("");
   const [images, setImages] = useState<string[]>([]);
+  const [date, setDate] = useState(new Date());
+
+  const [location, setLocation] = useState("");
+  const [km, setKm] = useState("");
+  const [fullTank, setFullTank] = useState(false);
 
   const pickImage = async () => {
     try {
@@ -48,19 +54,27 @@ export default function AddRefuelScreen() {
 
     setLoading(true);
     try {
-      // Simulate backend POST request
-      await new Promise(resolve => setTimeout(resolve, 800));
+      // For now we pass empty receiptPic, pending firebase upload implementation
+      await refuelService.registerRefuel({
+        liters: Number(volume),
+        price: Number(price),
+        date: date.toISOString(),
+        receiptPic: [],
+        location: location.trim() || undefined,
+        km: km ? Number(km) : undefined,
+        fullTank
+      });
       Alert.alert("Success", "Refuel log added successfully!");
       router.back();
-    } catch (error) {
-      Alert.alert("Error", "Failed to submit refuel log.");
+    } catch (error: any) {
+      Alert.alert("Error", error.message || "Failed to submit refuel log.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
+    <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
       {/* Header */}
       <View className="flex-row items-center justify-between px-5 pt-2 pb-4 bg-white border-b border-border shadow-sm">
         <TouchableOpacity 
@@ -130,6 +144,53 @@ export default function AddRefuelScreen() {
                 />
               </View>
             </View>
+
+            <View className="h-px bg-border/50 my-2" />
+
+            {/* Odometer (KM) & Location Row */}
+            <View className="flex-row gap-4 z-0">
+              <View className="flex-1">
+                <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase mb-2 ml-1">
+                  Odometer (KM)
+                </Text>
+                <TextInput
+                  value={km}
+                  onChangeText={setKm}
+                  placeholder="150000"
+                  placeholderTextColor="#94A3B8"
+                  keyboardType="numeric"
+                  className="bg-white border border-border rounded-xl h-14 px-4 text-base font-medium text-text-primary shadow-sm"
+                />
+              </View>
+              
+              <View className="flex-1">
+                <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase mb-2 ml-1">
+                  Location
+                </Text>
+                <TextInput
+                  value={location}
+                  onChangeText={setLocation}
+                  placeholder="Station Name"
+                  placeholderTextColor="#94A3B8"
+                  className="bg-white border border-border rounded-xl h-14 px-4 text-base font-medium text-text-primary shadow-sm"
+                />
+              </View>
+            </View>
+
+            {/* Full Tank Toggle */}
+            <View className="flex-row items-center justify-between bg-white border border-border rounded-xl p-4 shadow-sm z-0">
+               <View className="flex-row items-center">
+                 <Ionicons name="battery-full" size={20} color={fullTank ? "#16A34A" : "#94A3B8"} className="mr-3" />
+                 <Text className="text-text-primary font-bold text-base ml-2">Full Tank</Text>
+               </View>
+               <Switch
+                 value={fullTank}
+                 onValueChange={setFullTank}
+                 trackColor={{ false: "#E2E8F0", true: "#DCFCE7" }}
+                 thumbColor={fullTank ? "#16A34A" : "#94A3B8"}
+               />
+            </View>
+
 
             {/* Images Selection (Optional) */}
             <View className="z-0 pb-6">

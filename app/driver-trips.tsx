@@ -70,11 +70,9 @@ const TripCard = ({ trip, companiesMap }: { trip: Trip, companiesMap: Record<str
           name="location" 
           size={20} 
           color={
-             paymentMethodDisplay === "CASH" 
-               ? trip.approved === "APPROVED" ? "#16A34A"
+             trip.approved === "APPROVED" ? "#16A34A"
                : trip.approved === "DECLINED" ? "#DC2626"
                : "#F59E0B"
-               : "#2563EB"
           } 
         />
       </View>
@@ -169,7 +167,7 @@ export default function DriverTripsScreen() {
   const tripGroups = getGroupedTrips(trips);
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
+    <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
       {/* Header */}
       <View className="flex-row items-center justify-between px-5 pt-2 pb-4 bg-white border-b border-border shadow-sm" style={{ zIndex: 50 }}>
         <View className="flex-row items-center">

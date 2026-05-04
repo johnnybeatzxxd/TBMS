@@ -9,6 +9,8 @@ export interface Driver {
   accountActive: boolean;
   licenseRenewalDate?: string;
   oilChangeDate?: string;
+  balance?: number;
+  approvedBalance?: number;
 }
 
 export interface CreateDriverPayload {

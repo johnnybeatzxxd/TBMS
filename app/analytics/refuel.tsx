@@ -80,14 +80,14 @@ export default function RefuelAnalysisScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 bg-surface items-center justify-center" edges={["top"]}>
+      <SafeAreaView className="flex-1 bg-surface items-center justify-center" edges={["top","bottom"]}>
         <ActivityIndicator size="large" color="#F59E0B" />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
+    <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
       {/* Header */}
       <View className="flex-row items-center px-5 pt-2 pb-4 bg-white border-b border-border shadow-sm">
         <TouchableOpacity onPress={() => router.back()} className="w-10 h-10 bg-surface rounded-xl items-center justify-center mr-3 border border-border">

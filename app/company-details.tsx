@@ -108,7 +108,7 @@ export default function CompanyDetailsScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 bg-surface items-center justify-center" edges={["top"]}>
+      <SafeAreaView className="flex-1 bg-surface items-center justify-center" edges={["top","bottom"]}>
         <ActivityIndicator size="large" color="#D97706" />
       </SafeAreaView>
     );
@@ -116,7 +116,7 @@ export default function CompanyDetailsScreen() {
 
   if (!company) {
     return (
-      <SafeAreaView className="flex-1 bg-surface items-center justify-center px-8" edges={["top"]}>
+      <SafeAreaView className="flex-1 bg-surface items-center justify-center px-8" edges={["top","bottom"]}>
         <Ionicons name="alert-circle-outline" size={48} color="#CBD5E1" />
         <Text className="text-text-secondary font-medium mt-4 text-center">Company not found.</Text>
         <TouchableOpacity onPress={() => router.back()} className="mt-4 px-6 py-3 bg-primary rounded-xl">
@@ -127,7 +127,7 @@ export default function CompanyDetailsScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
+    <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
       {/* Header */}
       <View className="flex-row items-center px-4 pt-2 pb-4 bg-white border-b border-border shadow-sm">
         <TouchableOpacity

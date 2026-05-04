@@ -4,27 +4,21 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 
-// Temporary mock data for driver
-const getPastDateStr = (daysAgo: number) => {
-  const d = new Date();
-  d.setDate(d.getDate() - daysAgo);
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  const year = d.getFullYear();
-  return `${month}/${day}/${year}`;
-};
+import { refuelService } from "@/src/api/services";
+import { Refuel } from "@/src/types/refuel.types";
+import { useAuthStore } from "@/src/store";
+import { useFocusEffect } from "@react-navigation/native";
+import { useCallback } from "react";
 
-const MOCK_REFUELS = [
-  { id: "1", date: getPastDateStr(0), station: "TotalEnergies - Bole", amountLiters: "200", totalCost: "800.00" },
-  { id: "2", date: getPastDateStr(2), station: "NOC - Kality", amountLiters: "150", totalCost: "600.00" },
-];
-
-const getGroupedData = (data: typeof MOCK_REFUELS) => {
+const getGroupedData = (data: Refuel[]) => {
+  if (!data) return [];
   const grouped = data.reduce((acc, item) => {
-    if (!acc[item.date]) acc[item.date] = [];
-    acc[item.date].push(item);
+    // Normalizing Date grouping to YYYY-MM-DD
+    const rawDate = item.date ? item.date.split("T")[0] : new Date().toISOString().split("T")[0];
+    if (!acc[rawDate]) acc[rawDate] = [];
+    acc[rawDate].push(item);
     return acc;
-  }, {} as Record<string, typeof MOCK_REFUELS>);
+  }, {} as Record<string, Refuel[]>);
 
   return Object.entries(grouped).map(([date, t]) => ({
     title: date,
@@ -32,48 +26,83 @@ const getGroupedData = (data: typeof MOCK_REFUELS) => {
   }));
 };
 
-const RefuelCard = ({ refuel }: { refuel: typeof MOCK_REFUELS[0] }) => {
+const RefuelCard = ({ refuel }: { refuel: Refuel }) => {
   return (
     <View className="bg-white rounded-2xl border border-border mt-3 overflow-hidden shadow-sm p-4">
       <View className="flex-row items-center justify-between">
         <View className="flex-row items-center">
-          <View className="w-10 h-10 bg-amber-50 rounded-xl items-center justify-center mr-3">
-            <Ionicons name="water" size={20} color="#F59E0B" />
+          <View className={`w-10 h-10 ${refuel.approved === "APPROVED" ? "bg-success-50" : "bg-amber-50"} rounded-xl items-center justify-center mr-3`}>
+            <Ionicons name="water" size={20} color={refuel.approved === "APPROVED" ? "#16A34A" : "#F59E0B"} />
           </View>
           <View>
-            <Text className="text-text-primary font-bold text-base">{refuel.station}</Text>
-            <Text className="text-text-secondary text-xs mt-0.5">{refuel.amountLiters} Liters</Text>
+            <Text className="text-text-primary font-bold text-base">Fuel Refill</Text>
+            <Text className="text-text-secondary text-xs mt-0.5">{refuel.liters} Liters</Text>
           </View>
         </View>
-        <Text className="text-amber-600 font-bold text-lg">${refuel.totalCost}</Text>
+        <View className="items-end">
+           <Text className={`${refuel.approved === "APPROVED" ? "text-success-600" : "text-amber-600"} font-bold text-lg`}>${typeof refuel.price === "number" ? refuel.price.toFixed(2) : refuel.price}</Text>
+           <Text className={`text-[10px] font-bold uppercase tracking-wider mt-1 ${refuel.approved === "APPROVED" ? "text-success-600" : "text-amber-500"}`}>
+             {refuel.approved || "PENDING"}
+           </Text>
+        </View>
       </View>
     </View>
   );
 };
 
 export default function DriverRefuelsScreen() {
-  const [loading, setLoading] = useState(true);
-  const [refuels, setRefuels] = useState<typeof MOCK_REFUELS>([]);
+  const { user } = useAuthStore();
+  const [loadingInitial, setLoadingInitial] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(1);
+  const [refuels, setRefuels] = useState<Refuel[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+
+  const fetchRefuels = async (pageNum: number, append = false, isRefresh = false) => {
+    if (pageNum === 1 && !isRefresh) setLoadingInitial(true);
+    else if (pageNum > 1) setLoadingMore(true);
+
+    try {
+      const response = await refuelService.getRefuels({
+        page: pageNum,
+        perpage: 10,
+      });
+
+      setRefuels(prev => append ? [...prev, ...response.refuels] : response.refuels);
+      setPage(response.meta.currentPage);
+      setHasMore(response.meta.currentPage < response.meta.totalPages);
+    } catch (error: any) {
+      console.log("Error loading driver refuels:", error);
+      setHasMore(false);
+    } finally {
+      if (pageNum === 1) setLoadingInitial(false);
+      else setLoadingMore(false);
+    }
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    setRefuels(MOCK_REFUELS);
+    await fetchRefuels(1, false, true);
     setRefreshing(false);
   };
 
-  useEffect(() => {
-    setTimeout(() => {
-      setRefuels(MOCK_REFUELS);
-      setLoading(false);
-    }, 500);
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchRefuels(1, false);
+    }, [])
+  );
+
+  const handleLoadMore = () => {
+    if (!loadingMore && !loadingInitial && hasMore) {
+      fetchRefuels(page + 1, true);
+    }
+  };
 
   const sections = getGroupedData(refuels);
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
+    <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
       {/* Header */}
       <View className="flex-row items-center px-5 pt-2 pb-4 bg-white border-b border-border shadow-sm z-50">
         <TouchableOpacity onPress={() => router.back()} className="w-10 h-10 bg-surface rounded-xl items-center justify-center mr-3 border border-border">
@@ -83,7 +112,7 @@ export default function DriverRefuelsScreen() {
         <Text className="text-text-primary font-bold text-xl ml-2">My Refuels</Text>
       </View>
 
-      {loading ? (
+      {loadingInitial ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color="#F59E0B" />
         </View>
@@ -91,7 +120,7 @@ export default function DriverRefuelsScreen() {
         <SectionList
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#F59E0B" />}
           sections={sections}
-          keyExtractor={(item, index) => item.id + index}
+          keyExtractor={(item, index) => (item._id || (item as any).id) + index}
           renderSectionHeader={({ section: { title } }) => (
             <Text className="text-text-secondary font-bold text-xs tracking-widest uppercase ml-1 mb-1 mt-6">
               {title}
@@ -100,6 +129,16 @@ export default function DriverRefuelsScreen() {
           renderItem={({ item }) => <RefuelCard refuel={item} />}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            loadingMore ? (
+              <View className="py-6 items-center flex-row justify-center gap-2">
+                <ActivityIndicator size="small" color="#F59E0B" />
+                <Text className="text-text-secondary text-sm">Loading...</Text>
+              </View>
+            ) : null
+          }
           ListEmptyComponent={
             <View className="py-20 items-center justify-center">
                <Text className="text-text-secondary">No refuels logged yet.</Text>

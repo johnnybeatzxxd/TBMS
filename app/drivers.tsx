@@ -120,7 +120,7 @@ export default function DriversListScreen() {
   }, [drivers, filterTab, searchQuery, trucks]);
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
+    <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
       {/* Header */}
       <View className="px-4 pt-2 pb-4 bg-white border-b border-border shadow-sm">
         <View className="flex-row items-center mb-4">
@@ -198,8 +198,10 @@ export default function DriversListScreen() {
               const assignedTruck = trucks[driver.truckId];
 
               return (
-                <View
+                <TouchableOpacity
                   key={driver.id}
+                  activeOpacity={0.8}
+                  onPress={() => router.push(`/driver-detail?id=${driver.id}` as any)}
                   className="bg-white rounded-2xl border border-border shadow-sm p-4"
                 >
                   <View className="flex-row justify-between items-start mb-3">
@@ -294,7 +296,7 @@ export default function DriversListScreen() {
                       <MaterialCommunityIcons name="pencil" size={18} color="#2563EB" />
                     </TouchableOpacity>
                   </View>
-                </View>
+                </TouchableOpacity>
               );
             })
           )}

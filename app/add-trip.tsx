@@ -250,6 +250,7 @@ export default function AddTripModal() {
               value={tripDate}
               mode="date"
               display={Platform.OS === "ios" ? "spinner" : "default"}
+              maximumDate={new Date()}
               onChange={onDateChange}
             />
           )}

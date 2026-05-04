@@ -39,7 +39,7 @@ export default function CompaniesListScreen() {
   }, [companies, searchQuery]);
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
+    <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
       {/* Header */}
       <View className="px-4 pt-2 pb-4 bg-white border-b border-border shadow-sm">
         <View className="flex-row items-center mb-4">

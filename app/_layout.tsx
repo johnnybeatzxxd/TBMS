@@ -9,7 +9,7 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuthStore } from "@/src/store";
 
 export const unstable_settings = {
-  anchor: "(tabs)",
+  anchor: "admin-dashboard",
 };
 
 export default function RootLayout() {
@@ -32,7 +32,7 @@ export default function RootLayout() {
           if (state.user.role === "driver") {
             router.replace("/driver-dashboard");
           } else {
-            router.replace("/(tabs)");
+            router.replace("/admin-dashboard");
           }
         } else {
           router.replace("/(auth)/login");
@@ -54,8 +54,16 @@ export default function RootLayout() {
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <Stack>
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="admin-dashboard" options={{ headerShown: false }} />
+        <Stack.Screen name="admin-trips" options={{ headerShown: false }} />
+        <Stack.Screen name="admin-expenses" options={{ headerShown: false }} />
+        <Stack.Screen name="admin-transfers" options={{ headerShown: false }} />
+        <Stack.Screen name="admin-requests" options={{ headerShown: false }} />
+        <Stack.Screen name="admin-analytics" options={{ headerShown: false }} />
+        <Stack.Screen name="admin-refuels" options={{ headerShown: false }} />
+        <Stack.Screen name="admin-manage" options={{ headerShown: false }} />
         <Stack.Screen name="drivers" options={{ headerShown: false }} />
+        <Stack.Screen name="driver-detail" options={{ headerShown: false }} />
         <Stack.Screen name="trucks" options={{ headerShown: false }} />
         <Stack.Screen name="companies" options={{ headerShown: false }} />
         <Stack.Screen name="company-details" options={{ headerShown: false }} />

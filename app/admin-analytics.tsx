@@ -79,7 +79,7 @@ export default function AnalyticsHubScreen() {
 
   if (loading || !summary) {
     return (
-      <SafeAreaView className="flex-1 bg-surface items-center justify-center" edges={["top"]}>
+      <SafeAreaView className="flex-1 bg-surface items-center justify-center" edges={["top","bottom"]}>
         <ActivityIndicator size="large" color="#2563EB" />
         <Text className="text-text-secondary mt-3 tracking-widest text-xs uppercase font-bold">Loading Analytics...</Text>
       </SafeAreaView>
@@ -132,7 +132,7 @@ export default function AnalyticsHubScreen() {
   ];
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
+    <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
       {/* Header With Dropdown */}
       <View className="flex-row items-center justify-between px-5 pt-2 pb-3 bg-white border-b border-border shadow-sm z-50 elevation-10">
         <View className="flex-row items-center">

@@ -43,7 +43,7 @@ const getGroupedTrips = (trips: Trip[]) => {
   }));
 };
 
-const TripCard = ({ trip, isManager, onRefresh, activePaymentFilter }: { trip: Trip, isManager: boolean, onRefresh: () => void, activePaymentFilter: "CASH" | "CREDIT" }) => {
+const TripCard = ({ trip, isManager, onRefresh, onUpdateTrip, activePaymentFilter }: { trip: Trip, isManager: boolean, onRefresh: () => void, onUpdateTrip?: (updatedTrip: Trip) => void, activePaymentFilter: "CASH" | "CREDIT" }) => {
   const [expanded, setExpanded] = useState(false);
   const [approving, setApproving] = useState(false);
 
@@ -53,9 +53,13 @@ const TripCard = ({ trip, isManager, onRefresh, activePaymentFilter }: { trip: T
   const handleApprove = async () => {
     setApproving(true);
     try {
-      await tripService.approveTrip(trip.id);
-      Alert.alert("Success", "Trip approved successfully!");
-      onRefresh();
+      const res = await tripService.approveTrip(trip.id, tripPaymentType as "CASH" | "CREDIT");
+      Alert.alert("Success", res.message || "Trip approved successfully!");
+      if (res.updatedTrip && onUpdateTrip) {
+        onUpdateTrip(res.updatedTrip);
+      } else {
+        onRefresh();
+      }
     } catch (err: any) {
       Alert.alert("Error", err.message || "Approval failed.");
     } finally {
@@ -104,14 +108,9 @@ const TripCard = ({ trip, isManager, onRefresh, activePaymentFilter }: { trip: T
 
         <View className="flex-row items-center gap-2">
           {/* Status indicator */}
-          {tripPaymentType === "CASH" && (
-            <View className={`w-2 h-2 rounded-full ${
-              trip.approved === "APPROVED" ? "bg-success" : "bg-amber-400"
-            }`} />
-          )}
-          {tripPaymentType === "CREDIT" && (
-            <View className={`w-2 h-2 rounded-full ${trip.claimed ? "bg-success" : "bg-amber-400"}`} />
-          )}
+          <View className={`w-2 h-2 rounded-full ${
+            trip.approved === "APPROVED" ? "bg-success" : "bg-amber-400"
+          }`} />
           <Ionicons
             name={expanded ? "chevron-up" : "chevron-down"}
             size={20}
@@ -206,10 +205,21 @@ const TripCard = ({ trip, isManager, onRefresh, activePaymentFilter }: { trip: T
                     </Text>
                   </View>
                 ) : (
-                  <View className={`self-start px-2.5 py-1 rounded-md ${trip.claimed ? "bg-success-50" : "bg-amber-50"}`}>
-                    <Text className={`text-xs font-bold ${trip.claimed ? "text-success-700" : "text-amber-700"}`}>
-                      {trip.claimed ? "Claimed" : "Unclaimed"}
-                    </Text>
+                  <View className="flex-row gap-2">
+                    <View className={`self-start px-2.5 py-1 rounded-md ${
+                      trip.approved === "APPROVED" ? "bg-success-50" : "bg-amber-50"
+                    }`}>
+                      <Text className={`text-xs font-bold ${
+                        trip.approved === "APPROVED" ? "text-success-700" : "text-amber-700"
+                      }`}>
+                        {trip.approved === "APPROVED" ? "APPROVED" : "PENDING"}
+                      </Text>
+                    </View>
+                    <View className={`self-start px-2.5 py-1 rounded-md ${trip.claimed ? "bg-success-50" : "bg-amber-50"}`}>
+                      <Text className={`text-xs font-bold ${trip.claimed ? "text-success-700" : "text-amber-700"}`}>
+                        {trip.claimed ? "Claimed" : "Unclaimed"}
+                      </Text>
+                    </View>
                   </View>
                 )}
               </View>
@@ -275,14 +285,14 @@ const TripCard = ({ trip, isManager, onRefresh, activePaymentFilter }: { trip: T
                 <Text className="text-primary font-bold text-sm">Edit Trip</Text>
               </TouchableOpacity>
 
-              {/* Accept Button (only for pending CASH trips) */}
-              {tripPaymentType === "CASH" && trip.approved !== "APPROVED" && (
+              {/* Accept Button (for any pending trip) */}
+              {trip.approved !== "APPROVED" && (
                 <TouchableOpacity
                   onPress={(e) => {
                     e.stopPropagation?.();
                     Alert.alert(
                       "Approve Trip", 
-                      `Approve this cash trip for $${trip.amount || 0}?`, 
+                      `Approve this ${tripPaymentType.toLowerCase()} trip for $${trip.amount || 0}?`, 
                       [
                         { text: "Cancel", style: "cancel" },
                         { text: "Approve", onPress: handleApprove }
@@ -313,7 +323,7 @@ const TripCard = ({ trip, isManager, onRefresh, activePaymentFilter }: { trip: T
 
 export default function TripsListScreen() {
   const { user } = useAuthStore();
-  const isManager = user?.role === "admin" || user?.role === "manager";
+  const isManager = user?.role === "admin" || (user?.role as string) === "manager";
 
   // Initialize trucks from cached profile
   const cachedTrucks: Truck[] = (user?.profile?.trucks || []).map((t: any) => ({
@@ -412,6 +422,10 @@ export default function TripsListScreen() {
     }
   };
 
+  const handleUpdateTripInList = (updatedTrip: Trip) => {
+    setTrips(prev => prev.map(t => t.id === updatedTrip.id ? { ...t, ...updatedTrip } : t));
+  };
+
   const tripGroups = getGroupedTrips(trips);
 
   // Refresh trucks from API only when dropdown is opened
@@ -441,7 +455,7 @@ export default function TripsListScreen() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
+    <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
       {/* Top Header */}
       <View className="flex-row items-center justify-between px-5 pt-2 pb-3 border-b border-border shadow-sm bg-white" style={{ zIndex: 50, elevation: 10 }}>
         <View className="flex-row items-center">
@@ -557,8 +571,8 @@ export default function TripsListScreen() {
                 const end = new Date();
                 const start = new Date();
                 if (preset === "today") start.setHours(0,0,0,0);
-                if (preset === "7d") start.setDate(end.getDate() - 7);
-                if (preset === "30d") start.setDate(end.getDate() - 30);
+                if (preset === "week" || (preset as any) === "7d") start.setDate(end.getDate() - 7);
+                if (preset === "month" || (preset as any) === "30d") start.setDate(end.getDate() - 30);
                 setCustomFrom(start);
                 setCustomTo(end);
               }
@@ -708,7 +722,7 @@ export default function TripsListScreen() {
           </Text>
         )}
         renderItem={({ item }) => (
-          <TripCard trip={item} isManager={isManager} onRefresh={() => loadTrips(1)} activePaymentFilter={paymentFilter} />
+          <TripCard trip={item} isManager={isManager} onRefresh={() => loadTrips(1)} onUpdateTrip={handleUpdateTripInList} activePaymentFilter={paymentFilter} />
         )}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}

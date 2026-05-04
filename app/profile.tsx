@@ -104,7 +104,7 @@ export default function ProfileScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 bg-surface items-center justify-center" edges={["top"]}>
+      <SafeAreaView className="flex-1 bg-surface items-center justify-center" edges={["top","bottom"]}>
         <ActivityIndicator size="large" color="#2563EB" />
         <Text className="text-text-secondary mt-3">Loading profile...</Text>
       </SafeAreaView>
@@ -114,7 +114,7 @@ export default function ProfileScreen() {
   const accountActive = profileData?.accountActive ?? true;
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
+    <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 40 }}
@@ -129,7 +129,11 @@ export default function ProfileScreen() {
               if (router.canGoBack()) {
                 router.back();
               } else {
-                router.replace("/driver-dashboard");
+                if (user?.role === "driver") {
+                  router.replace("/driver-dashboard");
+                } else {
+                  router.replace("/admin-dashboard");
+                }
               }
             }}
             className="absolute top-6 left-5 z-20 w-10 h-10 rounded-full bg-white/20 items-center justify-center border border-white/30"

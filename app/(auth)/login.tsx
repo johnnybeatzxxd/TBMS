@@ -53,7 +53,7 @@ export default function LoginScreen() {
     if (state.user.role === "driver") {
       router.replace("/driver-dashboard");
     } else {
-      router.replace("/(tabs)");
+      router.replace("/admin-dashboard");
     }
   };
 

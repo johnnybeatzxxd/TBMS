@@ -111,7 +111,7 @@ export default function DriverDashboardScreen() {
   ];
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
+    <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
       {/* Header */}
       <View className="flex-row items-center justify-between px-6 pt-4 pb-6 bg-white border-b border-border shadow-sm rounded-b-3xl elevation-10 z-50">
         <TouchableOpacity 

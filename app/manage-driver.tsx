@@ -17,7 +17,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { driverService, truckService } from "@/src/api/services";
 
 export default function ManageDriverModal() {
-  const { mode, id, name: initialName, truckId: initialTruckId, username: initialUsername, password: initialPassword, licenseRenewalDate: initialLicense, oilChangeDate: initialOil } = useLocalSearchParams();
+  const { mode, id, name: initialName, truckId: initialTruckId, username: initialUsername, password: initialPassword, licenseRenewalDate: initialLicense } = useLocalSearchParams();
   const isEdit = mode === "edit";
 
   const [name, setName] = useState(isEdit ? initialName?.toString() || "" : "");
@@ -28,12 +28,17 @@ export default function ManageDriverModal() {
   const [truckName, setTruckName] = useState(isEdit ? initialTruckId?.toString() || "" : "");
   
   const [licenseDate, setLicenseDate] = useState<Date | null>(initialLicense && initialLicense !== "undefined" ? new Date(initialLicense.toString()) : null);
-  const [oilDate, setOilDate] = useState<Date | null>(initialOil && initialOil !== "undefined" ? new Date(initialOil.toString()) : null);
   
   const [showLicensePicker, setShowLicensePicker] = useState(false);
-  const [showOilPicker, setShowOilPicker] = useState(false);
 
   const [loading, setLoading] = useState(false);
+  const [credsLoading, setCredsLoading] = useState(false);
+  const [showCredsSection, setShowCredsSection] = useState(false);
+
+  // Credential reset fields (edit mode only)
+  const [newUsername, setNewUsername] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
   // Dropdown state
   const [trucks, setTrucks] = useState<{id: string; plateNumber: string}[]>([]);
@@ -44,22 +49,26 @@ export default function ManageDriverModal() {
   useEffect(() => {
     setLoadingTrucks(true);
     truckService.getUnassignedTrucks().then((res) => {
+      console.log("[ManageDriver] Unassigned trucks response:", JSON.stringify(res));
       const truckList = res.trucks || [];
       setTrucks(truckList);
       if (isEdit && initialTruckId) {
         const found = truckList.find(t => t.id === initialTruckId);
-        if (found) setTruckName(found.plateNumber);
+        if (found) {
+          setTruckName(found.plateNumber);
+        } else {
+          setTruckName("Current Assigned Truck");
+        }
       }
-    }).catch(() => setTrucks([])).finally(() => setLoadingTrucks(false));
+    }).catch((e) => { console.log("[ManageDriver] Truck fetch error:", e); setTrucks([]); }).finally(() => setLoadingTrucks(false));
   }, []);
 
-  const handleSubmit = async () => {
-    // Basic validation
-    if (!name.trim() || !truckId.trim()) {
+  const handleProfileSubmit = async () => {
+    if (!isEdit && (!name.trim() || !truckId.trim())) {
       Alert.alert("Error", "Please fill in all required fields.");
       return;
     }
-    
+
     if (!isEdit && (!username.trim() || !password.trim())) {
       Alert.alert("Error", "Please fill in username and password.");
       return;
@@ -69,13 +78,34 @@ export default function ManageDriverModal() {
     try {
       if (isEdit) {
         if (!id) throw new Error("Missing driver ID for update");
-        await driverService.updateDriverProfile(id.toString(), {
-          name: name.trim(),
-          password: password || undefined,
-          truckId: truckId.trim(),
-          licenseRenewalDate: licenseDate ? licenseDate.toISOString().split("T")[0] : undefined,
-          oilChangeDate: oilDate ? oilDate.toISOString().split("T")[0] : undefined,
-        });
+        const profilePayload: { truckId?: string; licenceExpiryDate?: string; name?: string } = {};
+        
+        if (truckId.trim() && truckId.trim() !== initialTruckId?.toString()) {
+          profilePayload.truckId = truckId.trim();
+        }
+        if (name.trim() && name.trim() !== initialName?.toString()) {
+          profilePayload.name = name.trim();
+        }
+        
+        // Compare dates by day to avoid millisecond mismatch
+        const currLicenseStr = licenseDate ? licenseDate.toISOString().split("T")[0] : "";
+        const initialLicenseStr = initialLicense && initialLicense !== "undefined" ? 
+          new Date(initialLicense.toString()).toISOString().split("T")[0] : "";
+          
+        if (currLicenseStr !== initialLicenseStr && licenseDate) {
+          profilePayload.licenceExpiryDate = licenseDate.toISOString();
+        }
+
+        console.log("[ManageDriver] Updating profile for ID:", id.toString());
+        console.log("[ManageDriver] Profile payload:", JSON.stringify(profilePayload));
+        
+        // Don't send empty requests
+        if (Object.keys(profilePayload).length === 0) {
+          Alert.alert("No Changes", "No fields were modified.", [{ text: "OK", onPress: () => router.back() }]);
+          return;
+        }
+
+        await driverService.updateDriverProfile(id.toString(), profilePayload);
         Alert.alert("Success", "Driver profile updated!", [{ text: "OK", onPress: () => router.back() }]);
       } else {
         await driverService.createDriverAccount({
@@ -84,19 +114,53 @@ export default function ManageDriverModal() {
           password,
           truckId: truckId.trim(),
           licenseRenewalDate: licenseDate ? licenseDate.toISOString().split("T")[0] : undefined,
-          oilChangeDate: oilDate ? oilDate.toISOString().split("T")[0] : undefined,
         });
         Alert.alert("Success", "Driver account created!", [{ text: "OK", onPress: () => router.back() }]);
       }
     } catch (error: any) {
+      console.log("[ManageDriver] Profile submit error:", error.message, error);
       Alert.alert("Error", error.message || "Something went wrong");
     } finally {
       setLoading(false);
     }
   };
 
+  const handleCredentialsReset = async () => {
+    if (!newUsername.trim() && !newPassword.trim()) {
+      Alert.alert("Error", "Please enter a new username or password.");
+      return;
+    }
+    
+    if (newPassword.trim() && newPassword.trim().length < 3) {
+      Alert.alert("Error", "Password must be at least 3 characters.");
+      return;
+    }
+
+    setCredsLoading(true);
+    try {
+      if (!id) throw new Error("Missing driver ID");
+      const payload: { username?: string; password?: string } = {};
+      if (newUsername.trim()) payload.username = newUsername.trim();
+      if (newPassword.trim()) payload.password = newPassword.trim();
+      
+      console.log("[ManageDriver] Resetting credentials for ID:", id.toString());
+      console.log("[ManageDriver] Credentials payload:", JSON.stringify(payload));
+      await driverService.resetDriverCredentials(id.toString(), payload);
+      Alert.alert("Success", "Driver credentials updated!", [{ text: "OK", onPress: () => {
+        setNewUsername("");
+        setNewPassword("");
+        setShowCredsSection(false);
+      }}]);
+    } catch (error: any) {
+      console.log("[ManageDriver] Credentials reset error:", error.message, error);
+      Alert.alert("Error", error.message || "Failed to reset credentials");
+    } finally {
+      setCredsLoading(false);
+    }
+  };
+
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
+    <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
       <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === "ios" ? "padding" : "height"}>
         {/* Header */}
         <View className="flex-row items-center justify-between px-4 pt-2 pb-4 bg-white border-b border-border shadow-sm">
@@ -110,6 +174,8 @@ export default function ManageDriverModal() {
         </View>
 
         <ScrollView className="flex-1 px-4 py-6" contentContainerStyle={{ gap: 24, paddingBottom: 60 }}>
+          
+          {/* ── SECTION 1: Profile Info ── */}
           <View className="bg-white rounded-2xl p-5 border border-border shadow-sm gap-4">
             
             {/* Name Field */}
@@ -208,6 +274,7 @@ export default function ManageDriverModal() {
                   value={licenseDate || new Date()}
                   mode="date"
                   display="default"
+                  minimumDate={new Date()}
                   onChange={(event, selectedDate) => {
                     if (Platform.OS === "android") setShowLicensePicker(false);
                     if (selectedDate) setLicenseDate(selectedDate);
@@ -224,87 +291,53 @@ export default function ManageDriverModal() {
               )}
             </View>
 
-            {/* Oil Change Date Field */}
-            <View className="gap-1 z-30">
-              <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase ml-1">
-                Oil Change Date
-              </Text>
-              <TouchableOpacity
-                onPress={() => setShowOilPicker(true)}
-                className="flex-row items-center bg-surface rounded-xl px-4 py-3.5 border border-border"
-              >
-                <Ionicons name="water-outline" size={16} color="#64748B" />
-                <Text className={`flex-1 ml-3 text-base ${oilDate ? "text-text-primary" : "text-[#94A3B8]"}`}>
-                  {oilDate ? oilDate.toISOString().split("T")[0] : "Select date"}
-                </Text>
-              </TouchableOpacity>
-              
-              {showOilPicker && (
-                <DateTimePicker
-                  value={oilDate || new Date()}
-                  mode="date"
-                  display="default"
-                  onChange={(event, selectedDate) => {
-                    if (Platform.OS === "android") setShowOilPicker(false);
-                    if (selectedDate) setOilDate(selectedDate);
-                  }}
-                />
-              )}
-              {Platform.OS === "ios" && showOilPicker && (
-                <TouchableOpacity
-                  onPress={() => setShowOilPicker(false)}
-                  className="mt-2 py-2 items-center bg-slate-100 rounded-lg"
-                >
-                  <Text className="text-primary font-semibold">Done</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Username Field - Only shown in Create Mode */}
+            {/* Username & Password - Create Mode Only */}
             {!isEdit && (
-              <View className="gap-1">
-                <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase ml-1">
-                  Username *
-                </Text>
-                <View className="flex-row items-center bg-surface rounded-xl px-4 border border-border">
-                  <Ionicons name="at" size={16} color="#64748B" />
-                  <TextInput
-                    className="flex-1 text-text-primary py-3.5 pl-3 text-base"
-                    placeholder="driver_username"
-                    placeholderTextColor="#94A3B8"
-                    value={username}
-                    onChangeText={setUsername}
-                    autoCapitalize="none"
-                  />
+              <>
+                <View className="gap-1">
+                  <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase ml-1">
+                    Username *
+                  </Text>
+                  <View className="flex-row items-center bg-surface rounded-xl px-4 border border-border">
+                    <Ionicons name="at" size={16} color="#64748B" />
+                    <TextInput
+                      className="flex-1 text-text-primary py-3.5 pl-3 text-base"
+                      placeholder="driver_username"
+                      placeholderTextColor="#94A3B8"
+                      value={username}
+                      onChangeText={setUsername}
+                      autoCapitalize="none"
+                    />
+                  </View>
                 </View>
-              </View>
+
+                <View className="gap-1">
+                  <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase ml-1">
+                    Password *
+                  </Text>
+                  <View className="flex-row items-center bg-surface rounded-xl px-4 border border-border">
+                    <Ionicons name="lock-closed-outline" size={16} color="#64748B" />
+                    <TextInput
+                      className="flex-1 text-text-primary py-3.5 pl-3 text-base"
+                      placeholder="driver_password"
+                      placeholderTextColor="#94A3B8"
+                      secureTextEntry={!showPassword}
+                      value={password}
+                      onChangeText={setPassword}
+                    />
+                    <TouchableOpacity onPress={() => setShowPassword((v) => !v)}>
+                      <Ionicons
+                        name={showPassword ? "eye-off-outline" : "eye-outline"}
+                        size={18}
+                        color="#94A3B8"
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </>
             )}
 
-            <View className="gap-1">
-              <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase ml-1">
-                {isEdit ? "Set New Password (optional)" : "Password *"}
-              </Text>
-              <View className="flex-row items-center bg-surface rounded-xl px-4 border border-border">
-                <Ionicons name="lock-closed-outline" size={16} color="#64748B" />
-                <TextInput
-                  className="flex-1 text-text-primary py-3.5 pl-3 text-base"
-                  placeholder={isEdit ? "Enter new password if changing" : "driver_password"}
-                  placeholderTextColor="#94A3B8"
-                  secureTextEntry={!showPassword}
-                  value={password}
-                  onChangeText={setPassword}
-                />
-                <TouchableOpacity onPress={() => setShowPassword((v) => !v)}>
-                  <Ionicons
-                    name={showPassword ? "eye-off-outline" : "eye-outline"}
-                    size={18}
-                    color="#94A3B8"
-                  />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Action Buttons */}
+            {/* Profile Action Buttons */}
             <View className="flex-row gap-4 mt-2">
               <TouchableOpacity
                 onPress={() => router.back()}
@@ -315,7 +348,7 @@ export default function ManageDriverModal() {
               </TouchableOpacity>
               
               <TouchableOpacity
-                onPress={handleSubmit}
+                onPress={handleProfileSubmit}
                 disabled={loading}
                 className="flex-1 bg-primary rounded-xl py-4 items-center justify-center shadow-sm"
               >
@@ -328,8 +361,89 @@ export default function ManageDriverModal() {
                 )}
               </TouchableOpacity>
             </View>
-
           </View>
+
+          {/* ── SECTION 2: Credential Reset (Edit Mode Only) ── */}
+          {isEdit && (
+            <View className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => setShowCredsSection(v => !v)}
+                className="flex-row items-center justify-between p-5"
+              >
+                <View className="flex-row items-center gap-3">
+                  <View className="w-10 h-10 rounded-full bg-amber-50 items-center justify-center border border-amber-200">
+                    <Ionicons name="key-outline" size={18} color="#F59E0B" />
+                  </View>
+                  <View>
+                    <Text className="text-text-primary font-bold text-base">Update Credentials</Text>
+                    <Text className="text-text-secondary text-xs mt-0.5">Change username or password</Text>
+                  </View>
+                </View>
+                <Ionicons name={showCredsSection ? "chevron-up" : "chevron-down"} size={20} color="#94A3B8" />
+              </TouchableOpacity>
+
+              {showCredsSection && (
+                <View className="px-5 pb-5 gap-4 border-t border-border/50 pt-4">
+                  <View className="gap-1">
+                    <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase ml-1">
+                      New Username
+                    </Text>
+                    <View className="flex-row items-center bg-surface rounded-xl px-4 border border-border">
+                      <Ionicons name="at" size={16} color="#64748B" />
+                      <TextInput
+                        className="flex-1 text-text-primary py-3.5 pl-3 text-base"
+                        placeholder="Leave blank to keep current"
+                        placeholderTextColor="#94A3B8"
+                        value={newUsername}
+                        onChangeText={setNewUsername}
+                        autoCapitalize="none"
+                      />
+                    </View>
+                  </View>
+
+                  <View className="gap-1">
+                    <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase ml-1">
+                      New Password
+                    </Text>
+                    <View className="flex-row items-center bg-surface rounded-xl px-4 border border-border">
+                      <Ionicons name="lock-closed-outline" size={16} color="#64748B" />
+                      <TextInput
+                        className="flex-1 text-text-primary py-3.5 pl-3 text-base"
+                        placeholder="Leave blank to keep current"
+                        placeholderTextColor="#94A3B8"
+                        secureTextEntry={!showNewPassword}
+                        value={newPassword}
+                        onChangeText={setNewPassword}
+                      />
+                      <TouchableOpacity onPress={() => setShowNewPassword((v) => !v)}>
+                        <Ionicons
+                          name={showNewPassword ? "eye-off-outline" : "eye-outline"}
+                          size={18}
+                          color="#94A3B8"
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    onPress={handleCredentialsReset}
+                    disabled={credsLoading}
+                    className="bg-amber-500 rounded-xl py-3.5 items-center justify-center mt-1 shadow-sm"
+                  >
+                    {credsLoading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <View className="flex-row items-center gap-2">
+                        <Ionicons name="shield-checkmark" size={18} color="#fff" />
+                        <Text className="text-white font-bold text-base">Reset Credentials</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

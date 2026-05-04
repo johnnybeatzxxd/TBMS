@@ -22,8 +22,10 @@ export const transferService = {
     if (params.sender) queryParams.push(`sender=${params.sender}`);
     if (params.dateFrom) queryParams.push(`dateFrom=${params.dateFrom}`);
     if (params.dateTo) queryParams.push(`dateTo=${params.dateTo}`);
-    if (params.amountFrom) queryParams.push(`amountFrom=${params.amountFrom}`);
-    if (params.amountTo) queryParams.push(`amountTo=${params.amountTo}`);
+    if (params.amountFrom !== undefined) queryParams.push(`amountFrom=${params.amountFrom}`);
+
+    // TEMPORARY FIX: Bypass the backend Prisma crash (missing lte) by injecting a huge number
+    queryParams.push(`amountTo=${params.amountTo !== undefined ? params.amountTo : 999999999}`);
 
     const queryString = queryParams.length > 0 ? `?${queryParams.join("&")}` : "";
 

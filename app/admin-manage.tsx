@@ -133,7 +133,7 @@ export default function ManageScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={["top"]}>
+    <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ paddingBottom: 100 }}
@@ -212,7 +212,7 @@ export default function ManageScreen() {
                     } else if (section.id === "companies") {
                       router.push("/companies" as any);
                     } else if (section.id === "requests") {
-                      router.push("/requests");
+                      router.push("/admin-requests");
                     }
                   }}
                 >
