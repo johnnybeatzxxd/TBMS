@@ -26,9 +26,15 @@ const getGroupedData = (data: Refuel[]) => {
   }));
 };
 
-const RefuelCard = ({ refuel }: { refuel: Refuel }) => {
+const RefuelCard = ({ refuel, userName }: { refuel: Refuel, userName?: string }) => {
+  const [expanded, setExpanded] = useState(false);
+
   return (
-    <View className="bg-white rounded-2xl border border-border mt-3 overflow-hidden shadow-sm p-4">
+    <TouchableOpacity
+      activeOpacity={0.8}
+      onPress={() => setExpanded(!expanded)}
+      className="bg-white rounded-2xl border border-border mt-3 overflow-hidden shadow-sm p-4"
+    >
       <View className="flex-row items-center justify-between">
         <View className="flex-row items-center">
           <View className={`w-10 h-10 ${refuel.approved === "APPROVED" ? "bg-success-50" : "bg-amber-50"} rounded-xl items-center justify-center mr-3`}>
@@ -46,7 +52,38 @@ const RefuelCard = ({ refuel }: { refuel: Refuel }) => {
            </Text>
         </View>
       </View>
-    </View>
+      
+      {expanded && (
+        <View className="mt-3 pt-3 border-t border-border/50">
+          <View className="bg-surface rounded-xl p-3 border border-border/30 mb-2 gap-2">
+            <View className="flex-row items-center justify-between">
+               <Text className="text-text-secondary text-xs uppercase font-bold tracking-widest">Driver</Text>
+               <Text className="text-text-primary text-sm font-medium">{userName || refuel.driverId || "N/A"}</Text>
+            </View>
+            {refuel.location && (
+               <View className="flex-row items-center justify-between pt-2 border-t border-border/30">
+                  <Text className="text-text-secondary text-xs uppercase font-bold tracking-widest">Location</Text>
+                  <Text className="text-text-primary text-sm font-medium">{refuel.location}</Text>
+               </View>
+            )}
+            {refuel.km !== undefined && (
+               <View className="flex-row items-center justify-between pt-2 border-t border-border/30">
+                  <Text className="text-text-secondary text-xs uppercase font-bold tracking-widest">Odometer</Text>
+                  <Text className="text-text-primary text-sm font-medium">{refuel.km} km</Text>
+               </View>
+            )}
+            <View className="flex-row items-center justify-between pt-2 border-t border-border/30">
+               <Text className="text-text-secondary text-xs uppercase font-bold tracking-widest">Tank Fill</Text>
+               <View className={`px-2 py-0.5 rounded ${refuel.fullTank ? "bg-success-100" : "bg-surface border border-border"}`}>
+                 <Text className={`text-[10px] font-bold uppercase tracking-wider ${refuel.fullTank ? "text-success-700" : "text-text-secondary"}`}>
+                   {refuel.fullTank ? "Full Tank" : "Partial"}
+                 </Text>
+               </View>
+            </View>
+          </View>
+        </View>
+      )}
+    </TouchableOpacity>
   );
 };
 
@@ -126,7 +163,7 @@ export default function DriverRefuelsScreen() {
               {title}
             </Text>
           )}
-          renderItem={({ item }) => <RefuelCard refuel={item} />}
+          renderItem={({ item }) => <RefuelCard refuel={item} userName={user?.name} />}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
           onEndReached={handleLoadMore}

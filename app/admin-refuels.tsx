@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useAuthStore } from "@/src/store";
-import { refuelService } from "@/src/api/services";
+import { refuelService, driverService } from "@/src/api/services";
 import { Refuel } from "@/src/types/refuel.types";
 import { DateFilterBar, DateFilterPreset, passesDateFilter } from "@/src/components/DateFilterBar";
 
@@ -28,7 +28,7 @@ const getRelativeDateLabel = (dateStr: string) => {
   return `${weekdays[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}`;
 };
 
-const RefuelCard = ({ exp, onApprove }: { exp: Refuel, onApprove: (id: string) => void }) => {
+const RefuelCard = ({ exp, onApprove, driverName }: { exp: Refuel, onApprove: (id: string) => void, driverName?: string }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   
   return (
@@ -72,8 +72,8 @@ const RefuelCard = ({ exp, onApprove }: { exp: Refuel, onApprove: (id: string) =
         <View className="mt-3 pt-3 border-t border-border/50">
           <View className="bg-surface rounded-xl p-3 border border-border/30 mb-2 gap-2">
             <View className="flex-row items-center justify-between">
-               <Text className="text-text-secondary text-xs uppercase font-bold tracking-widest">Driver ID</Text>
-               <Text className="text-text-primary text-sm font-medium">{exp.driverId}</Text>
+               <Text className="text-text-secondary text-xs uppercase font-bold tracking-widest">Driver</Text>
+               <Text className="text-text-primary text-sm font-medium">{driverName || exp.driverId || "N/A"}</Text>
             </View>
             
             {exp.location && (
@@ -125,6 +125,7 @@ export default function RefuelsScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [driverMap, setDriverMap] = useState<Record<string, string>>({});
 
   // Date Filter State
   const [filterPreset, setFilterPreset] = useState<DateFilterPreset>("all");
@@ -192,6 +193,14 @@ export default function RefuelsScreen() {
 
   useEffect(() => {
     loadInitialData();
+    const isManager = user?.role === "admin" || (user?.role as string) === "manager";
+    if (isManager) {
+       driverService.getMyDrivers().then(res => {
+         const map: Record<string, string> = {};
+         res.drivers.forEach((d: any) => { map[d.id || d._id] = d.name; });
+         setDriverMap(map);
+       }).catch(() => console.log("Silent fail driver map load"));
+    }
   }, []);
 
   const groupedRefuels = displayedRefuels.reduce((acc, exp) => {
@@ -249,7 +258,7 @@ export default function RefuelsScreen() {
         )}
         renderItem={({ item }) => (
           <View className="px-4">
-            <RefuelCard exp={item} onApprove={handleApprove} />
+            <RefuelCard exp={item} onApprove={handleApprove} driverName={driverMap[item.driverId]} />
           </View>
         )}
         contentContainerStyle={{ paddingBottom: 100 }}
