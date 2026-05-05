@@ -69,9 +69,9 @@ const TransferCard = ({ tx, isManager, onApprove, onDelete, driverName }: { tx: 
           </Text>
           
           <View className="flex-row items-center mt-1">
-            <View className={`px-2 py-0.5 rounded mr-2 ${tx.status === "APPROVED" ? "bg-success-100" : "bg-amber-100"}`}>
-               <Text className={`text-[10px] font-bold uppercase tracking-wider ${tx.status === "APPROVED" ? "text-success-700" : "text-amber-700"}`}>
-                  {tx.status}
+            <View className={`px-2 py-0.5 rounded mr-2 ${tx.status === "APPROVED" || (tx as any).approved === "APPROVED" ? "bg-success-100" : "bg-amber-100"}`}>
+               <Text className={`text-[10px] font-bold uppercase tracking-wider ${tx.status === "APPROVED" || (tx as any).approved === "APPROVED" ? "text-success-700" : "text-amber-700"}`}>
+                  {tx.status || (tx as any).approved || "PENDING"}
                </Text>
             </View>
             <Ionicons
@@ -109,7 +109,7 @@ const TransferCard = ({ tx, isManager, onApprove, onDelete, driverName }: { tx: 
             </View>
           </View>
           
-          {isManager && tx.status === "PENDING" && (
+          {isManager && (tx.status === "PENDING" || (tx as any).approved === "PENDING") && (
             <View className="flex-row gap-3 pt-2">
               <TouchableOpacity
                 className="flex-1 bg-success-500 py-2.5 rounded-xl items-center"
@@ -128,7 +128,7 @@ const TransferCard = ({ tx, isManager, onApprove, onDelete, driverName }: { tx: 
             </View>
           )}
 
-          {isManager && tx.status === "APPROVED" && (
+          {isManager && (tx.status === "APPROVED" || (tx as any).approved === "APPROVED") && (
             <View className="flex-row justify-end pt-2">
                <TouchableOpacity
                 className="px-4 py-2 bg-danger-50 border border-danger-200 rounded-lg items-center"

@@ -1,12 +1,14 @@
 export interface Transfer {
-  _id: string;
+  id?: string;
+  _id?: string;
   driverId: string;
   adminId?: string;
   amount: number;
   remark: string;
   date: string;
   sender: "ADMIN" | "DRIVER";
-  status: "PENDING" | "APPROVED";
+  status?: "PENDING" | "APPROVED";
+  approved?: "PENDING" | "APPROVED";
   createdAt: string;
   updatedAt: string;
 }
