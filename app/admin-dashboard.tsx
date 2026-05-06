@@ -1,12 +1,12 @@
-import { View, Text, TouchableOpacity, ScrollView, Platform } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, Platform, BackHandler } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { useFocusEffect } from "@react-navigation/native";
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { Ionicons, MaterialCommunityIcons, Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useAuthStore } from "@/src/store";
-import { tripService, transferService } from "@/src/api/services";
+import { tripService, transferService, reminderService } from "@/src/api/services";
 
 export default function AdminDashboardScreen() {
   const { user, logout } = useAuthStore();
@@ -15,17 +15,37 @@ export default function AdminDashboardScreen() {
     logout();
   };
 
+  // Redirect if wrong role somehow landed here
+  useEffect(() => {
+    if (user && user.role === 'driver') {
+      router.replace('/driver-dashboard');
+    }
+  }, [user]);
+
+  // Trap hardware back button — dashboard is root; back should exit app
+  useFocusEffect(
+    useCallback(() => {
+      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+        BackHandler.exitApp();
+        return true;
+      });
+      return () => subscription.remove();
+    }, [])
+  );
+
   const [pendingTripsCount, setPendingTripsCount] = useState(0);
   const [pendingTransfersCount, setPendingTransfersCount] = useState(0);
+  const [pendingRemindersCount, setPendingRemindersCount] = useState(0);
 
   // Dynamically calculate KPIs simply by grabbing first pages and aggregating locally
   useFocusEffect(
     useCallback(() => {
       const fetchLocalKPIs = async () => {
         try {
-          const [tripsRes, transfersRes] = await Promise.allSettled([
+          const [tripsRes, transfersRes, remindersRes] = await Promise.allSettled([
             tripService.getTrips({ page: 1, paymentMethod: "CASH" }),
-            transferService.getTransfers({ page: 1 })
+            transferService.getTransfers({ page: 1 }),
+            reminderService.getPendingRemindersAdmin()
           ]);
           
           if (tripsRes.status === "fulfilled") {
@@ -34,8 +54,12 @@ export default function AdminDashboardScreen() {
           }
 
           if (transfersRes.status === "fulfilled") {
-            const pendingTransfers = transfersRes.value.transfers.filter((t: any) => t.status === "PENDING");
+            const pendingTransfers = transfersRes.value.transfers.filter((t: any) => t.status === "PENDING" || t.approved === "PENDING");
             setPendingTransfersCount(pendingTransfers.length);
+          }
+
+          if (remindersRes.status === "fulfilled") {
+            setPendingRemindersCount(remindersRes.value.pending?.length || 0);
           }
         } catch (e) {
           console.log("[Dashboard] Failed fetching modular KPIs locally:", e);
@@ -45,7 +69,7 @@ export default function AdminDashboardScreen() {
     }, [])
   );
 
-  const totalActionable = pendingTripsCount + pendingTransfersCount;
+  const totalActionable = pendingTripsCount + pendingTransfersCount + pendingRemindersCount;
 
   const navSections = [
     {
@@ -53,13 +77,13 @@ export default function AdminDashboardScreen() {
       items: [
         { id: "trips", title: "Trip Management", subtitle: "Review and approve driver logs", icon: "truck", route: "/admin-trips", color: "#3B82F6", unread: pendingTripsCount },
         { id: "requests", title: "Service Requests", subtitle: "Manage fleet maintenance", icon: "document-text", route: "/admin-requests", color: "#10B981", unread: 0 },
-        { id: "refuels", title: "Fleet Refuels", subtitle: "Fuel consumption logs", icon: "water", route: "/admin-refuels", color: "#0EA5E9", unread: 0 },
+        { id: "refuels", title: "Refuels", subtitle: "Fuel consumption logs", icon: "water", route: "/admin-refuels", color: "#0EA5E9", unread: 0 },
       ]
     },
     {
       title: "Finance",
       items: [
-        { id: "expenses", title: "Driver Expenses", subtitle: "Road and operational spendings", icon: "receipt", route: "/admin-expenses", color: "#EF4444", unread: 0 },
+        { id: "expenses", title: "Expenses", subtitle: "Road and operational spendings", icon: "receipt", route: "/admin-expenses", color: "#EF4444", unread: 0 },
         { id: "transfers", title: "Money Transfers", subtitle: "Internal fleet balancing", icon: "swap-horizontal", route: "/admin-transfers", color: "#F59E0B", unread: pendingTransfersCount },
       ]
     },
@@ -67,7 +91,9 @@ export default function AdminDashboardScreen() {
       title: "Administration",
       items: [
         { id: "manage", title: "System Configuration", subtitle: "Drivers, Trucks & Companies", icon: "settings", route: "/admin-manage", color: "#64748B", unread: 0 },
-        { id: "analytics", title: "Reports & Analytics", subtitle: "Export CSV and view fleet trends", icon: "bar-chart", route: "/admin-analytics", color: "#8B5CF6", unread: 0 },
+        { id: "displays", title: "Billboard", subtitle: "Live driver announcement config", icon: "chatbubbles", route: "/admin-displays", color: "#3B82F6", unread: 0 },
+        { id: "reminders", title: "Reminders", subtitle: "Alerts & Scheduled Notifs", icon: "notifications", route: "/admin-reminders", color: "#8B5CF6", unread: pendingRemindersCount },
+        { id: "analytics", title: "Reports & Analytics", subtitle: "Export CSV and view fleet trends", icon: "bar-chart", route: "/admin-analytics", color: "#F43F5E", unread: 0 },
       ]
     }
   ];

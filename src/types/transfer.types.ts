@@ -9,6 +9,7 @@ export interface Transfer {
   sender: "ADMIN" | "DRIVER";
   status?: "PENDING" | "APPROVED";
   approved?: "PENDING" | "APPROVED";
+  bank?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -18,4 +19,5 @@ export interface AddTransferPayload {
   amount: number;
   remark: string;
   date: string;
+  bank?: string;
 }

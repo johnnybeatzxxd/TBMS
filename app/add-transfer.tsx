@@ -21,6 +21,7 @@ export default function AddTransferModal() {
   const [driverId, setDriverId] = useState("");
   const [amount, setAmount] = useState("");
   const [remark, setRemark] = useState("");
+  const [bank, setBank] = useState("");
   
   // Hardcoding date to today for simplicity
   const [date, setDate] = useState(new Date());
@@ -77,6 +78,7 @@ export default function AddTransferModal() {
         amount: parsedAmount,
         remark: remark.trim(),
         date: formattedDate,
+        bank: bank.trim() || undefined,
       });
       router.back();
     } catch (error: any) {
@@ -171,6 +173,23 @@ export default function AddTransferModal() {
                   onChangeText={(text) => setAmount(text.replace(/[^0-9.]/g, ""))}
                   keyboardType="decimal-pad"
 
+                />
+              </View>
+            </View>
+
+            {/* Bank */}
+            <View className="gap-1.5 z-0">
+              <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase ml-1">
+                Bank / Account
+              </Text>
+              <View className="flex-row items-center bg-surface rounded-xl px-4 border border-border">
+                <Ionicons name="business-outline" size={16} color="#64748B" />
+                <TextInput
+                  className="flex-1 py-3.5 pl-3 text-base text-text-primary"
+                  placeholder="e.g. Commercial Bank..."
+                  placeholderTextColor="#94A3B8"
+                  value={bank}
+                  onChangeText={setBank}
                 />
               </View>
             </View>

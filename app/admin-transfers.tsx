@@ -100,6 +100,10 @@ const TransferCard = ({ tx, isManager, onApprove, onDelete, driverName }: { tx: 
                <Text className="text-text-primary text-sm font-medium">{tx.status || (tx as any).approved}</Text>
             </View>
             <View className="flex-row items-center justify-between pt-2 border-t border-border/30">
+               <Text className="text-text-secondary text-xs uppercase font-bold tracking-widest">Bank/Acct</Text>
+               <Text className="text-text-primary text-sm font-medium">{tx.bank || "N/A"}</Text>
+            </View>
+            <View className="flex-row items-center justify-between pt-2 border-t border-border/30">
                <Text className="text-text-secondary text-xs uppercase font-bold tracking-widest">Date</Text>
                <Text className="text-text-primary text-sm font-medium">{tx.date ? tx.date.split("T")[0] : "N/A"}</Text>
             </View>
@@ -167,6 +171,10 @@ export default function TransfersScreen() {
   const [customFrom, setCustomFrom] = useState<Date | null>(null);
   const [customTo, setCustomTo] = useState<Date | null>(null);
 
+  // Driver Filter State
+  const [selectedDriverId, setSelectedDriverId] = useState<string>("");
+  const [showDriverMenu, setShowDriverMenu] = useState(false);
+
   const isManager = user?.role === "admin" || (user?.role as string) === "manager";
 
   const loadInitialData = async () => {
@@ -176,6 +184,7 @@ export default function TransfersScreen() {
       const res = await transferService.getTransfers({
          page: 1,
          perpage: 10,
+         driverId: selectedDriverId || undefined,
          dateFrom: filterPreset !== "all" && customFrom ? customFrom.toISOString().split("T")[0] : undefined,
          dateTo: filterPreset !== "all" && customTo ? customTo.toISOString().split("T")[0] : undefined,
       });
@@ -199,6 +208,7 @@ export default function TransfersScreen() {
       const res = await transferService.getTransfers({
          page: nextPage,
          perpage: 10,
+         driverId: selectedDriverId || undefined,
          dateFrom: filterPreset !== "all" && customFrom ? customFrom.toISOString().split("T")[0] : undefined,
          dateTo: filterPreset !== "all" && customTo ? customTo.toISOString().split("T")[0] : undefined,
       });
@@ -242,6 +252,9 @@ export default function TransfersScreen() {
 
   useEffect(() => {
     loadInitialData();
+  }, [selectedDriverId]);
+
+  useEffect(() => {
     if (isManager) {
       driverService.getMyDrivers().then(res => {
         const map: Record<string, string> = {};
@@ -269,13 +282,77 @@ export default function TransfersScreen() {
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
       {/* Header */}
-      <View className="flex-row items-center justify-between px-5 pt-2 pb-4 bg-white border-b border-border shadow-sm">
+      <View className="flex-row items-center justify-between px-5 pt-2 pb-3 bg-white border-b border-border shadow-sm" style={{ zIndex: 50, elevation: 10 }}>
         <View className="flex-row items-center">
           <Ionicons name="swap-horizontal" size={26} color="#2563EB" />
           <Text className="text-text-primary font-bold text-xl ml-2 tracking-wide">
             Transfers
           </Text>
         </View>
+
+        {isManager && (
+          <View className="relative">
+            <TouchableOpacity
+              onPress={() => setShowDriverMenu(!showDriverMenu)}
+              className="flex-row items-center gap-1.5 bg-primary-50 border border-primary-100 rounded-xl px-3 py-2"
+              activeOpacity={0.8}
+            >
+              <Ionicons name="person" size={14} color="#2563EB" />
+              <Text className="text-primary font-semibold text-sm">
+                {selectedDriverId ? driverMap[selectedDriverId] || "Unknown" : "All Drivers"}
+              </Text>
+              <Ionicons name={showDriverMenu ? "chevron-up" : "chevron-down"} size={14} color="#2563EB" />
+            </TouchableOpacity>
+
+            {showDriverMenu && (
+              <View className="absolute right-0 top-10 bg-white rounded-2xl border border-border shadow-lg overflow-hidden min-w-[160px]" style={{ zIndex: 999, elevation: 20 }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setSelectedDriverId("");
+                    setShowDriverMenu(false);
+                  }}
+                  className={`px-4 py-3 flex-row items-center gap-2 ${
+                    !selectedDriverId ? "bg-primary-50" : "bg-white"
+                  }`}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name="person-outline"
+                    size={16}
+                    color={!selectedDriverId ? "#2563EB" : "#64748B"}
+                  />
+                  <Text className={`text-sm font-medium ${!selectedDriverId ? "text-primary font-bold" : "text-text-primary"}`}>
+                    All Drivers
+                  </Text>
+                  {!selectedDriverId && <Ionicons name="checkmark" size={14} color="#2563EB" />}
+                </TouchableOpacity>
+                {Object.entries(driverMap).map(([id, name]) => (
+                  <TouchableOpacity
+                    key={id}
+                    onPress={() => {
+                      setSelectedDriverId(id);
+                      setShowDriverMenu(false);
+                    }}
+                    className={`px-4 py-3 flex-row items-center gap-2 ${
+                      selectedDriverId === id ? "bg-primary-50" : "bg-white"
+                    }`}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name="person-outline"
+                      size={16}
+                      color={selectedDriverId === id ? "#2563EB" : "#64748B"}
+                    />
+                    <Text className={`text-sm font-medium ${selectedDriverId === id ? "text-primary font-bold" : "text-text-primary"}`}>
+                      {name}
+                    </Text>
+                    {selectedDriverId === id && <Ionicons name="checkmark" size={14} color="#2563EB" />}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
       </View>
 
       {/* Date Filter */}

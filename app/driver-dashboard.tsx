@@ -1,9 +1,14 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, TouchableOpacity, ScrollView, Animated } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, Animated, Modal, BackHandler } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useAuthStore } from "@/src/store";
+import { useFocusEffect } from "@react-navigation/native";
+import { useCallback } from "react";
+import { reminderService, displayService } from "@/src/api/services";
+import { Reminder } from "@/src/types/reminder.types";
+import { notificationUtils } from "@/src/utils/notifications";
 
 const TIPS = [
   "Drive Safe and take regular breaks!",
@@ -12,10 +17,18 @@ const TIPS = [
   "Make sure to securely park the truck!"
 ];
 
-const AnimatedTips = () => {
+const AnimatedTips = ({ tips = TIPS }: { tips?: string[] }) => {
   const [index, setIndex] = useState(0);
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const translateY = useRef(new Animated.Value(0)).current;
+  
+  // Safe default fallback incase of empty array passed during transition
+  const safeTips = tips.length > 0 ? tips : TIPS;
+
+  useEffect(() => {
+    // Reset index on tip change
+    setIndex(0);
+  }, [tips]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -31,7 +44,7 @@ const AnimatedTips = () => {
           useNativeDriver: true,
         })
       ]).start(() => {
-        setIndex((prev) => (prev + 1) % TIPS.length);
+        setIndex((prev) => (prev + 1) % safeTips.length);
         translateY.setValue(15);
         Animated.parallel([
           Animated.timing(fadeAnim, {
@@ -49,7 +62,7 @@ const AnimatedTips = () => {
     }, 4500);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [safeTips.length]);
 
   return (
     <View className="h-10 justify-center items-center w-full px-2">
@@ -62,7 +75,7 @@ const AnimatedTips = () => {
         numberOfLines={1}
         adjustsFontSizeToFit
       >
-        {TIPS[index]}
+        {safeTips[index] || safeTips[0]}
       </Animated.Text>
     </View>
   );
@@ -74,6 +87,58 @@ export default function DriverDashboardScreen() {
   const handleLogout = () => {
     logout();
   };
+
+  const [pendingReminders, setPendingReminders] = useState<Reminder[]>([]);
+  const [dynamicTips, setDynamicTips] = useState<string[]>(TIPS);
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  useEffect(() => {
+    notificationUtils.setupPushNotificationsAsync();
+  }, []);
+
+  // Redirect if wrong role somehow landed here
+  useEffect(() => {
+    if (user && user.role !== 'driver') {
+      router.replace('/admin-dashboard');
+    }
+  }, [user]);
+
+  // Trap hardware back button — dashboard is a root; back should exit app, not navigate
+  useFocusEffect(
+    useCallback(() => {
+      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+        BackHandler.exitApp();
+        return true;
+      });
+      return () => subscription.remove();
+    }, [])
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      Promise.allSettled([
+        reminderService.getPendingRemindersDriver(),
+        displayService.getRollingDisplays()
+      ]).then(([remRes, dispRes]) => {
+        if (remRes.status === "fulfilled") {
+          const pending = remRes.value.pending || [];
+          setPendingReminders(pending);
+          
+          notificationUtils.processNewAlerts(
+            pending,
+            (item) => item._id || item.id,
+            (item) => ({ title: item.reminderName, body: item.reminderMessage })
+          );
+        }
+        
+        if (dispRes.status === "fulfilled" && dispRes.value.displays?.length > 0) {
+          setDynamicTips(dispRes.value.displays.map((d: any) => d.displayMessage));
+        } else {
+          setDynamicTips(TIPS);
+        }
+      });
+    }, [])
+  );
 
   const actionButtons = [
     {
@@ -133,11 +198,16 @@ export default function DriverDashboardScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          onPress={handleLogout}
-          className="w-12 h-12 bg-rose-50 rounded-full items-center justify-center border border-rose-100"
+          onPress={() => setShowNotifications(true)}
+          className="w-12 h-12 bg-slate-50 rounded-full items-center justify-center border border-slate-200 relative"
           activeOpacity={0.7}
         >
-          <Ionicons name="log-out-outline" size={22} color="#E11D48" />
+          <Ionicons name="notifications-outline" size={24} color="#64748B" />
+          {pendingReminders.length > 0 && (
+            <View className="absolute top-2 right-2 w-4 h-4 bg-rose-500 rounded-full items-center justify-center border-2 border-white">
+              <Text className="text-white text-[8px] font-bold">{pendingReminders.length}</Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -148,7 +218,7 @@ export default function DriverDashboardScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="items-center mb-10 gap-2">
-           <AnimatedTips />
+           <AnimatedTips tips={dynamicTips} />
            <Text className="text-text-secondary text-base text-center max-w-xs">
              Tap a box below to quickly submit your records.
            </Text>
@@ -176,6 +246,51 @@ export default function DriverDashboardScreen() {
           ))}
         </View>
       </ScrollView>
+
+      {/* Notification Center Modal */}
+      <Modal
+        visible={showNotifications}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowNotifications(false)}
+      >
+        <SafeAreaView className="flex-1 bg-surface">
+          <View className="flex-row items-center justify-between px-6 pt-4 pb-4 border-b border-border bg-white shadow-sm z-50">
+            <Text className="text-xl font-bold text-text-primary">Notifications</Text>
+            <TouchableOpacity onPress={() => setShowNotifications(false)} className="w-10 h-10 items-center justify-center bg-slate-50 rounded-full">
+              <Ionicons name="close" size={24} color="#64748B" />
+            </TouchableOpacity>
+          </View>
+          <ScrollView className="flex-1 px-4 py-4" contentContainerStyle={{ paddingBottom: 60 }}>
+            {pendingReminders.length === 0 ? (
+              <View className="py-20 items-center justify-center opacity-60">
+                <Ionicons name="notifications-off-outline" size={64} color="#94A3B8" />
+                <Text className="text-text-secondary text-base mt-4 text-center">
+                  You're all caught up!
+                </Text>
+              </View>
+            ) : (
+              pendingReminders.map(rem => (
+                <View key={rem._id || rem.id} className="bg-white border border-border rounded-2xl p-4 mb-3 shadow-sm flex-row items-start">
+                  <View className="w-12 h-12 bg-rose-50 rounded-full items-center justify-center border border-rose-100 mr-3">
+                    <Ionicons name="alert-circle" size={24} color="#E11D48" />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-text-primary font-bold text-base mb-1">{rem.reminderName}</Text>
+                    <Text className="text-text-secondary text-sm leading-5">{rem.reminderMessage}</Text>
+                    <View className="mt-3 pt-3 border-t border-border-light flex-row justify-between items-center">
+                      <Text className="text-primary-600 text-[10px] uppercase font-bold tracking-widest bg-primary-50 px-2 py-1 rounded-md">
+                        {rem.reminderType === "ONE_TIME" ? `Deadline: ${rem.deadline ? rem.deadline.split("T")[0] : "N/A"}` : `Frequency: ${rem.frequency}`}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              ))
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
     </SafeAreaView>
   );
 }

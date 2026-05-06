@@ -8,8 +8,10 @@
 
 import { create } from "zustand";
 import * as SecureStore from "expo-secure-store";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { User, LoginCredentials } from "@/src/types";
 import { authService } from "@/src/api/services";
+import { clearSessionCookie } from "@/src/api/config";
 
 const USER_PROFILE_KEY = "userProfile";
 
@@ -48,10 +50,16 @@ export const useAuthStore = create<AuthStore>((set) => ({
 
   logout: async () => {
     // 1. Immediately clear local state — don't wait for the API
-    await SecureStore.deleteItemAsync(USER_PROFILE_KEY);
     set({ user: null, isAuthenticated: false, isLoading: false, error: null });
 
-    // 2. Fire-and-forget: notify the server, but never block on it
+    // 2. Nuke ALL local storage to prevent data leakage between users
+    await Promise.allSettled([
+      SecureStore.deleteItemAsync(USER_PROFILE_KEY),
+      clearSessionCookie(),
+      AsyncStorage.clear(), // Wipes notification tracking, cached data, everything
+    ]);
+
+    // 3. Fire-and-forget: notify the server, but never block on it
     authService.logout().catch(() => {});
   },
 

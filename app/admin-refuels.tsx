@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useAuthStore } from "@/src/store";
-import { refuelService, driverService } from "@/src/api/services";
+import { refuelService, driverService, truckService } from "@/src/api/services";
 import { Refuel } from "@/src/types/refuel.types";
 import { DateFilterBar, DateFilterPreset, passesDateFilter } from "@/src/components/DateFilterBar";
 
@@ -132,6 +132,11 @@ export default function RefuelsScreen() {
   const [customFrom, setCustomFrom] = useState<Date | null>(null);
   const [customTo, setCustomTo] = useState<Date | null>(null);
 
+  // Truck Filter State
+  const [trucks, setTrucks] = useState<{id: string, plateNumber: string}[]>([]);
+  const [selectedTruckId, setSelectedTruckId] = useState<string>("");
+  const [showTruckMenu, setShowTruckMenu] = useState(false);
+
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = async () => {
     setRefreshing(true);
@@ -146,6 +151,7 @@ export default function RefuelsScreen() {
       const res = await refuelService.getRefuels({
          page: 1,
          perpage: 10,
+         truckId: selectedTruckId || undefined,
          startDate: filterPreset !== "all" && customFrom ? customFrom.toISOString().split("T")[0] : undefined,
          endDate: filterPreset !== "all" && customTo ? customTo.toISOString().split("T")[0] : undefined,
       });
@@ -168,6 +174,7 @@ export default function RefuelsScreen() {
       const res = await refuelService.getRefuels({
          page: nextPage,
          perpage: 10,
+         truckId: selectedTruckId || undefined,
          startDate: filterPreset !== "all" && customFrom ? customFrom.toISOString().split("T")[0] : undefined,
          endDate: filterPreset !== "all" && customTo ? customTo.toISOString().split("T")[0] : undefined,
       });
@@ -193,6 +200,9 @@ export default function RefuelsScreen() {
 
   useEffect(() => {
     loadInitialData();
+  }, [selectedTruckId]);
+
+  useEffect(() => {
     const isManager = user?.role === "admin" || (user?.role as string) === "manager";
     if (isManager) {
        driverService.getMyDrivers().then(res => {
@@ -200,6 +210,10 @@ export default function RefuelsScreen() {
          res.drivers.forEach((d: any) => { map[d.id || d._id] = d.name; });
          setDriverMap(map);
        }).catch(() => console.log("Silent fail driver map load"));
+
+       truckService.getMyTrucks().then(res => {
+         setTrucks(res.trucks || []);
+       }).catch(() => console.log("Silent fail trucks load"));
     }
   }, []);
 
@@ -219,7 +233,7 @@ export default function RefuelsScreen() {
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
       {/* Header */}
-      <View className="flex-row items-center justify-between px-5 pt-2 pb-4 bg-white border-b border-border shadow-sm">
+      <View className="flex-row items-center justify-between px-5 pt-2 pb-3 bg-white border-b border-border shadow-sm" style={{ zIndex: 50, elevation: 10 }}>
         <View className="flex-row items-center gap-3">
           <TouchableOpacity onPress={() => router.back()} className="w-8 h-8 items-center justify-center rounded-full bg-slate-100">
             <Ionicons name="arrow-back" size={20} color="#64748B" />
@@ -229,6 +243,70 @@ export default function RefuelsScreen() {
             Refuels
           </Text>
         </View>
+
+        {user?.role !== "driver" && (
+          <View className="relative">
+            <TouchableOpacity
+              onPress={() => setShowTruckMenu(!showTruckMenu)}
+              className="flex-row items-center gap-1.5 bg-sky-50 border border-sky-100 rounded-xl px-3 py-2"
+              activeOpacity={0.8}
+            >
+              <Ionicons name="car-sport" size={14} color="#0EA5E9" />
+              <Text className="text-sky-600 font-semibold text-sm">
+                {selectedTruckId ? trucks.find(t => t.id === selectedTruckId)?.plateNumber || "Unknown" : "All Trucks"}
+              </Text>
+              <Ionicons name={showTruckMenu ? "chevron-up" : "chevron-down"} size={14} color="#0EA5E9" />
+            </TouchableOpacity>
+
+            {showTruckMenu && (
+              <View className="absolute right-0 top-10 bg-white rounded-2xl border border-border shadow-lg overflow-hidden min-w-[160px]" style={{ zIndex: 999, elevation: 20 }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setSelectedTruckId("");
+                    setShowTruckMenu(false);
+                  }}
+                  className={`px-4 py-3 flex-row items-center gap-2 ${
+                    !selectedTruckId ? "bg-sky-50" : "bg-white"
+                  }`}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name="car-sport-outline"
+                    size={16}
+                    color={!selectedTruckId ? "#0EA5E9" : "#64748B"}
+                  />
+                  <Text className={`text-sm font-medium ${!selectedTruckId ? "text-sky-600 font-bold" : "text-text-primary"}`}>
+                    All Trucks
+                  </Text>
+                  {!selectedTruckId && <Ionicons name="checkmark" size={14} color="#0EA5E9" />}
+                </TouchableOpacity>
+                {trucks.map((truck) => (
+                  <TouchableOpacity
+                    key={truck.id}
+                    onPress={() => {
+                      setSelectedTruckId(truck.id);
+                      setShowTruckMenu(false);
+                    }}
+                    className={`px-4 py-3 flex-row items-center gap-2 ${
+                      selectedTruckId === truck.id ? "bg-sky-50" : "bg-white"
+                    }`}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name="car-sport-outline"
+                      size={16}
+                      color={selectedTruckId === truck.id ? "#0EA5E9" : "#64748B"}
+                    />
+                    <Text className={`text-sm font-medium ${selectedTruckId === truck.id ? "text-sky-600 font-bold" : "text-text-primary"}`}>
+                      {truck.plateNumber}
+                    </Text>
+                    {selectedTruckId === truck.id && <Ionicons name="checkmark" size={14} color="#0EA5E9" />}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
       </View>
 
       <DateFilterBar

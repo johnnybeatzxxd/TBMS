@@ -19,3 +19,5 @@ export { mockRequestsService as requestService } from "./mock/requests.mock";
 export { mockExpenseService as expenseService } from "./mock/expenses.mock";
 export { transferService } from "./transfer.service";
 export { refuelService } from "./refuel.service";
+export { reminderService } from "./reminder.service";
+export { displayService } from "./display.service";

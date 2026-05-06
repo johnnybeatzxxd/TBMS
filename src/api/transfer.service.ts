@@ -13,6 +13,7 @@ export const transferService = {
     dateTo?: string;
     amountFrom?: number;
     amountTo?: number;
+    bank?: string;
   } = {}): Promise<{ transfers: Transfer[]; meta: any }> {
     const queryParams: string[] = [];
     if (params.page) queryParams.push(`page=${params.page}`);
@@ -23,6 +24,7 @@ export const transferService = {
     if (params.dateFrom) queryParams.push(`dateFrom=${params.dateFrom}`);
     if (params.dateTo) queryParams.push(`dateTo=${params.dateTo}`);
     if (params.amountFrom !== undefined) queryParams.push(`amountFrom=${params.amountFrom}`);
+    if (params.bank) queryParams.push(`bank=${encodeURIComponent(params.bank)}`);
 
     // TEMPORARY FIX: Bypass the backend Prisma crash (missing lte) by injecting a huge number
     queryParams.push(`amountTo=${params.amountTo !== undefined ? params.amountTo : 999999999}`);
