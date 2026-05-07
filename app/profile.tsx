@@ -11,7 +11,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { authService } from "@/src/api/auth.service";
 import { useAuthStore } from "@/src/store";
@@ -25,6 +25,26 @@ const getInitials = (name: string) =>
 
 const formatCurrency = (amount: number) =>
   `$${Math.abs(amount).toFixed(2)}`;
+
+const isWithinOneMonth = (dateString?: string) => {
+  if (!dateString) return false;
+  const date = new Date(dateString);
+  const today = new Date();
+  const oneMonthFromNow = new Date();
+  oneMonthFromNow.setMonth(oneMonthFromNow.getMonth() + 1);
+  return date > today && date <= oneMonthFromNow;
+};
+
+const isExpired = (dateString?: string) => {
+  if (!dateString) return false;
+  return new Date(dateString) <= new Date();
+};
+
+const formatDate = (dateString?: string) => {
+  if (!dateString) return "Not Set";
+  const date = new Date(dateString);
+  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+};
 
 export default function ProfileScreen() {
   const { user, logout } = useAuthStore();
@@ -261,6 +281,24 @@ export default function ProfileScreen() {
               </View>
             </View>
 
+            {/* License Expiry */}
+            <View className="flex-row items-center gap-3 bg-surface rounded-xl px-4 py-3.5 border border-border">
+              <View className="w-9 h-9 rounded-full bg-emerald-50 items-center justify-center border border-emerald-100">
+                <Ionicons name="card-outline" size={16} color="#10B981" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-text-secondary text-[10px] font-semibold tracking-widest uppercase">
+                  License Expiry
+                </Text>
+                <Text className={`font-bold text-sm mt-0.5 ${isExpired(profileData?.licenseRenewalDate) ? "text-danger-600" : isWithinOneMonth(profileData?.licenseRenewalDate) ? "text-amber-600" : "text-text-primary"}`}>
+                  {formatDate(profileData?.licenseRenewalDate)}
+                  {isExpired(profileData?.licenseRenewalDate) ? " (Expired)" : isWithinOneMonth(profileData?.licenseRenewalDate) ? " (Expiring Soon)" : ""}
+                </Text>
+              </View>
+            </View>
+
+
+
 
           </View>
 
@@ -270,20 +308,22 @@ export default function ProfileScreen() {
               Quick Actions
             </Text>
 
-            {/* Change Credentials */}
-            <TouchableOpacity
-              onPress={() => setShowCredModal(true)}
-              className="flex-row items-center gap-3 px-5 py-4 border-b border-border/50"
-              activeOpacity={0.7}
-            >
-              <View className="w-9 h-9 rounded-full bg-primary-50 items-center justify-center border border-primary-100">
-                <Ionicons name="key-outline" size={16} color="#2563EB" />
-              </View>
-              <Text className="flex-1 text-text-primary font-semibold text-sm">
-                Change Credentials
-              </Text>
-              <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
-            </TouchableOpacity>
+            {/* Change Credentials — admin only */}
+            {!isDriver && (
+              <TouchableOpacity
+                onPress={() => setShowCredModal(true)}
+                className="flex-row items-center gap-3 px-5 py-4 border-b border-border/50"
+                activeOpacity={0.7}
+              >
+                <View className="w-9 h-9 rounded-full bg-primary-50 items-center justify-center border border-primary-100">
+                  <Ionicons name="key-outline" size={16} color="#2563EB" />
+                </View>
+                <Text className="flex-1 text-text-primary font-semibold text-sm">
+                  Change Credentials
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+              </TouchableOpacity>
+            )}
 
             {/* Logout */}
             <TouchableOpacity

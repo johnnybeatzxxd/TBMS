@@ -53,7 +53,7 @@ export const refuelService = {
     return res.json();
   },
 
-  async updateRefuel(id: string, payload: { liters?: number; price?: number; date?: string }) {
+  async updateRefuel(id: string, payload: { liters?: number; price?: number; date?: string; location?: string; km?: number; fullTank?: boolean }) {
     const res = await apiFetch(`/refuel/update-refuel/${id}`, {
       method: "POST", // API doc says POST for update
       body: JSON.stringify(payload),

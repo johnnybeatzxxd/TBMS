@@ -4,21 +4,33 @@ import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { refuelService } from "@/src/api/services";
 
 export default function AddRefuelScreen() {
+  const params = useLocalSearchParams<{
+    id?: string;
+    liters?: string;
+    price?: string;
+    date?: string;
+    location?: string;
+    km?: string;
+    fullTank?: string;
+  }>();
+
+  const isEditMode = !!params.id;
+
   const [loading, setLoading] = useState(false);
 
-  // Form State
-  const [volume, setVolume] = useState("");
-  const [price, setPrice] = useState("");
+  // Form State — pre-fill from params when editing
+  const [volume, setVolume] = useState(params.liters || "");
+  const [price, setPrice] = useState(params.price || "");
   const [images, setImages] = useState<string[]>([]);
-  const [date, setDate] = useState(new Date());
+  const [date, setDate] = useState(params.date ? new Date(params.date) : new Date());
 
-  const [location, setLocation] = useState("");
-  const [km, setKm] = useState("");
-  const [fullTank, setFullTank] = useState(false);
+  const [location, setLocation] = useState(params.location || "");
+  const [km, setKm] = useState(params.km || "");
+  const [fullTank, setFullTank] = useState(params.fullTank === "true");
 
   const pickImage = async () => {
     try {
@@ -54,20 +66,32 @@ export default function AddRefuelScreen() {
 
     setLoading(true);
     try {
-      // For now we pass empty receiptPic, pending firebase upload implementation
-      await refuelService.registerRefuel({
-        liters: Number(volume),
-        price: Number(price),
-        date: date.toISOString(),
-        receiptPic: [],
-        location: location.trim() || undefined,
-        km: km ? Number(km) : undefined,
-        fullTank
-      });
-      Alert.alert("Success", "Refuel log added successfully!");
+      if (isEditMode) {
+        await refuelService.updateRefuel(params.id!, {
+          liters: Number(volume),
+          price: Number(price),
+          date: date.toISOString(),
+          location: location.trim() || undefined,
+          km: km ? Number(km) : undefined,
+          fullTank,
+        });
+        Alert.alert("Success", "Refuel updated successfully!");
+      } else {
+        // For now we pass empty receiptPic, pending firebase upload implementation
+        await refuelService.registerRefuel({
+          liters: Number(volume),
+          price: Number(price),
+          date: date.toISOString(),
+          receiptPic: [],
+          location: location.trim() || undefined,
+          km: km ? Number(km) : undefined,
+          fullTank
+        });
+        Alert.alert("Success", "Refuel log added successfully!");
+      }
       router.back();
     } catch (error: any) {
-      Alert.alert("Error", error.message || "Failed to submit refuel log.");
+      Alert.alert("Error", error.message || `Failed to ${isEditMode ? "update" : "submit"} refuel log.`);
     } finally {
       setLoading(false);
     }
@@ -83,7 +107,9 @@ export default function AddRefuelScreen() {
         >
           <Ionicons name="close" size={24} color="#334155" />
         </TouchableOpacity>
-        <Text className="text-text-primary font-bold text-xl">Log Refuel</Text>
+        <Text className="text-text-primary font-bold text-xl">
+          {isEditMode ? "Edit Refuel" : "Log Refuel"}
+        </Text>
         <View className="w-10" />
       </View>
 
@@ -98,12 +124,16 @@ export default function AddRefuelScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View className="items-center mb-8">
-            <View className="w-16 h-16 bg-amber-50 rounded-full items-center justify-center mb-3">
-              <MaterialCommunityIcons name="gas-station" size={32} color="#F59E0B" />
+            <View className={`w-16 h-16 rounded-full items-center justify-center mb-3 ${isEditMode ? "bg-sky-50" : "bg-amber-50"}`}>
+              <MaterialCommunityIcons name="gas-station" size={32} color={isEditMode ? "#0EA5E9" : "#F59E0B"} />
             </View>
-            <Text className="text-text-primary text-xl font-bold">New Refuel Log</Text>
+            <Text className="text-text-primary text-xl font-bold">
+              {isEditMode ? "Update Refuel Log" : "New Refuel Log"}
+            </Text>
             <Text className="text-text-secondary text-sm mt-1 text-center px-4">
-              Enter the fuel volume and total price for the truck.
+              {isEditMode
+                ? "Modify the fuel volume, price, or details below."
+                : "Enter the fuel volume and total price for the truck."}
             </Text>
           </View>
 
@@ -192,37 +222,39 @@ export default function AddRefuelScreen() {
             </View>
 
 
-            {/* Images Selection (Optional) */}
-            <View className="z-0 pb-6">
-              <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase mb-2 ml-1">
-                Receipt / Optional Photos ({images.length}/2)
-              </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row gap-3">
-                {images.map((imgUri, index) => (
-                  <View key={index} className="relative w-24 h-24 rounded-2xl overflow-hidden border border-border shadow-sm">
-                    <Image source={imgUri} className="w-full h-full" contentFit="cover" />
-                    <TouchableOpacity
-                      onPress={() => removeImage(index)}
-                      className="absolute top-1 right-1 bg-black/50 w-6 h-6 rounded-full items-center justify-center backdrop-blur-sm"
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="close" size={16} color="#fff" />
-                    </TouchableOpacity>
-                  </View>
-                ))}
+            {/* Images Selection (Optional) — only show for new refuels */}
+            {!isEditMode && (
+              <View className="z-0 pb-6">
+                <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase mb-2 ml-1">
+                  Receipt / Optional Photos ({images.length}/2)
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row gap-3">
+                  {images.map((imgUri, index) => (
+                    <View key={index} className="relative w-24 h-24 rounded-2xl overflow-hidden border border-border shadow-sm">
+                      <Image source={imgUri} className="w-full h-full" contentFit="cover" />
+                      <TouchableOpacity
+                        onPress={() => removeImage(index)}
+                        className="absolute top-1 right-1 bg-black/50 w-6 h-6 rounded-full items-center justify-center backdrop-blur-sm"
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="close" size={16} color="#fff" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
 
-                {images.length < 2 && (
-                  <TouchableOpacity
-                    onPress={pickImage}
-                    className="w-24 h-24 rounded-2xl border-2 border-dashed border-border bg-surface items-center justify-center"
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="add" size={28} color="#94A3B8" />
-                    <Text className="text-text-secondary text-xs font-bold mt-1">Add Image</Text>
-                  </TouchableOpacity>
-                )}
-              </ScrollView>
-            </View>
+                  {images.length < 2 && (
+                    <TouchableOpacity
+                      onPress={pickImage}
+                      className="w-24 h-24 rounded-2xl border-2 border-dashed border-border bg-surface items-center justify-center"
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="add" size={28} color="#94A3B8" />
+                      <Text className="text-text-secondary text-xs font-bold mt-1">Add Image</Text>
+                    </TouchableOpacity>
+                  )}
+                </ScrollView>
+              </View>
+            )}
 
           </View>
         </ScrollView>
@@ -235,7 +267,9 @@ export default function AddRefuelScreen() {
           disabled={loading}
           activeOpacity={0.8}
           className={`h-14 rounded-xl flex-row items-center justify-center shadow-md ${
-            loading ? "bg-amber-400/70" : "bg-amber-500"
+            loading
+              ? isEditMode ? "bg-sky-400/70" : "bg-amber-400/70"
+              : isEditMode ? "bg-sky-500" : "bg-amber-500"
           }`}
         >
           {loading ? (
@@ -243,7 +277,9 @@ export default function AddRefuelScreen() {
           ) : (
             <>
               <MaterialCommunityIcons name="gas-station" size={20} color="#fff" className="mr-2" />
-              <Text className="text-white font-bold text-lg ml-2">Submit Refuel</Text>
+              <Text className="text-white font-bold text-lg ml-2">
+                {isEditMode ? "Update Refuel" : "Submit Refuel"}
+              </Text>
             </>
           )}
         </TouchableOpacity>

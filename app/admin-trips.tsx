@@ -335,9 +335,10 @@ export default function TripsListScreen() {
     adminId: t.adminId || user?.id || "",
   }));
 
+  const allTrucksOption: Truck = { id: "", plateNumber: "All Trucks", adminId: "" };
   const [showTruckMenu, setShowTruckMenu] = useState(false);
   const [trucks, setTrucks] = useState<Truck[]>(cachedTrucks);
-  const [selectedTruck, setSelectedTruck] = useState<Truck>(cachedTrucks[0] || { id: "", plateNumber: "No Trucks", adminId: "" });
+  const [selectedTruck, setSelectedTruck] = useState<Truck>(allTrucksOption);
   const [refreshingTrucks, setRefreshingTrucks] = useState(false);
 
   // Trip Pagination State
@@ -480,9 +481,9 @@ export default function TripsListScreen() {
 
             {showTruckMenu && (
               <View className="absolute right-0 top-10 bg-white rounded-2xl border border-border shadow-lg overflow-hidden min-w-[160px]" style={{ zIndex: 999, elevation: 20 }}>
-                {trucks.map((truck) => (
+                {[allTrucksOption, ...trucks].map((truck) => (
                   <TouchableOpacity
-                    key={truck.id}
+                    key={truck.id || "__all__"}
                     onPress={() => {
                       setTrips([]);
                       setSelectedTruck(truck);

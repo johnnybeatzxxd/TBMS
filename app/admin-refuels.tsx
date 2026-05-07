@@ -28,7 +28,7 @@ const getRelativeDateLabel = (dateStr: string) => {
   return `${weekdays[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}`;
 };
 
-const RefuelCard = ({ exp, onApprove, driverName }: { exp: Refuel, onApprove: (id: string) => void, driverName?: string }) => {
+const RefuelCard = ({ exp, onApprove, onEdit, driverName }: { exp: Refuel, onApprove: (id: string) => void, onEdit: (refuel: Refuel) => void, driverName?: string }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   
   return (
@@ -101,14 +101,35 @@ const RefuelCard = ({ exp, onApprove, driverName }: { exp: Refuel, onApprove: (i
           </View>
 
           {exp.approved !== "APPROVED" && (
-            <View className="flex-row justify-end pt-1">
+            <View className="flex-row gap-3 pt-1">
                <TouchableOpacity
-                 className="px-6 py-2 bg-success-500 rounded-lg flex-row items-center"
+                 className="flex-1 flex-row items-center justify-center py-2.5 bg-sky-50 rounded-lg border border-sky-100"
+                 activeOpacity={0.8}
+                 onPress={(e) => { e.stopPropagation(); onEdit(exp); }}
+               >
+                 <Ionicons name="pencil" size={14} color="#0EA5E9" style={{marginRight: 4}} />
+                 <Text className="text-sky-600 font-bold text-sm">Edit</Text>
+               </TouchableOpacity>
+               <TouchableOpacity
+                 className="flex-1 flex-row items-center justify-center py-2.5 bg-success-500 rounded-lg"
                  activeOpacity={0.8}
                  onPress={(e) => { e.stopPropagation(); onApprove(exp._id || (exp as any).id); }}
                >
-                 <Ionicons name="checkmark-circle-outline" size={16} color="#fff" style={{marginRight: 4}} />
-                 <Text className="text-white font-bold text-sm">Approve Form</Text>
+                 <Ionicons name="checkmark-circle-outline" size={14} color="#fff" style={{marginRight: 4}} />
+                 <Text className="text-white font-bold text-sm">Approve</Text>
+               </TouchableOpacity>
+            </View>
+          )}
+
+          {exp.approved === "APPROVED" && (
+            <View className="flex-row justify-end pt-1">
+               <TouchableOpacity
+                 className="px-5 py-2 bg-sky-50 rounded-lg border border-sky-100 flex-row items-center"
+                 activeOpacity={0.8}
+                 onPress={(e) => { e.stopPropagation(); onEdit(exp); }}
+               >
+                 <Ionicons name="pencil" size={14} color="#0EA5E9" style={{marginRight: 4}} />
+                 <Text className="text-sky-600 font-bold text-sm">Edit</Text>
                </TouchableOpacity>
             </View>
           )}
@@ -336,7 +357,16 @@ export default function RefuelsScreen() {
         )}
         renderItem={({ item }) => (
           <View className="px-4">
-            <RefuelCard exp={item} onApprove={handleApprove} driverName={driverMap[item.driverId]} />
+            <RefuelCard
+              exp={item}
+              onApprove={handleApprove}
+              onEdit={(refuel) => {
+                const refuelId = refuel._id || (refuel as any).id;
+                const qs = `?id=${refuelId}&liters=${refuel.liters}&price=${refuel.price}&date=${encodeURIComponent(refuel.date || "")}&location=${encodeURIComponent(refuel.location || "")}&km=${refuel.km ?? ""}&fullTank=${refuel.fullTank ?? false}`;
+                router.push(`/add-refuel${qs}` as any);
+              }}
+              driverName={driverMap[item.driverId]}
+            />
           </View>
         )}
         contentContainerStyle={{ paddingBottom: 100 }}
