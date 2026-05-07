@@ -28,7 +28,7 @@ const getRelativeDateLabel = (dateStr: string) => {
   return `${weekdays[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}`;
 };
 
-const RefuelCard = ({ exp, onApprove, onEdit, driverName }: { exp: Refuel, onApprove: (id: string) => void, onEdit: (refuel: Refuel) => void, driverName?: string }) => {
+const RefuelCard = ({ exp, onApprove, onEdit, driverName, truckLabel }: { exp: Refuel, onApprove: (id: string) => void, onEdit: (refuel: Refuel) => void, driverName?: string, truckLabel?: string }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   
   return (
@@ -47,7 +47,7 @@ const RefuelCard = ({ exp, onApprove, onEdit, driverName }: { exp: Refuel, onApp
               Fuel Refill
             </Text>
             <Text className="text-text-secondary text-xs">
-              Truck: {exp.truckId} • {exp.liters}L
+              Truck: {truckLabel || "Unknown Truck"} • {exp.liters}L
             </Text>
           </View>
         </View>
@@ -366,6 +366,7 @@ export default function RefuelsScreen() {
                 router.push(`/add-refuel${qs}` as any);
               }}
               driverName={driverMap[item.driverId]}
+              truckLabel={trucks.find(t => t.id === item.truckId)?.plateNumber}
             />
           </View>
         )}

@@ -26,7 +26,7 @@ const getInitials = (name: string) =>
 const formatCurrency = (amount: number) =>
   `$${Math.abs(amount).toFixed(2)}`;
 
-const isWithinOneMonth = (dateString?: string) => {
+const isWithinOneMonth = (dateString?: string | null) => {
   if (!dateString) return false;
   const date = new Date(dateString);
   const today = new Date();
@@ -35,12 +35,12 @@ const isWithinOneMonth = (dateString?: string) => {
   return date > today && date <= oneMonthFromNow;
 };
 
-const isExpired = (dateString?: string) => {
+const isExpired = (dateString?: string | null) => {
   if (!dateString) return false;
   return new Date(dateString) <= new Date();
 };
 
-const formatDate = (dateString?: string) => {
+const formatDate = (dateString?: string | null) => {
   if (!dateString) return "Not Set";
   const date = new Date(dateString);
   return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
@@ -132,6 +132,7 @@ export default function ProfileScreen() {
   }
 
   const accountActive = profileData?.accountActive ?? true;
+  const licenseExpiryDate = profileData?.licenceExpiryDate ?? profileData?.licenseRenewalDate ?? null;
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
@@ -290,9 +291,9 @@ export default function ProfileScreen() {
                 <Text className="text-text-secondary text-[10px] font-semibold tracking-widest uppercase">
                   License Expiry
                 </Text>
-                <Text className={`font-bold text-sm mt-0.5 ${isExpired(profileData?.licenseRenewalDate) ? "text-danger-600" : isWithinOneMonth(profileData?.licenseRenewalDate) ? "text-amber-600" : "text-text-primary"}`}>
-                  {formatDate(profileData?.licenseRenewalDate)}
-                  {isExpired(profileData?.licenseRenewalDate) ? " (Expired)" : isWithinOneMonth(profileData?.licenseRenewalDate) ? " (Expiring Soon)" : ""}
+                <Text className={`font-bold text-sm mt-0.5 ${isExpired(licenseExpiryDate) ? "text-danger-600" : isWithinOneMonth(licenseExpiryDate) ? "text-danger-600" : "text-text-primary"}`}>
+                  {formatDate(licenseExpiryDate)}
+                  {isExpired(licenseExpiryDate) ? " (Expired)" : isWithinOneMonth(licenseExpiryDate) ? " (Expiring Soon)" : ""}
                 </Text>
               </View>
             </View>
