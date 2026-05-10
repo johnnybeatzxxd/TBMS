@@ -289,7 +289,7 @@ export default function DriverDetailScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => router.push(`/admin-trips` as any)}
+              onPress={() => router.push(`/admin-trips?truckId=${encodeURIComponent(driver.truckId)}&truckPlate=${encodeURIComponent(truck?.plateNumber || "")}` as any)}
               className="flex-row items-center gap-3 bg-surface rounded-xl px-4 py-3 border border-border"
               activeOpacity={0.7}
             >
@@ -299,7 +299,7 @@ export default function DriverDetailScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => router.push(`/admin-transfers` as any)}
+              onPress={() => router.push(`/admin-transfers?driverId=${encodeURIComponent(driver.id)}&driverName=${encodeURIComponent(driver.name)}` as any)}
               className="flex-row items-center gap-3 bg-surface rounded-xl px-4 py-3 border border-border"
               activeOpacity={0.7}
             >

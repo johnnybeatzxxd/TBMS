@@ -1,12 +1,12 @@
-import { useState, useEffect, useMemo } from "react";
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert, SectionList, RefreshControl } from "react-native";
+import { useState, useEffect } from "react";
+import { View, Text, TouchableOpacity, Pressable, ScrollView, ActivityIndicator, Alert, SectionList, RefreshControl, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useAuthStore } from "@/src/store";
-import { mockExpenseService } from "@/src/api/mock/expenses.mock";
+import { useAuthStore, useCacheStore } from "@/src/store";
+import { expenseService, truckService } from "@/src/api/services";
 import { Expense } from "@/src/types";
-import { DateFilterBar, DateFilterPreset, passesDateFilter } from "@/src/components/DateFilterBar";
+import { DateFilterBar, DateFilterPreset } from "@/src/components/DateFilterBar";
 
 const getRelativeDateLabel = (dateStr: string) => {
   const [year, month, day] = dateStr.split("-").map(Number);
@@ -29,10 +29,25 @@ const getRelativeDateLabel = (dateStr: string) => {
 const ExpenseCard = ({ exp }: { exp: Expense }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const parts = exp.remark.split(" | Desc: ");
-  const expenseTitle = parts.length > 1 ? parts[0] : "Expense";
-  const expenseDesc = parts.length > 1 ? parts[1] : exp.remark;
+  let expenseTitle = exp.serviceRequest?.serviceType?.name || "Expense";
+  let expenseDesc = exp.remark || exp.serviceRequest?.description || "No description provided.";
   
+  if (exp.remark && exp.remark.includes(" | Desc: ")) {
+     const parts = exp.remark.split(" | Desc: ");
+     expenseTitle = parts[0];
+     expenseDesc = parts[1];
+  } else if (!exp.serviceRequest && exp.remark && exp.remark.includes(" | ")) {
+     const parts = exp.remark.split(" | ");
+     expenseTitle = parts[0];
+     expenseDesc = parts[1];
+  } else if (!exp.serviceRequest && exp.remark) {
+     expenseTitle = exp.remark;
+     expenseDesc = "";
+  }
+
+  const truckLabel = exp.truck?.plateNumber || exp.truckId.replace("trk_", "Truck ");
+  const dynamicData = exp.dynamicData || exp.serviceRequest?.dynamicData || null;
+
   let iconName = "receipt-outline";
   let iconColor = "#64748B";
   let iconBg = "bg-slate-100";
@@ -43,18 +58,17 @@ const ExpenseCard = ({ exp }: { exp: Expense }) => {
     iconColor = "#0EA5E9";
     iconBg = "bg-sky-50";
     iconBorder = "border-sky-100";
-  } else if (expenseTitle.includes("Maintenance")) {
+  } else if (expenseTitle.includes("Maintenance") || expenseTitle.toLowerCase().includes("engine") || expenseTitle.toLowerCase().includes("repair")) {
     iconName = "build-outline";
-    iconColor = "#1E3A8A"; // Dark blue
-    iconBg = "bg-blue-50"; // Light blue background
+    iconColor = "#1E3A8A";
+    iconBg = "bg-blue-50";
     iconBorder = "border-blue-100";
-  } else if (expenseTitle.includes("Road Expense")) {
-    iconName = "car-outline"; // Assuming car-outline fits, or "map-outline"
-    iconColor = "#10B981"; // Emerald green
+  } else if (expenseTitle.includes("Road Expense") || expenseTitle.includes("Toll")) {
+    iconName = "car-outline";
+    iconColor = "#10B981";
     iconBg = "bg-emerald-50";
     iconBorder = "border-emerald-100";
   }
-
 
   return (
     <TouchableOpacity
@@ -71,14 +85,20 @@ const ExpenseCard = ({ exp }: { exp: Expense }) => {
             <Text className="text-text-primary font-bold text-base" numberOfLines={1}>
               {expenseTitle}
             </Text>
-            <Text className="text-text-secondary text-xs">
-              Truck: {exp.truckId}
-            </Text>
+            <View className="flex-row items-center mt-0.5">
+              <Text className="text-text-secondary text-xs">
+                {truckLabel}
+              </Text>
+              <View className="w-1 h-1 rounded-full bg-border mx-2" />
+              <Text className={`text-[10px] font-bold tracking-widest uppercase ${exp.approved === 'APPROVED' ? 'text-primary' : 'text-amber-500'}`}>
+                {exp.approved}
+              </Text>
+            </View>
           </View>
         </View>
         <View className="items-end">
           <Text className="text-danger font-bold text-lg mb-0.5">
-            - ${exp.price.toFixed(2)}
+            - ${exp.amount.toFixed(2)}
           </Text>
           <Ionicons 
             name={isExpanded ? "chevron-up" : "chevron-down"} 
@@ -90,10 +110,31 @@ const ExpenseCard = ({ exp }: { exp: Expense }) => {
       
       {isExpanded && (
         <View className="mt-3 pt-3 border-t border-border/50">
-          <View className="bg-surface rounded-xl p-3 border border-border/30">
-            <Text className="text-text-secondary text-sm leading-5">
-              {expenseDesc}
-            </Text>
+          <View className="bg-surface rounded-xl p-3 border border-border/30 gap-2">
+            {expenseDesc ? (
+              <Text className="text-text-secondary text-sm leading-5">
+                {expenseDesc}
+              </Text>
+            ) : null}
+
+            {dynamicData && Object.keys(dynamicData).length > 0 && (
+              <View className="mt-2 bg-white rounded-lg p-3 border border-border">
+                <Text className="text-xs font-bold text-text-secondary tracking-widest uppercase mb-2">Form Details</Text>
+                {Object.entries(dynamicData).map(([key, value]) => (
+                  <View key={key} className="flex-row justify-between mb-1.5">
+                    <Text className="text-sm text-text-secondary">{key}:</Text>
+                    <Text className="text-sm text-text-primary font-medium">{String(value)}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            
+            {exp.receiptPic && (
+              <View className="mt-2">
+                <Text className="text-xs font-bold text-text-secondary tracking-widest uppercase mb-2">Receipt</Text>
+                <Text className="text-sm text-primary underline">View Receipt</Text>
+              </View>
+            )}
           </View>
         </View>
       )}
@@ -103,20 +144,36 @@ const ExpenseCard = ({ exp }: { exp: Expense }) => {
 
 export default function ExpensesScreen() {
   const { user } = useAuthStore();
+  const { expenses: cachedExpenses, setExpenses: setCachedExpenses } = useCacheStore();
   const [allExpenses, setAllExpenses] = useState<Expense[]>([]);
-  const [displayedExpenses, setDisplayedExpenses] = useState<Expense[]>([]);
-  const [loadingInitial, setLoadingInitial] = useState(true);
+  const [displayedExpenses, setDisplayedExpenses] = useState<Expense[]>(cachedExpenses);
+  const [loadingInitial, setLoadingInitial] = useState(cachedExpenses.length === 0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
 
-  // Date Filter State
   const [filterPreset, setFilterPreset] = useState<DateFilterPreset>("all");
   const [customFrom, setCustomFrom] = useState<Date | null>(null);
   const [customTo, setCustomTo] = useState<Date | null>(null);
 
+  const [approvedFilter, setApprovedFilter] = useState<"PENDING" | "APPROVED" | "ALL">("ALL");
+  const [amountFrom, setAmountFrom] = useState<string>("");
+  const [amountTo, setAmountTo] = useState<string>("");
+  const [selectedTruckId, setSelectedTruckId] = useState<string>("all");
+  const [trucks, setTrucks] = useState<any[]>([{ id: "all", plateNumber: "All Trucks" }]);
+  const [showFilters, setShowFilters] = useState(false);
+  const [showTruckMenu, setShowTruckMenu] = useState(false);
+
   const isDriver = user?.role === "driver";
   const isAdminOrManager = user?.role === "admin" || user?.role === "manager";
+
+  useEffect(() => {
+    if (isAdminOrManager) {
+      truckService.getMyTrucks().then(res => {
+        if ("trucks" in res) setTrucks([{ id: "all", plateNumber: "All Trucks" }, ...res.trucks]);
+      }).catch(() => {});
+    }
+  }, [isAdminOrManager]);
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = async () => {
@@ -129,16 +186,39 @@ export default function ExpensesScreen() {
     setLoadingInitial(true);
     setPage(1);
     try {
-      const res = await mockExpenseService.getMyExpenses();
-      // Apply filters first
+      const filters: any = {};
+      const now = new Date();
+      if (filterPreset === "today") {
+         filters.startDate = new Date(now.setHours(0,0,0,0)).toISOString();
+         filters.endDate = new Date(now.setHours(23,59,59,999)).toISOString();
+      } else if (filterPreset === "week") {
+         const weekAgo = new Date(); weekAgo.setDate(now.getDate() - 7);
+         filters.startDate = weekAgo.toISOString();
+         filters.endDate = new Date(now.setHours(23,59,59,999)).toISOString();
+      } else if (filterPreset === "month") {
+         const monthAgo = new Date(); monthAgo.setMonth(now.getMonth() - 1);
+         filters.startDate = monthAgo.toISOString();
+         filters.endDate = new Date(now.setHours(23,59,59,999)).toISOString();
+      } else if (filterPreset === "custom" && customFrom && customTo) {
+         filters.startDate = customFrom.toISOString();
+         filters.endDate = customTo.toISOString();
+      }
+
+      if (approvedFilter !== "ALL") filters.approved = approvedFilter;
+      if (amountFrom) filters.amountFrom = Number(amountFrom);
+      if (amountTo) filters.amountTo = Number(amountTo);
+      if (selectedTruckId !== "all") filters.truckIds = [selectedTruckId];
+
+      const res = await expenseService.getMyExpenses(filters);
       const sorted = [...res.expenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       setAllExpenses(sorted);
       
-      // Simulate pagination slice
       const limit = 6;
       const initialSlice = sorted.slice(0, limit);
       setDisplayedExpenses(initialSlice);
       setHasMore(sorted.length > limit);
+      
+      if (Object.keys(filters).length === 0) setCachedExpenses(initialSlice);
     } catch (error: any) {
       Alert.alert("Error", error.message || "Failed to load expenses");
     } finally {
@@ -148,9 +228,7 @@ export default function ExpensesScreen() {
 
   const handleLoadMore = async () => {
     if (loadingMore || !hasMore) return;
-
     setLoadingMore(true);
-    // Simulate network delay
     await new Promise(resolve => setTimeout(resolve, 800));
     
     const nextPage = page + 1;
@@ -158,7 +236,7 @@ export default function ExpensesScreen() {
     const start = (nextPage - 1) * limit;
     const end = start + limit;
     
-    const nextSlice = filteredDataFull.slice(start, end);
+    const nextSlice = allExpenses.slice(start, end);
     
     if (nextSlice.length > 0) {
       setDisplayedExpenses(prev => {
@@ -166,31 +244,19 @@ export default function ExpensesScreen() {
         return [...prev, ...newItems];
       });
       setPage(nextPage);
-      setHasMore(filteredDataFull.length > end);
+      setHasMore(allExpenses.length > end);
     } else {
       setHasMore(false);
     }
     setLoadingMore(false);
   };
 
+  // Re-fetch when preset changes or when custom dates change (if preset is custom)
   useEffect(() => {
-    loadInitialData();
-  }, []);
-
-  // When filters change, we reset pagination and re-apply filters to the full set
-  const filteredDataFull = useMemo(() => 
-    allExpenses.filter(exp => passesDateFilter(exp.date, filterPreset, customFrom, customTo)),
-    [allExpenses, filterPreset, customFrom, customTo]
-  );
-
-  useEffect(() => {
-    // Sync displayed with filtered on first page
-    const limit = 6;
-    const firstSlice = filteredDataFull.slice(0, limit);
-    setDisplayedExpenses(firstSlice);
-    setPage(1);
-    setHasMore(filteredDataFull.length > limit);
-  }, [filteredDataFull]);
+    if (filterPreset !== "custom" || (filterPreset === "custom" && customFrom && customTo)) {
+      loadInitialData();
+    }
+  }, [filterPreset, customFrom, customTo]);
 
   const groupedExpenses = displayedExpenses.reduce((acc, exp) => {
     if (!acc[exp.date]) acc[exp.date] = [];
@@ -207,31 +273,126 @@ export default function ExpensesScreen() {
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
       {/* Header */}
-      <View className="flex-row items-center justify-between px-5 pt-2 pb-4 bg-white border-b border-border shadow-sm">
+      <View className="flex-row items-center justify-between px-5 pt-2 pb-4 bg-white border-b border-border shadow-sm z-50">
         <View className="flex-row items-center">
           <Ionicons name="receipt" size={26} color="#2563EB" />
           <Text className="text-text-primary font-bold text-xl ml-2 tracking-wide">
             Expenses
           </Text>
         </View>
+        <TouchableOpacity onPress={() => setShowFilters(!showFilters)} className="bg-surface p-2 rounded-xl border border-border">
+          <Ionicons name="filter" size={20} color="#2563EB" />
+        </TouchableOpacity>
       </View>
 
+      {/* Extended Filters */}
+      {showFilters && (
+        <View className="bg-white px-5 py-4 border-b border-border shadow-sm z-40 gap-4">
+          <View className="flex-row items-center gap-3">
+            <View className="flex-1">
+              <Text className="text-xs font-bold tracking-widest text-text-secondary uppercase mb-1">Status</Text>
+              <View style={{ flexDirection: 'row', backgroundColor: '#F8FAFC', borderRadius: 8, padding: 4 }}>
+                <TouchableOpacity
+                  onPress={() => setApprovedFilter("ALL")}
+                  style={{ flex: 1, paddingVertical: 6, alignItems: 'center', borderRadius: 6, backgroundColor: approvedFilter === "ALL" ? '#FFFFFF' : 'transparent', elevation: approvedFilter === "ALL" ? 1 : 0 }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: 'bold', color: approvedFilter === "ALL" ? '#2563EB' : '#64748B' }}>ALL</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => setApprovedFilter("PENDING")}
+                  style={{ flex: 1, paddingVertical: 6, alignItems: 'center', borderRadius: 6, backgroundColor: approvedFilter === "PENDING" ? '#FFFFFF' : 'transparent', elevation: approvedFilter === "PENDING" ? 1 : 0 }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: 'bold', color: approvedFilter === "PENDING" ? '#2563EB' : '#64748B' }}>PENDING</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => setApprovedFilter("APPROVED")}
+                  style={{ flex: 1, paddingVertical: 6, alignItems: 'center', borderRadius: 6, backgroundColor: approvedFilter === "APPROVED" ? '#FFFFFF' : 'transparent', elevation: approvedFilter === "APPROVED" ? 1 : 0 }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: 'bold', color: approvedFilter === "APPROVED" ? '#2563EB' : '#64748B' }}>APPROVED</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+          
+          <View className="flex-row gap-3">
+            <View className="flex-1">
+              <Text className="text-xs font-bold tracking-widest text-text-secondary uppercase mb-1">Min Amount</Text>
+              <TextInput
+                value={amountFrom}
+                onChangeText={setAmountFrom}
+                keyboardType="numeric"
+                placeholder="0"
+                className="bg-surface border border-border rounded-xl h-10 px-3 text-sm text-text-primary"
+              />
+            </View>
+            <View className="flex-1">
+              <Text className="text-xs font-bold tracking-widest text-text-secondary uppercase mb-1">Max Amount</Text>
+              <TextInput
+                value={amountTo}
+                onChangeText={setAmountTo}
+                keyboardType="numeric"
+                placeholder="No limit"
+                className="bg-surface border border-border rounded-xl h-10 px-3 text-sm text-text-primary"
+              />
+            </View>
+          </View>
+
+          {isAdminOrManager && (
+            <View className="z-50 relative">
+              <Text className="text-xs font-bold tracking-widest text-text-secondary uppercase mb-1">Truck</Text>
+              <TouchableOpacity
+                onPress={() => setShowTruckMenu(!showTruckMenu)}
+                className="bg-surface border border-border rounded-xl h-10 px-3 flex-row items-center justify-between"
+              >
+                <Text className="text-sm text-text-primary">{trucks.find(t => t.id === selectedTruckId)?.plateNumber || "Select Truck"}</Text>
+                <Ionicons name="chevron-down" size={16} color="#64748B" />
+              </TouchableOpacity>
+              
+              {showTruckMenu && (
+                <View className="absolute top-16 left-0 right-0 bg-white border border-border rounded-xl shadow-lg z-50 overflow-hidden max-h-48">
+                  <ScrollView nestedScrollEnabled>
+                    {trucks.map(t => (
+                      <TouchableOpacity
+                        key={t.id}
+                        onPress={() => {
+                          setSelectedTruckId(t.id);
+                          setShowTruckMenu(false);
+                        }}
+                        className={`px-4 py-3 border-b border-border-light ${selectedTruckId === t.id ? "bg-primary-50" : ""}`}
+                      >
+                        <Text className={`text-sm ${selectedTruckId === t.id ? "text-primary font-bold" : "text-text-primary"}`}>{t.plateNumber}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
+          )}
+
+          <TouchableOpacity
+            onPress={() => { setShowFilters(false); loadInitialData(); }}
+            className="bg-primary rounded-xl py-3 mt-2 items-center"
+          >
+            <Text className="text-white font-bold">Apply Filters</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Date Filter */}
+      <View className="z-0">
       <DateFilterBar
         activePreset={filterPreset}
         onPresetChange={(preset) => {
           setFilterPreset(preset);
-          if (preset === "all") {
-            setCustomFrom(null);
-            setCustomTo(null);
-            loadInitialData(); // Fresh fetch
-          }
         }}
         customFrom={customFrom}
         customTo={customTo}
         onCustomFromChange={setCustomFrom}
         onCustomToChange={setCustomTo}
       />
+      </View>
 
       {/* Content */}
       <SectionList

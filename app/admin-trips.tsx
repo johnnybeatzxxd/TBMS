@@ -4,8 +4,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { router } from "expo-router";
-import { useAuthStore } from "@/src/store";
+import { router, useLocalSearchParams } from "expo-router";
+import { useAuthStore, useCacheStore } from "@/src/store";
 import { DateFilterBar, DateFilterPreset, passesDateFilter } from "@/src/components/DateFilterBar";
 import { tripService, truckService } from "@/src/api/services";
 import { Trip, Truck, GetTripsQuery } from "@/src/types";
@@ -323,6 +323,7 @@ const TripCard = ({ trip, isManager, onRefresh, onUpdateTrip, activePaymentFilte
 
 export default function TripsListScreen() {
   const { user } = useAuthStore();
+  const params = useLocalSearchParams<{ truckId?: string; truckPlate?: string }>();
   const isManager = user?.role === "admin" || (user?.role as string) === "manager";
 
   // Initialize trucks from cached profile
@@ -338,14 +339,21 @@ export default function TripsListScreen() {
   const allTrucksOption: Truck = { id: "", plateNumber: "All Trucks", adminId: "" };
   const [showTruckMenu, setShowTruckMenu] = useState(false);
   const [trucks, setTrucks] = useState<Truck[]>(cachedTrucks);
-  const [selectedTruck, setSelectedTruck] = useState<Truck>(allTrucksOption);
+
+  // Pre-select truck if navigated from driver-detail with truckId
+  const initialTruck = params.truckId
+    ? cachedTrucks.find(t => t.id === params.truckId) || { id: params.truckId, plateNumber: params.truckPlate || "Unknown", adminId: "" }
+    : allTrucksOption;
+  const [selectedTruck, setSelectedTruck] = useState<Truck>(initialTruck);
   const [refreshingTrucks, setRefreshingTrucks] = useState(false);
 
+  const { trips: cachedTrips, setTrips: setCachedTrips } = useCacheStore();
+
   // Trip Pagination State
-  const [trips, setTrips] = useState<Trip[]>([]);
+  const [trips, setTrips] = useState<Trip[]>(cachedTrips);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [loadingInitial, setLoadingInitial] = useState(true);
+  const [loadingInitial, setLoadingInitial] = useState(cachedTrips.length === 0);
   const [loadingMore, setLoadingMore] = useState(false);
 
   // Date Filter State
@@ -391,10 +399,17 @@ export default function TripsListScreen() {
     else setLoadingMore(true);
 
     try {
-      const res = await tripService.getTrips(buildQuery(pageNumber));
-      setTrips(prev => append ? [...prev, ...res.data] : res.data);
+      const query = buildQuery(pageNumber);
+      const res = await tripService.getTrips(query);
+      const newTrips = append ? [...trips, ...res.data] : res.data;
+      setTrips(newTrips);
       setPage(res.meta.currentPage);
       setTotalPages(res.meta.totalPages);
+      
+      // Update global cache if we fetched the default list (Page 1, All Trucks, CASH)
+      if (pageNumber === 1 && !append && !query.truckId && query.paymentMethod === "CASH" && query.startDate === undefined) {
+        setCachedTrips(res.data);
+      }
     } catch (e: any) {
       Alert.alert("Error", e.message || "Failed to load trips");
     } finally {

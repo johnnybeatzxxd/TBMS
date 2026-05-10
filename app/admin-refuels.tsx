@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { View, Text, TouchableOpacity, ActivityIndicator, Alert, SectionList, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
-import { useAuthStore } from "@/src/store";
+import { router, useFocusEffect } from "expo-router";
+import { useAuthStore, useCacheStore } from "@/src/store";
 import { refuelService, driverService, truckService } from "@/src/api/services";
 import { Refuel } from "@/src/types/refuel.types";
 import { DateFilterBar, DateFilterPreset, passesDateFilter } from "@/src/components/DateFilterBar";
@@ -28,7 +28,7 @@ const getRelativeDateLabel = (dateStr: string) => {
   return `${weekdays[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}`;
 };
 
-const RefuelCard = ({ exp, onApprove, onEdit, driverName, truckLabel }: { exp: Refuel, onApprove: (id: string) => void, onEdit: (refuel: Refuel) => void, driverName?: string, truckLabel?: string }) => {
+const RefuelCard = ({ exp, onApprove, onEdit, driverName }: { exp: Refuel, onApprove: (id: string) => void, onEdit: (refuel: Refuel) => void, driverName?: string }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   
   return (
@@ -47,7 +47,7 @@ const RefuelCard = ({ exp, onApprove, onEdit, driverName, truckLabel }: { exp: R
               Fuel Refill
             </Text>
             <Text className="text-text-secondary text-xs">
-              Truck: {truckLabel || "Unknown Truck"} • {exp.liters}L
+              {exp.liters}L
             </Text>
           </View>
         </View>
@@ -141,8 +141,9 @@ const RefuelCard = ({ exp, onApprove, onEdit, driverName, truckLabel }: { exp: R
 
 export default function RefuelsScreen() {
   const { user } = useAuthStore();
-  const [displayedRefuels, setDisplayedRefuels] = useState<Refuel[]>([]);
-  const [loadingInitial, setLoadingInitial] = useState(true);
+  const { refuels: cachedRefuels, setRefuels: setCachedRefuels } = useCacheStore();
+  const [displayedRefuels, setDisplayedRefuels] = useState<Refuel[]>(cachedRefuels);
+  const [loadingInitial, setLoadingInitial] = useState(cachedRefuels.length === 0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -178,6 +179,11 @@ export default function RefuelsScreen() {
       });
       setDisplayedRefuels(res.refuels || []);
       setHasMore(res.meta?.currentPage < res.meta?.totalPages);
+      
+      // Update global cache if we fetched the default list (Page 1, No Truck, No Date Filters)
+      if (!selectedTruckId && filterPreset === "all") {
+        setCachedRefuels(res.refuels || []);
+      }
     } catch (error: any) {
       Alert.alert("Error", error.message || "Failed to load refuels");
       setHasMore(false);
@@ -366,7 +372,6 @@ export default function RefuelsScreen() {
                 router.push(`/add-refuel${qs}` as any);
               }}
               driverName={driverMap[item.driverId]}
-              truckLabel={trucks.find(t => t.id === item.truckId)?.plateNumber}
             />
           </View>
         )}

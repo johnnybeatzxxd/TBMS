@@ -12,6 +12,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
+import { useCallback } from "react";
+import { BackHandler } from "react-native";
 import { useAuthStore } from "@/src/store";
 
 export default function LoginScreen() {
@@ -19,6 +22,17 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const { login, isLoading, error, clearError } = useAuthStore();
+
+  // Trap hardware back button — login is root of unauth stack; back should exit app
+  useFocusEffect(
+    useCallback(() => {
+      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+        BackHandler.exitApp();
+        return true;
+      });
+      return () => subscription.remove();
+    }, [])
+  );
 
   const handleLogin = async () => {
     if (!username.trim() || !password.trim()) {

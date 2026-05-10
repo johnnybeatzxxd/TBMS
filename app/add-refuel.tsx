@@ -5,6 +5,7 @@ import * as ImagePicker from "expo-image-picker";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { refuelService } from "@/src/api/services";
 
 export default function AddRefuelScreen() {
@@ -27,6 +28,7 @@ export default function AddRefuelScreen() {
   const [price, setPrice] = useState(params.price || "");
   const [images, setImages] = useState<string[]>([]);
   const [date, setDate] = useState(params.date ? new Date(params.date) : new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const [location, setLocation] = useState(params.location || "");
   const [km, setKm] = useState(params.km || "");
@@ -173,6 +175,45 @@ export default function AddRefuelScreen() {
                   className="bg-white border border-border rounded-xl h-14 pl-10 pr-4 text-base font-medium text-text-primary shadow-sm"
                 />
               </View>
+            </View>
+
+            {/* Date Field */}
+            <View className="z-0">
+              <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase mb-2 ml-1">
+                Refuel Date *
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowDatePicker(true)}
+                className="bg-white border border-border rounded-xl h-14 px-4 flex-row items-center justify-between shadow-sm"
+              >
+                <View className="flex-row items-center">
+                  <Ionicons name="calendar-outline" size={20} color="#94A3B8" className="mr-3" />
+                  <Text className="text-base font-medium text-text-primary ml-2">
+                    {date.toISOString().split("T")[0]}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+              </TouchableOpacity>
+              
+              {showDatePicker && (
+                <DateTimePicker
+                  value={date}
+                  mode="date"
+                  display="default"
+                  onChange={(event, selectedDate) => {
+                    if (Platform.OS === "android") setShowDatePicker(false);
+                    if (selectedDate) setDate(selectedDate);
+                  }}
+                />
+              )}
+              {Platform.OS === "ios" && showDatePicker && (
+                <TouchableOpacity
+                  onPress={() => setShowDatePicker(false)}
+                  className="mt-2 py-2 items-center bg-slate-100 rounded-lg"
+                >
+                  <Text className="text-primary font-semibold">Done</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <View className="h-px bg-border/50 my-2" />

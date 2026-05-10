@@ -2,8 +2,8 @@ import { useState, useEffect, useMemo } from "react";
 import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert, SectionList, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
-import { useAuthStore } from "@/src/store";
+import { router, useLocalSearchParams } from "expo-router";
+import { useAuthStore, useCacheStore } from "@/src/store";
 import { transferService, driverService } from "@/src/api/services";
 import { Transfer } from "@/src/types/transfer.types";
 import { DateFilterBar, DateFilterPreset, passesDateFilter } from "@/src/components/DateFilterBar";
@@ -151,9 +151,10 @@ const TransferCard = ({ tx, isManager, onApprove, onDelete, driverName }: { tx: 
 
 export default function TransfersScreen() {
   const { user } = useAuthStore();
+  const { transfers: cachedTransfers, setTransfers: setCachedTransfers } = useCacheStore();
   const [allTransfers, setAllTransfers] = useState<Transfer[]>([]);
-  const [displayedTransfers, setDisplayedTransfers] = useState<Transfer[]>([]);
-  const [loadingInitial, setLoadingInitial] = useState(true);
+  const [displayedTransfers, setDisplayedTransfers] = useState<Transfer[]>(cachedTransfers);
+  const [loadingInitial, setLoadingInitial] = useState(cachedTransfers.length === 0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -172,8 +173,16 @@ export default function TransfersScreen() {
   const [customTo, setCustomTo] = useState<Date | null>(null);
 
   // Driver Filter State
-  const [selectedDriverId, setSelectedDriverId] = useState<string>("");
+  const params = useLocalSearchParams<{ driverId?: string; driverName?: string }>();
+  const [selectedDriverId, setSelectedDriverId] = useState<string>(params.driverId || "");
   const [showDriverMenu, setShowDriverMenu] = useState(false);
+
+  // If we came with a pre-selected driver, make sure they are in the driverMap so the dropdown displays their name
+  useEffect(() => {
+    if (params.driverId && params.driverName) {
+      setDriverMap(prev => ({ ...prev, [params.driverId as string]: params.driverName as string }));
+    }
+  }, [params.driverId, params.driverName]);
 
   const isManager = user?.role === "admin" || (user?.role as string) === "manager";
 
@@ -190,6 +199,11 @@ export default function TransfersScreen() {
       });
       setDisplayedTransfers(res.transfers);
       setHasMore(res.meta?.currentPage < res.meta?.totalPages);
+      
+      // Update global cache if we fetched the default list (Page 1, No Driver, No Date Filters)
+      if (!selectedDriverId && filterPreset === "all") {
+        setCachedTransfers(res.transfers);
+      }
     } catch (error: any) {
       Alert.alert("Error", error.message || "Failed to load transfers");
       setHasMore(false);

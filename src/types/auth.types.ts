@@ -15,7 +15,7 @@ export interface User {
   id: string;
   name: string;
   username: string;
-  role: "admin" | "driver";
+  role: "admin" | "driver" | "manager";
   profile: UserProfile;
 }
 

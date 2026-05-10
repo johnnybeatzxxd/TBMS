@@ -11,7 +11,6 @@ const ADMIN_ONLY_ROUTES = [
   'admin-trips',
   'admin-expenses',
   'admin-transfers',
-  'admin-requests',
   'admin-analytics',
   'admin-refuels',
   'admin-reminders',
@@ -28,6 +27,8 @@ const ADMIN_ONLY_ROUTES = [
   'add-company',
   'add-reminder',
   'add-display',
+  'admin-forms',
+  'add-form-template',
 ];
 
 const DRIVER_ONLY_ROUTES = [
@@ -52,9 +53,17 @@ export function useRouteGuard() {
   const { user, isAuthenticated } = useAuthStore();
 
   useEffect(() => {
-    if (!isAuthenticated || !user) return;
-
     const currentSegment = segments[0] as string;
+
+    // Critical Security Fix: If not authenticated, block access to any non-auth route
+    if (!isAuthenticated || !user) {
+      if (currentSegment && currentSegment !== '(auth)' && currentSegment !== 'index') {
+        console.log(`[GUARD] Unauthenticated user tried to access protected route: ${currentSegment}. Redirecting.`);
+        router.replace('/(auth)/login');
+      }
+      return;
+    }
+
     if (!currentSegment) return;
 
     const role = user.role;

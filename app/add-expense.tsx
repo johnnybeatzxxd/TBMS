@@ -14,7 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { mockExpenseService } from "@/src/api/mock/expenses.mock";
+import { expenseService } from "@/src/api/services";
 
 type ExpenseType = "Refuel" | "Maintenance" | "Others";
 type MaintenanceType = "Oil" | "Tires" | "Brakes" | "Engine" | "Other";
@@ -84,14 +84,12 @@ export default function AddExpenseModal() {
 
     setLoading(true);
     try {
-      // Mock driver truck ID (since we don't have driver profile logic implemented yet pulling a specific truck)
-      const mockAssignedTruckId = "trk_101";
-
-        await mockExpenseService.addExpense(mockAssignedTruckId, {
-          remark: finalRemark,
-          price: parsedPrice,
-          date: formattedDate,
-        });
+      await expenseService.addExpense("", {
+        remark: finalRemark,
+        price: parsedPrice,
+        date: formattedDate,
+      });
+      Alert.alert("Success", "Expense registered successfully.");
       router.back();
     } catch (error: any) {
       Alert.alert("Error", error.message || "Failed to add expense");

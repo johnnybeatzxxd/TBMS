@@ -173,6 +173,14 @@ export default function DriverDashboardScreen() {
       bgColor: "#DCFCE7",
       route: "/driver-transfers",
     },
+    {
+      id: "requests",
+      title: "Requests",
+      icon: "clipboard-text-outline",
+      color: "#8B5CF6",
+      bgColor: "#EDE9FE",
+      route: "/admin-requests",
+    },
   ];
 
   return (

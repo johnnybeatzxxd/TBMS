@@ -5,8 +5,8 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useState, useEffect } from "react";
 import { Ionicons, MaterialCommunityIcons, Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useAuthStore } from "@/src/store";
-import { tripService, transferService, reminderService } from "@/src/api/services";
+import { useAuthStore, useCacheStore } from "@/src/store";
+import { tripService, transferService, reminderService, expenseService, refuelService, formService } from "@/src/api/services";
 
 export default function AdminDashboardScreen() {
   const { user, logout } = useAuthStore();
@@ -37,25 +37,46 @@ export default function AdminDashboardScreen() {
   const [pendingTransfersCount, setPendingTransfersCount] = useState(0);
   const [pendingRemindersCount, setPendingRemindersCount] = useState(0);
 
-  // Dynamically calculate KPIs simply by grabbing first pages and aggregating locally
+  const { setTrips, setTransfers, setExpenses, setRefuels, setRequests } = useCacheStore();
+
+  // Dynamically calculate KPIs and pre-fetch list data into the global cache
   useFocusEffect(
     useCallback(() => {
-      const fetchLocalKPIs = async () => {
+      const prefetchAllData = async () => {
         try {
-          const [tripsRes, transfersRes, remindersRes] = await Promise.allSettled([
+          const [tripsRes, transfersRes, remindersRes, expensesRes, refuelsRes, requestsRes] = await Promise.allSettled([
             tripService.getTrips({ page: 1, paymentMethod: "CASH" }),
             transferService.getTransfers({ page: 1 }),
-            reminderService.getPendingRemindersAdmin()
+            reminderService.getPendingRemindersAdmin(),
+            expenseService.getMyExpenses(),
+            refuelService.getRefuels({}),
+            formService.getFormSubmissions()
           ]);
           
           if (tripsRes.status === "fulfilled") {
-            const pendingTrips = tripsRes.value.data.filter((t: any) => t.approved !== "APPROVED");
+            const fetchedTrips = tripsRes.value.data;
+            setTrips(fetchedTrips);
+            const pendingTrips = fetchedTrips.filter((t: any) => t.approved !== "APPROVED");
             setPendingTripsCount(pendingTrips.length);
           }
 
           if (transfersRes.status === "fulfilled") {
-            const pendingTransfers = transfersRes.value.transfers.filter((t: any) => t.status === "PENDING" || t.approved === "PENDING");
+            const fetchedTransfers = transfersRes.value.transfers;
+            setTransfers(fetchedTransfers);
+            const pendingTransfers = fetchedTransfers.filter((t: any) => t.status === "PENDING" || t.approved === "PENDING");
             setPendingTransfersCount(pendingTransfers.length);
+          }
+
+          if (expensesRes.status === "fulfilled") {
+            setExpenses(expensesRes.value.expenses);
+          }
+
+          if (refuelsRes.status === "fulfilled") {
+            setRefuels(refuelsRes.value.refuels);
+          }
+
+          if (requestsRes.status === "fulfilled") {
+            setRequests(requestsRes.value.submissions);
           }
 
           if (remindersRes.status === "fulfilled") {
@@ -65,7 +86,7 @@ export default function AdminDashboardScreen() {
           console.log("[Dashboard] Failed fetching modular KPIs locally:", e);
         }
       };
-      fetchLocalKPIs();
+      prefetchAllData();
     }, [])
   );
 
@@ -91,6 +112,7 @@ export default function AdminDashboardScreen() {
       title: "Administration",
       items: [
         { id: "manage", title: "System Configuration", subtitle: "Drivers, Trucks & Companies", icon: "settings", route: "/admin-manage", color: "#64748B", unread: 0 },
+        { id: "forms", title: "Form Builder", subtitle: "Create custom request forms", icon: "construct", route: "/admin-forms", color: "#6366F1", unread: 0 },
         { id: "displays", title: "Billboard", subtitle: "Live driver announcement config", icon: "chatbubbles", route: "/admin-displays", color: "#3B82F6", unread: 0 },
         { id: "reminders", title: "Reminders", subtitle: "Alerts & Scheduled Notifs", icon: "notifications", route: "/admin-reminders", color: "#8B5CF6", unread: pendingRemindersCount },
         { id: "analytics", title: "Reports & Analytics", subtitle: "Export CSV and view fleet trends", icon: "bar-chart", route: "/admin-analytics", color: "#F43F5E", unread: 0 },
@@ -103,11 +125,7 @@ export default function AdminDashboardScreen() {
       <StatusBar style="light" />
       {/* Enterprise Header Banner */}
       <View className="flex-row items-center justify-between px-5 pt-3 pb-4 bg-slate-900" style={{ zIndex: 10 }}>
-        <TouchableOpacity 
-          className="flex-row items-center gap-3 flex-1"
-          activeOpacity={0.8}
-          onPress={() => router.push("/profile")}
-        >
+        <View className="flex-row items-center gap-3 flex-1">
           <View className="w-11 h-11 rounded-xl bg-slate-800 items-center justify-center border border-slate-700">
              <Ionicons name="shield-checkmark" size={20} color="#38BDF8" />
           </View>
@@ -119,7 +137,7 @@ export default function AdminDashboardScreen() {
               {user?.name || "Administrator"}
             </Text>
           </View>
-        </TouchableOpacity>
+        </View>
 
         <TouchableOpacity 
           onPress={handleLogout} 

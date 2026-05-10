@@ -3,14 +3,13 @@ import { View, Text, TouchableOpacity, ScrollView, SectionList, ActivityIndicato
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
-import { useAuthStore } from "@/src/store";
+import { useAuthStore, useCacheStore } from "@/src/store";
 import { DateFilterBar, DateFilterPreset } from "@/src/components/DateFilterBar";
-import { mockRequestsService } from "@/src/api/mock/requests.mock";
-import { ServiceRequest, RequestStatus } from "@/src/types/request.types";
-import { mockTruckService } from "@/src/api/mock/trucks.mock";
+import { formService, truckService } from "@/src/api/services";
+import { FormSubmission } from "@/src/types/form.types";
 
 const getRelativeDateLabel = (dateStr: string) => {
-  const parts = dateStr.split("-");
+  const parts = dateStr.split("T")[0].split("-");
   if (parts.length !== 3) return dateStr;
   
   const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
@@ -31,20 +30,34 @@ const getRelativeDateLabel = (dateStr: string) => {
 
 const formatCurrency = (n?: number) => n ? n.toLocaleString("en-US") : "0";
 
-const StatusBadge = ({ status }: { status: RequestStatus }) => {
+const StatusBadge = ({ status }: { status: string }) => {
   switch (status) {
-    case "accepted":
+    case "APPROVED":
       return (
         <View className="bg-success-100 px-2 py-0.5 rounded flex-row items-center gap-1 border border-success-200">
           <Ionicons name="checkmark-circle" size={12} color="#16A34A" />
-          <Text className="text-success-700 text-[10px] font-bold uppercase tracking-wider">Accepted</Text>
+          <Text className="text-success-700 text-[10px] font-bold uppercase tracking-wider">Approved</Text>
         </View>
       );
-    case "declined":
+    case "DECLINED":
       return (
         <View className="bg-danger-100 px-2 py-0.5 rounded flex-row items-center gap-1 border border-danger-200">
           <Ionicons name="close-circle" size={12} color="#DC2626" />
           <Text className="text-danger-700 text-[10px] font-bold uppercase tracking-wider">Declined</Text>
+        </View>
+      );
+    case "PROCEED":
+      return (
+        <View className="bg-blue-100 px-2 py-0.5 rounded flex-row items-center gap-1 border border-blue-200">
+          <Ionicons name="arrow-forward-circle" size={12} color="#2563EB" />
+          <Text className="text-blue-700 text-[10px] font-bold uppercase tracking-wider">Proceed</Text>
+        </View>
+      );
+    case "COMPLETED":
+      return (
+        <View className="bg-indigo-100 px-2 py-0.5 rounded flex-row items-center gap-1 border border-indigo-200">
+          <Ionicons name="checkmark-done" size={12} color="#6366F1" />
+          <Text className="text-indigo-700 text-[10px] font-bold uppercase tracking-wider">Completed</Text>
         </View>
       );
     default:
@@ -57,8 +70,11 @@ const StatusBadge = ({ status }: { status: RequestStatus }) => {
   }
 };
 
-const RequestCard = ({ req, isManager, onStatusUpdate }: { req: ServiceRequest, isManager: boolean, onStatusUpdate: (id: string, status: RequestStatus) => void }) => {
+const RequestCard = ({ req, isManager, isDriver, onStatusUpdate }: { req: FormSubmission, isManager: boolean, isDriver: boolean, onStatusUpdate: (id: string, action: string) => void }) => {
   const [expanded, setExpanded] = useState(false);
+
+  // Filter out empty values and render dynamic fields
+  const filledValues = Object.entries(req.values || {}).filter(([_, v]) => v !== undefined && v !== null && v !== "");
 
   return (
     <TouchableOpacity
@@ -74,11 +90,14 @@ const RequestCard = ({ req, isManager, onStatusUpdate }: { req: ServiceRequest, 
           </View>
           <View className="flex-1">
             <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase mb-0.5">
-              {req.truckId.replace("trk_", "Truck ")}
+              {req.truckPlate || "Unknown Truck"}
             </Text>
             <Text className="text-text-primary font-bold text-base" numberOfLines={1}>
-              {req.type}
+              {req.templateName}
             </Text>
+            {isManager && req.driverName && (
+              <Text className="text-primary-600 text-[10px] mt-0.5">{req.driverName}</Text>
+            )}
           </View>
         </View>
         <StatusBadge status={req.status} />
@@ -87,46 +106,153 @@ const RequestCard = ({ req, isManager, onStatusUpdate }: { req: ServiceRequest, 
       {/* Expanded Actions & Info */}
       {expanded && (
         <View className="px-4 pb-4 bg-surface/50 border-t border-border pt-4 gap-4">
-          <View>
-             <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase">Description</Text>
-             <Text className="text-text-primary text-sm mt-1">{req.description}</Text>
-          </View>
-
-          {req.amount ? (
+          
+          {/* Amount */}
+          {req.amount > 0 && (
             <View>
-              <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase">Requested Amount</Text>
-              <Text className="text-text-primary font-bold text-lg mt-0.5 text-danger-600">${formatCurrency(req.amount)}</Text>
+              <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase mb-1">Total Amount</Text>
+              <Text className="text-text-primary font-bold text-xl text-danger-600">${formatCurrency(req.amount)}</Text>
+            </View>
+          )}
+
+          {/* Description / Remark */}
+          {req.description ? (
+            <View>
+              <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase mb-1">Description</Text>
+              <Text className="text-text-primary text-sm leading-5">{req.description}</Text>
             </View>
           ) : null}
 
-          {/* Manager Actions */}
-          {isManager && req.status === "pending" && (
+          {/* Date */}
+          {req.date && (
+            <View>
+              <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase mb-1">Date</Text>
+              <Text className="text-text-primary text-sm">{new Date(req.date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}</Text>
+            </View>
+          )}
+
+          {/* Approval Type */}
+          <View>
+            <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase mb-1">Approval Type</Text>
+            <Text className="text-text-primary text-sm font-medium">{req.requiresApproval ? "Requires Admin Approval" : "Auto-Approved"}</Text>
+          </View>
+
+          {/* Render dynamic form values */}
+          {filledValues.length > 0 && (
+            <View className="bg-white border border-border rounded-xl p-3 gap-3">
+              <Text className="text-text-secondary text-[10px] font-bold tracking-widest uppercase mb-1">Form Details</Text>
+              {filledValues.map(([fieldLabel, value], index) => (
+                <View key={fieldLabel} className={`flex-row justify-between ${index > 0 ? "border-t border-border/50 pt-2" : ""}`}>
+                  <Text className="text-text-secondary text-sm">{fieldLabel}</Text>
+                  <Text className="text-text-primary text-sm font-medium">{String(value)}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Manager Actions — PENDING */}
+          {isManager && req.status === "PENDING" && (
+            <View className="flex-row gap-3 mt-2 border-t border-border pt-4">
+              {req.requiresApproval ? (
+                /* requiresApproval === true → show Proceed + Decline */
+                <>
+                  <TouchableOpacity
+                    className="flex-1 bg-primary py-2.5 rounded-xl items-center"
+                    activeOpacity={0.8}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      onStatusUpdate(req.id, "PROCEED");
+                    }}
+                  >
+                    <Text className="text-white font-bold text-sm">Proceed</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    className="flex-[0.7] bg-white border border-danger-500 py-2.5 rounded-xl items-center"
+                    activeOpacity={0.8}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      onStatusUpdate(req.id, "DECLINED");
+                    }}
+                  >
+                    <Text className="text-danger-600 font-bold text-sm">Decline</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                /* requiresApproval === false → show Approve + Decline */
+                <>
+                  <TouchableOpacity
+                    className="flex-1 bg-success-500 py-2.5 rounded-xl items-center"
+                    activeOpacity={0.8}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      onStatusUpdate(req.id, "APPROVED");
+                    }}
+                  >
+                    <Text className="text-white font-bold text-sm">Approve</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    className="flex-[0.7] bg-white border border-danger-500 py-2.5 rounded-xl items-center"
+                    activeOpacity={0.8}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      onStatusUpdate(req.id, "DECLINED");
+                    }}
+                  >
+                    <Text className="text-danger-600 font-bold text-sm">Decline</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          )}
+
+          {/* Driver Actions */}
+          {isDriver && (req.status === "PENDING" || req.status === "PROCEED") && (
             <View className="flex-row gap-3 mt-2 border-t border-border pt-4">
               <TouchableOpacity
-                className="flex-1 bg-success-500 py-2.5 rounded-xl items-center"
+                className="flex-1 bg-white border border-primary py-2.5 rounded-xl items-center"
                 activeOpacity={0.8}
                 onPress={(e) => {
                   e.stopPropagation();
-                  onStatusUpdate(req.id, "accepted");
+                  router.push(`/add-request?id=${req.id}`);
                 }}
               >
-                <Text className="text-white font-bold text-sm">Accept</Text>
+                <Text className="text-primary font-bold text-sm">Edit Request</Text>
               </TouchableOpacity>
+              
+              {req.status === "PROCEED" && (
+                <TouchableOpacity
+                  className="flex-1 bg-indigo-500 py-2.5 rounded-xl items-center"
+                  activeOpacity={0.8}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    onStatusUpdate(req.id, "COMPLETED");
+                  }}
+                >
+                  <Text className="text-white font-bold text-sm">Mark Completed</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
+          {/* Manager Action — COMPLETED: Final Approve */}
+          {isManager && req.status === "COMPLETED" && (
+            <View className="mt-2 border-t border-border pt-4">
               <TouchableOpacity
-                className="flex-[0.7] bg-white border border-danger-500 py-2.5 rounded-xl items-center"
+                className="bg-success-500 py-2.5 rounded-xl items-center"
                 activeOpacity={0.8}
                 onPress={(e) => {
                   e.stopPropagation();
-                  onStatusUpdate(req.id, "declined");
+                  onStatusUpdate(req.id, "APPROVED");
                 }}
               >
-                <Text className="text-danger-600 font-bold text-sm">Decline</Text>
+                <Text className="text-white font-bold text-sm">Approve</Text>
               </TouchableOpacity>
             </View>
           )}
 
           <View className="flex-row items-center justify-between border-t border-border pt-3 mt-1">
-            <Text className="text-text-secondary text-xs">Generated on: {new Date(req.createdAt).toLocaleDateString()}</Text>
+            <Text className="text-text-secondary text-xs">Created: {new Date(req.createdAt).toLocaleDateString()}</Text>
+            <Text className="text-text-secondary text-xs">Updated: {new Date(req.updatedAt).toLocaleDateString()}</Text>
           </View>
         </View>
       )}
@@ -137,10 +263,11 @@ const RequestCard = ({ req, isManager, onStatusUpdate }: { req: ServiceRequest, 
 export default function RequestsScreen() {
   const { user } = useAuthStore();
   const isManager = user?.role === "manager" || user?.role === "admin";
+  const { requests: cachedRequests, setRequests: setCachedRequests } = useCacheStore();
   
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(cachedRequests.length === 0);
   const [refreshing, setRefreshing] = useState(false);
-  const [requests, setRequests] = useState<ServiceRequest[]>([]);
+  const [requests, setRequests] = useState<FormSubmission[]>(cachedRequests);
   const [trucks, setTrucks] = useState<any[]>([{ id: "all", plateNumber: "All Trucks" }]);
   const [selectedTruck, setSelectedTruck] = useState<any>({ id: "all", plateNumber: "All Trucks" });
   const [showTruckMenu, setShowTruckMenu] = useState(false);
@@ -152,7 +279,7 @@ export default function RequestsScreen() {
   useEffect(() => {
     if (isManager) {
       (async () => {
-        const res = await mockTruckService.getMyTrucks();
+        const res = await truckService.getMyTrucks();
         if ("trucks" in res) {
           setTrucks([{ id: "all", plateNumber: "All Trucks" }, ...res.trucks]);
         }
@@ -162,17 +289,100 @@ export default function RequestsScreen() {
 
   const loadRequests = useCallback(async () => {
     setLoading(true);
-    const res = await mockRequestsService.getRequests({
-      preset: filterPreset,
-      customFrom,
-      customTo,
-      truckId: selectedTruck.id,
-      role: user?.role as any,
-      driverId: user?.id,
-    });
-    setRequests(res.requests);
-    setLoading(false);
-  }, [filterPreset, customFrom, customTo, selectedTruck, user]);
+    try {
+      const promises: Promise<any>[] = [
+        formService.getFormSubmissions(),
+      ];
+      if (isManager) {
+        promises.push(truckService.getMyTrucks().catch(() => ({ trucks: [] })));
+      }
+      
+      const [res, trucksRes] = await Promise.all(promises);
+
+      // Get unique template IDs from submissions and fetch full details for each
+      const uniqueTemplateIds = [...new Set(
+        res.submissions.map((s: FormSubmission) => s.templateId).filter(Boolean)
+      )] as string[];
+      
+      const templateResults = await Promise.all(
+        uniqueTemplateIds.map((id: string) => formService.getFormTemplate(id).catch(() => null))
+      );
+
+      const templatesDict: Record<string, { name: string; requiresApproval: boolean }> = {};
+      templateResults.forEach((t: any) => {
+        if (t) templatesDict[t.id] = { name: t.name, requiresApproval: t.requiresApproval };
+      });
+
+      const trucksDict: Record<string, string> = {};
+      if (trucksRes && trucksRes.trucks) {
+        trucksRes.trucks.forEach((t: any) => trucksDict[t.id] = t.plateNumber);
+      }
+
+      let filtered = res.submissions.map((s: FormSubmission) => {
+        // Look up template info
+        const tpl = templatesDict[s.templateId];
+        if (s.templateName === "Unknown" && tpl) {
+          s.templateName = tpl.name;
+        }
+        // Always apply requiresApproval from template if available
+        if (tpl) {
+          s.requiresApproval = tpl.requiresApproval;
+        }
+        if (!s.truckPlate || s.truckPlate === "Unknown" || s.truckPlate.trim() === "") {
+          if (isManager && trucksDict[s.truckId]) {
+            s.truckPlate = trucksDict[s.truckId];
+          } else if (!isManager) {
+            s.truckPlate = "My Truck";
+          }
+        }
+        return s;
+      });
+      
+      // Filter by role
+      if (!isManager && user?.id) {
+        filtered = filtered.filter((s: FormSubmission) => s.driverId === user.id);
+      }
+      
+      // Filter by truck
+      if (selectedTruck.id !== "all") {
+        filtered = filtered.filter((s: FormSubmission) => s.truckId === selectedTruck.id);
+      }
+      
+      // Filter by date preset (simplified for UI demonstration)
+      if (filterPreset !== "all") {
+         const now = new Date();
+         filtered = filtered.filter((s: FormSubmission) => {
+           const d = new Date(s.createdAt);
+           if (filterPreset === "today") return d.toDateString() === now.toDateString();
+           if (filterPreset === "week") {
+              const weekAgo = new Date(); weekAgo.setDate(now.getDate() - 7);
+              return d >= weekAgo;
+           }
+           if (filterPreset === "month") {
+              const monthAgo = new Date(); monthAgo.setMonth(now.getMonth() - 1);
+              return d >= monthAgo;
+           }
+           if (filterPreset === "custom" && customFrom && customTo) {
+             return d >= customFrom && d <= customTo;
+           }
+           return true;
+         });
+      }
+      
+      setRequests(filtered);
+      
+      // Update cache only if there are no filters applied
+      if (!isManager && filterPreset === "all") {
+        setCachedRequests(res.submissions);
+      } else if (isManager && selectedTruck.id === "all" && filterPreset === "all") {
+        setCachedRequests(res.submissions);
+      }
+    } catch (e: any) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [filterPreset, customFrom, customTo, selectedTruck, user, isManager]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -188,18 +398,43 @@ export default function RequestsScreen() {
     }, [loadRequests])
   );
 
-  const handleStatusUpdate = async (id: string, status: RequestStatus) => {
-    // Optimistic UI update
-    setRequests(prev => prev.map(r => r.id === id ? { ...r, status } : r));
-    await mockRequestsService.updateStatus(id, status);
+  const isDriver = user?.role === "driver";
+
+  const handleStatusUpdate = async (id: string, action: string) => {
+    console.log(`[Requests] Status update: id=${id}, action=${action}`);
+    setRequests(prev => prev.map(r => r.id === id ? { ...r, status: action as any } : r));
+    try {
+      switch (action) {
+        case "PROCEED":
+          console.log(`[Requests] Calling markProceed for ${id}`);
+          await formService.markProceed(id);
+          break;
+        case "COMPLETED":
+          console.log(`[Requests] Calling markCompleted for ${id}`);
+          await formService.markCompleted(id);
+          break;
+        case "APPROVED":
+          console.log(`[Requests] Calling markApproved for ${id}`);
+          await formService.markApproved(id);
+          break;
+        case "DECLINED":
+          console.log(`[Requests] Calling markDeclined for ${id}`);
+          await formService.markDeclined(id);
+          break;
+      }
+    } catch (e: any) {
+       console.error("Failed to update status", e);
+       loadRequests();
+    }
   };
 
   const groupedData = useMemo(() => {
     const grouped = requests.reduce((acc, req) => {
-      if (!acc[req.date]) acc[req.date] = [];
-      acc[req.date].push(req);
+      const date = req.createdAt.split("T")[0];
+      if (!acc[date]) acc[date] = [];
+      acc[date].push(req);
       return acc;
-    }, {} as Record<string, ServiceRequest[]>);
+    }, {} as Record<string, FormSubmission[]>);
 
     return Object.entries(grouped)
       .sort((a, b) => new Date(b[0]).getTime() - new Date(a[0]).getTime())
@@ -214,9 +449,11 @@ export default function RequestsScreen() {
     <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
       {/* Header */}
       <View className="bg-primary z-50 elevation-10 shadow-sm relative pt-4 pb-20 px-5 rounded-b-[40px]">
-        {/* Title Row */}
-        <View className="flex-row items-center justify-between mb-4">
-          <View>
+        <View className="flex-row items-center gap-3 mb-4">
+          <TouchableOpacity onPress={() => router.back()} className="w-8 h-8 rounded-full bg-white/20 items-center justify-center">
+            <Ionicons name="arrow-back" size={20} color="#fff" />
+          </TouchableOpacity>
+          <View className="flex-1">
             <Text className="text-white text-2xl font-bold tracking-wide">Requests</Text>
             <Text className="text-white/70 text-sm mt-0.5">
               {isManager ? "Manage driver requests" : "Track your requests"}
@@ -276,12 +513,12 @@ export default function RequestsScreen() {
           <View className="w-px h-8 bg-border" />
           <View className="items-center flex-1">
             <Text className="text-amber-500 text-[10px] font-bold tracking-widest uppercase mb-1">Pending</Text>
-            <Text className="text-text-primary font-black text-xl">{requests.filter(r => r.status === "pending").length}</Text>
+            <Text className="text-text-primary font-black text-xl">{requests.filter(r => r.status === "PENDING").length}</Text>
           </View>
           <View className="w-px h-8 bg-border" />
           <View className="items-center flex-1">
-            <Text className="text-success-500 text-[10px] font-bold tracking-widest uppercase mb-1">Accepted</Text>
-            <Text className="text-text-primary font-black text-xl">{requests.filter(r => r.status === "accepted").length}</Text>
+            <Text className="text-success-500 text-[10px] font-bold tracking-widest uppercase mb-1">Approved</Text>
+            <Text className="text-text-primary font-black text-xl">{requests.filter(r => r.status === "APPROVED").length}</Text>
           </View>
         </View>
       </View>
@@ -328,7 +565,7 @@ export default function RequestsScreen() {
             </View>
           )}
           renderItem={({ item }) => (
-            <RequestCard req={item} isManager={isManager} onStatusUpdate={handleStatusUpdate} />
+            <RequestCard req={item} isManager={isManager} isDriver={isDriver} onStatusUpdate={handleStatusUpdate} />
           )}
         />
       )}

@@ -70,6 +70,7 @@ export default function RootLayout() {
         <Stack.Screen name="admin-reminders" options={{ headerShown: false }} />
         <Stack.Screen name="admin-displays" options={{ headerShown: false }} />
         <Stack.Screen name="admin-manage" options={{ headerShown: false }} />
+        <Stack.Screen name="admin-forms" options={{ headerShown: false }} />
         <Stack.Screen name="drivers" options={{ headerShown: false }} />
         <Stack.Screen name="driver-detail" options={{ headerShown: false }} />
         <Stack.Screen name="trucks" options={{ headerShown: false }} />
@@ -120,6 +121,10 @@ export default function RootLayout() {
         />
         <Stack.Screen
           name="add-display"
+          options={{ presentation: "modal", headerShown: false }}
+        />
+        <Stack.Screen
+          name="add-form-template"
           options={{ presentation: "modal", headerShown: false }}
         />
       </Stack>

@@ -1,0 +1,97 @@
+// This is your Prisma schema file,
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// session
+model Session {
+  id        String   @id
+  sid       String   @unique
+  data      String
+  expiresAt DateTime
+}
+
+enum Volume {
+  MCUBE10
+  MCUBE16
+}
+
+enum Payment {
+  CASH
+  DISPATCH
+}
+
+enum Role {
+  ADMIN
+  DRIVER
+}
+
+model Truck {
+  id          String   @id @default(cuid())
+  plateNumber String   @unique
+  vinNumber   String?  @unique
+  driver      Driver?  // A truck has one driver
+  admin       Admin    @relation(fields: [adminId], references: [id])
+  adminId     String
+}
+
+model Driver {
+  id        String   @id @default(cuid())
+  name      String
+  truck     Truck   @relation(fields: [truckId], references: [id])
+  truckId   String  @unique // Must be unique for 1-to-1
+  company   Admin    @relation(fields: [adminId], references: [id])
+  adminId   String
+  account   Account @relation(fields: [accountId], references: [id])
+  accountId String  @unique
+  accountActive Boolean @default(true)
+}
+
+model Admin {
+  id        String   @id @default(cuid())
+  name      String
+  trucks    Truck[]
+  drivers   Driver[]
+  account   Account? @relation(fields: [accountId], references: [id])
+  accountId String?
+}
+
+model Account {
+  id       String   @id @default(cuid())
+  username String   @unique
+  password String
+  role     Role
+  drivers  Driver[]
+  admins   Admin[]
+}
+
+model Trip {
+  id              String   @id @default(cuid())
+  date            DateTime
+  loadingSite     String
+  destinationSite String
+  volume          Volume
+  paymentMethod   Payment  @default(CASH)
+  amount          Int?
+  numberOfTrips   Int      @default(1)
+}
+
+model Refuel {
+  id    String   @id @default(cuid())
+  date  DateTime
+  price Int
+  vol   Int
+}
+
+model DriverExpenses {
+  id     String   @id @default(cuid())
+  date   DateTime
+  remark String
+  amount Int
+}
