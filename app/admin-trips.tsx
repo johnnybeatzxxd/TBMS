@@ -43,9 +43,10 @@ const getGroupedTrips = (trips: Trip[]) => {
   }));
 };
 
-const TripCard = ({ trip, isManager, onRefresh, onUpdateTrip, activePaymentFilter }: { trip: Trip, isManager: boolean, onRefresh: () => void, onUpdateTrip?: (updatedTrip: Trip) => void, activePaymentFilter: "CASH" | "CREDIT" }) => {
+const TripCard = ({ trip, isManager, onRefresh, onUpdateTrip, onDelete, activePaymentFilter }: { trip: Trip, isManager: boolean, onRefresh: () => void, onUpdateTrip?: (updatedTrip: Trip) => void, onDelete?: (tripId: string) => void, activePaymentFilter: "CASH" | "CREDIT" }) => {
   const [expanded, setExpanded] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Determine the trip type: use companyId presence or fall back to the active filter
   const tripPaymentType = trip.companyId ? "CREDIT" : (trip.paymentMethod || activePaymentFilter);
@@ -64,6 +65,19 @@ const TripCard = ({ trip, isManager, onRefresh, onUpdateTrip, activePaymentFilte
       Alert.alert("Error", err.message || "Approval failed.");
     } finally {
       setApproving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      const res = await tripService.deleteTrip(trip.id, tripPaymentType as "CASH" | "CREDIT");
+      Alert.alert("Deleted", res.message || "Trip deleted successfully.");
+      if (onDelete) onDelete(trip.id);
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Failed to delete trip.");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -299,8 +313,8 @@ const TripCard = ({ trip, isManager, onRefresh, onUpdateTrip, activePaymentFilte
                       ]
                     );
                   }}
-                  disabled={approving}
-                  className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-xl bg-success-50 border border-success-200"
+                  disabled={approving || deleting}
+                  className="flex-[1.5] flex-row items-center justify-center gap-2 py-3 rounded-xl bg-success-50 border border-success-200"
                   activeOpacity={0.7}
                 >
                   {approving ? (
@@ -310,6 +324,32 @@ const TripCard = ({ trip, isManager, onRefresh, onUpdateTrip, activePaymentFilte
                       <Ionicons name="checkmark-circle" size={18} color="#16A34A" />
                       <Text className="text-success-700 font-bold text-sm">Accept</Text>
                     </>
+                  )}
+                </TouchableOpacity>
+              )}
+
+              {/* Delete Button (for non-approved trips only) */}
+              {trip.approved !== "APPROVED" && (
+                <TouchableOpacity
+                  onPress={(e) => {
+                    e.stopPropagation?.();
+                    Alert.alert(
+                      "Delete Trip",
+                      `Are you sure you want to delete this trip to ${trip.destinationSite}?`,
+                      [
+                        { text: "Cancel", style: "cancel" },
+                        { text: "Delete", style: "destructive", onPress: handleDelete }
+                      ]
+                    );
+                  }}
+                  disabled={deleting || approving}
+                  className="w-12 items-center justify-center py-3 rounded-xl bg-danger-50 border border-danger-200"
+                  activeOpacity={0.7}
+                >
+                  {deleting ? (
+                    <ActivityIndicator size="small" color="#DC2626" />
+                  ) : (
+                    <Ionicons name="trash" size={18} color="#DC2626" />
                   )}
                 </TouchableOpacity>
               )}
@@ -436,6 +476,10 @@ export default function TripsListScreen() {
     if (!loadingMore && !loadingInitial && page < totalPages) {
       loadTrips(page + 1, true);
     }
+  };
+
+  const handleDeleteTripInList = (tripId: string) => {
+    setTrips(prev => prev.filter(t => t.id !== tripId));
   };
 
   const handleUpdateTripInList = (updatedTrip: Trip) => {
@@ -738,7 +782,7 @@ export default function TripsListScreen() {
           </Text>
         )}
         renderItem={({ item }) => (
-          <TripCard trip={item} isManager={isManager} onRefresh={() => loadTrips(1)} onUpdateTrip={handleUpdateTripInList} activePaymentFilter={paymentFilter} />
+          <TripCard trip={item} isManager={isManager} onRefresh={() => loadTrips(1)} onUpdateTrip={handleUpdateTripInList} onDelete={handleDeleteTripInList} activePaymentFilter={paymentFilter} />
         )}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}

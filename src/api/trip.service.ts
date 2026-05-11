@@ -119,4 +119,20 @@ export const tripService = {
       },
     };
   },
+
+  /**
+   * Delete a non-approved trip
+   * DELETE /trip/delete-trip/:tripId/:paymentMethod
+   */
+  async deleteTrip(tripId: string, paymentMethod: "CASH" | "CREDIT"): Promise<{ message: string }> {
+    console.log(`[TripService] deleteTrip: id=${tripId}, paymentMethod=${paymentMethod}`);
+    const res = await apiFetch(`/trip/delete-trip/${tripId}/${paymentMethod}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || "Failed to delete trip");
+    }
+    return res.json();
+  },
 };
