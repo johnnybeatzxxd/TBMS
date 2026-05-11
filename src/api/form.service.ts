@@ -185,7 +185,7 @@ export const formService = {
   async getFormSubmissions(filters?: {
     driverId?: string;
     truckId?: string;
-    status?: string;
+    status?: string | string[];
     startDate?: string;
     endDate?: string;
     serviceTypeId?: string;
@@ -193,7 +193,13 @@ export const formService = {
     const params = new URLSearchParams();
     if (filters) {
       Object.entries(filters).forEach(([key, value]) => {
-        if (value) params.append(key, value);
+        if (value) {
+          if (Array.isArray(value)) {
+            value.forEach(v => params.append(key, v));
+          } else {
+            params.append(key, value);
+          }
+        }
       });
     }
     const qs = params.toString();

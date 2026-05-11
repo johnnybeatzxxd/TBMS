@@ -45,4 +45,5 @@ export interface AddExpensePayload {
   serviceRequestId?: string;
   dynamicData?: Record<string, any>;
   receiptPic?: string;
+  tag?: "PERDIME" | "SALARY";
 }

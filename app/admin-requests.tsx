@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { View, Text, TouchableOpacity, ScrollView, SectionList, ActivityIndicator, Dimensions, RefreshControl } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, SectionList, ActivityIndicator, Dimensions, RefreshControl, Modal } from "react-native";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { useAuthStore, useCacheStore } from "@/src/store";
-import { DateFilterBar, DateFilterPreset } from "@/src/components/DateFilterBar";
 import { formService, truckService } from "@/src/api/services";
 import { FormSubmission } from "@/src/types/form.types";
+import { DateFilterPreset } from "@/src/components/DateFilterBar";
 
 const getRelativeDateLabel = (dateStr: string) => {
   const parts = dateStr.split("T")[0].split("-");
@@ -275,6 +276,10 @@ export default function RequestsScreen() {
   const [filterPreset, setFilterPreset] = useState<DateFilterPreset>("all");
   const [customFrom, setCustomFrom] = useState<Date | null>(null);
   const [customTo, setCustomTo] = useState<Date | null>(null);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [showFromPicker, setShowFromPicker] = useState(false);
+  const [showToPicker, setShowToPicker] = useState(false);
 
   useEffect(() => {
     if (isManager) {
@@ -290,8 +295,40 @@ export default function RequestsScreen() {
   const loadRequests = useCallback(async () => {
     setLoading(true);
     try {
+      const filters: any = {};
+      
+      // Date filtering
+      if (filterPreset !== "all") {
+        const now = new Date();
+        if (filterPreset === "today") {
+          filters.startDate = new Date(now.setHours(0,0,0,0)).toISOString();
+          filters.endDate = new Date(now.setHours(23,59,59,999)).toISOString();
+        } else if (filterPreset === "week") {
+          const weekAgo = new Date(); weekAgo.setDate(now.getDate() - 7);
+          filters.startDate = weekAgo.toISOString();
+          filters.endDate = new Date(now.setHours(23,59,59,999)).toISOString();
+        } else if (filterPreset === "month") {
+          const monthAgo = new Date(); monthAgo.setMonth(now.getMonth() - 1);
+          filters.startDate = monthAgo.toISOString();
+          filters.endDate = new Date(now.setHours(23,59,59,999)).toISOString();
+        } else if (filterPreset === "custom" && customFrom && customTo) {
+          filters.startDate = customFrom.toISOString();
+          filters.endDate = customTo.toISOString();
+        }
+      }
+
+      // Truck filtering
+      if (selectedTruck.id !== "all") {
+        filters.truckId = selectedTruck.id;
+      }
+
+      // Status filtering
+      if (selectedStatuses.length > 0) {
+        filters.status = selectedStatuses;
+      }
+
       const promises: Promise<any>[] = [
-        formService.getFormSubmissions(),
+        formService.getFormSubmissions(filters),
       ];
       if (isManager) {
         promises.push(truckService.getMyTrucks().catch(() => ({ trucks: [] })));
@@ -318,7 +355,7 @@ export default function RequestsScreen() {
         trucksRes.trucks.forEach((t: any) => trucksDict[t.id] = t.plateNumber);
       }
 
-      let filtered = res.submissions.map((s: FormSubmission) => {
+      let processed = res.submissions.map((s: FormSubmission) => {
         // Look up template info
         const tpl = templatesDict[s.templateId];
         if (s.templateName === "Unknown" && tpl) {
@@ -338,43 +375,12 @@ export default function RequestsScreen() {
         return s;
       });
       
-      // Filter by role
-      if (!isManager && user?.id) {
-        filtered = filtered.filter((s: FormSubmission) => s.driverId === user.id);
-      }
-      
-      // Filter by truck
-      if (selectedTruck.id !== "all") {
-        filtered = filtered.filter((s: FormSubmission) => s.truckId === selectedTruck.id);
-      }
-      
-      // Filter by date preset (simplified for UI demonstration)
-      if (filterPreset !== "all") {
-         const now = new Date();
-         filtered = filtered.filter((s: FormSubmission) => {
-           const d = new Date(s.createdAt);
-           if (filterPreset === "today") return d.toDateString() === now.toDateString();
-           if (filterPreset === "week") {
-              const weekAgo = new Date(); weekAgo.setDate(now.getDate() - 7);
-              return d >= weekAgo;
-           }
-           if (filterPreset === "month") {
-              const monthAgo = new Date(); monthAgo.setMonth(now.getMonth() - 1);
-              return d >= monthAgo;
-           }
-           if (filterPreset === "custom" && customFrom && customTo) {
-             return d >= customFrom && d <= customTo;
-           }
-           return true;
-         });
-      }
-      
-      setRequests(filtered);
+      setRequests(processed);
       
       // Update cache only if there are no filters applied
-      if (!isManager && filterPreset === "all") {
+      if (!isManager && filterPreset === "all" && selectedStatuses.length === 0) {
         setCachedRequests(res.submissions);
-      } else if (isManager && selectedTruck.id === "all" && filterPreset === "all") {
+      } else if (isManager && selectedTruck.id === "all" && filterPreset === "all" && selectedStatuses.length === 0) {
         setCachedRequests(res.submissions);
       }
     } catch (e: any) {
@@ -382,7 +388,7 @@ export default function RequestsScreen() {
     } finally {
       setLoading(false);
     }
-  }, [filterPreset, customFrom, customTo, selectedTruck, user, isManager]);
+  }, [filterPreset, customFrom, customTo, selectedTruck, selectedStatuses, user, isManager]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -461,45 +467,60 @@ export default function RequestsScreen() {
           </View>
           
           {isManager && (
-            <View className="relative z-50">
+            <View className="flex-row items-center gap-2">
               <TouchableOpacity
-                onPress={() => setShowTruckMenu(!showTruckMenu)}
-                className="flex-row items-center bg-white/20 border border-white/30 rounded-full px-4 py-2 gap-2"
+                onPress={() => setShowAdvancedFilters(true)}
+                className="w-10 h-10 bg-white/20 border border-white/30 rounded-full items-center justify-center"
                 activeOpacity={0.8}
               >
-                <Ionicons name="car-sport" size={16} color="#fff" />
-                <Text className="text-white font-medium text-sm">{selectedTruck.plateNumber}</Text>
-                <Ionicons name={showTruckMenu ? "chevron-up" : "chevron-down"} size={16} color="#fff" />
+                <Ionicons name="options" size={20} color="#fff" />
+                {selectedStatuses.length > 0 && (
+                  <View className="absolute -top-1 -right-1 w-4 h-4 bg-danger rounded-full items-center justify-center border border-white">
+                    <Text className="text-white text-[8px] font-black">{selectedStatuses.length}</Text>
+                  </View>
+                )}
               </TouchableOpacity>
-              
-              {showTruckMenu && (
-                <View className="absolute right-0 top-12 bg-white rounded-2xl border border-border shadow-lg overflow-hidden min-w-[200px] z-[999] elevation-20">
-                  <ScrollView style={{ maxHeight: 250 }} showsVerticalScrollIndicator={false}>
-                    {trucks.map((truck) => (
-                      <TouchableOpacity
-                        key={truck.id}
-                        onPress={() => {
-                          setSelectedTruck(truck);
-                          setShowTruckMenu(false);
-                        }}
-                        className={`px-4 py-3 border-b border-border/50 flex-row items-center gap-3 ${
-                          selectedTruck.id === truck.id ? "bg-primary-50" : "bg-white"
-                        }`}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons 
-                          name={truck.id === "all" ? "apps-outline" : "car-sport-outline"} 
-                          size={18} 
-                          color={selectedTruck.id === truck.id ? "#2563EB" : "#64748B"} 
-                        />
-                        <Text className={`text-sm ${selectedTruck.id === truck.id ? "text-primary font-bold" : "text-text-primary"}`}>
-                          {truck.plateNumber}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
+
+              <View className="relative z-50">
+                <TouchableOpacity
+                  onPress={() => setShowTruckMenu(!showTruckMenu)}
+                  className="flex-row items-center bg-white/20 border border-white/30 rounded-full px-4 py-2 gap-2"
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="car-sport" size={16} color="#fff" />
+                  <Text className="text-white font-medium text-sm">{selectedTruck.plateNumber}</Text>
+                  <Ionicons name={showTruckMenu ? "chevron-up" : "chevron-down"} size={16} color="#fff" />
+                </TouchableOpacity>
+                
+                {showTruckMenu && (
+                  <View className="absolute right-0 top-12 bg-white rounded-2xl border border-border shadow-lg overflow-hidden min-w-[200px] z-[999] elevation-20">
+                    <ScrollView style={{ maxHeight: 250 }} showsVerticalScrollIndicator={false}>
+                      {trucks.map((truck) => (
+                        <TouchableOpacity
+                          key={truck.id}
+                          onPress={() => {
+                            setSelectedTruck(truck);
+                            setShowTruckMenu(false);
+                          }}
+                          className={`px-4 py-3 border-b border-border/50 flex-row items-center gap-3 ${
+                            selectedTruck.id === truck.id ? "bg-primary-50" : "bg-white"
+                          }`}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons 
+                            name={truck.id === "all" ? "apps-outline" : "car-sport-outline"} 
+                            size={18} 
+                            color={selectedTruck.id === truck.id ? "#2563EB" : "#64748B"} 
+                          />
+                          <Text className={`text-sm ${selectedTruck.id === truck.id ? "text-primary font-bold" : "text-text-primary"}`}>
+                            {truck.plateNumber}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+              </View>
             </View>
           )}
         </View>
@@ -523,17 +544,154 @@ export default function RequestsScreen() {
         </View>
       </View>
 
-      {/* Date Filters Spacer & Bar */}
-      <View className="mt-12 z-0 elevation-0">
-        <DateFilterBar
-          activePreset={filterPreset}
-          onPresetChange={setFilterPreset}
-          customFrom={customFrom}
-          customTo={customTo}
-          onCustomFromChange={setCustomFrom}
-          onCustomToChange={setCustomTo}
-        />
-      </View>
+      {/* Header Spacer for Stats Bubble */}
+      <View className="mt-12" />
+
+      {/* Advanced Filter Modal */}
+      <Modal visible={showAdvancedFilters} transparent animationType="fade">
+        <View className="flex-1 bg-black/50 justify-center items-center px-5">
+          <View className="bg-white rounded-3xl w-full max-w-sm overflow-hidden border border-border shadow-2xl">
+            {/* Modal Header */}
+            <View className="flex-row items-center justify-between px-5 pt-5 pb-3 border-b border-border/50">
+              <Text className="text-text-primary font-bold text-lg">Filters</Text>
+              <TouchableOpacity onPress={() => setShowAdvancedFilters(false)} className="w-8 h-8 bg-surface rounded-full items-center justify-center">
+                <Ionicons name="close" size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView className="px-5 py-4 max-h-[450px]">
+              <View className="gap-6">
+                {/* Status Selection */}
+                <View>
+                  <Text className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-3">Status</Text>
+                  <View className="flex-row flex-wrap gap-2">
+                    {["PENDING", "PROCEED", "COMPLETED", "APPROVED", "DECLINED"].map((status) => {
+                      const isSelected = selectedStatuses.includes(status);
+                      return (
+                        <TouchableOpacity
+                          key={status}
+                          onPress={() => {
+                            setSelectedStatuses(prev => 
+                              prev.includes(status) 
+                                ? prev.filter(s => s !== status) 
+                                : [...prev, status]
+                            );
+                          }}
+                          className={`px-3 py-1.5 rounded-lg border ${
+                            isSelected ? "bg-primary-50 border-primary" : "bg-surface border-border"
+                          }`}
+                        >
+                          <Text className={`text-[11px] font-bold ${isSelected ? "text-primary" : "text-text-secondary"}`}>
+                            {status}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                {/* Date Presets */}
+                <View>
+                  <Text className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-3">Time Range</Text>
+                  <View className="flex-row flex-wrap gap-2">
+                    {["all", "today", "week", "month", "custom"].map((preset) => {
+                      const isSelected = filterPreset === preset;
+                      return (
+                        <TouchableOpacity
+                          key={preset}
+                          onPress={() => setFilterPreset(preset as any)}
+                          className={`px-3 py-1.5 rounded-lg border ${
+                            isSelected ? "bg-primary-50 border-primary" : "bg-surface border-border"
+                          }`}
+                        >
+                          <Text className={`text-[11px] font-bold capitalize ${isSelected ? "text-primary" : "text-text-secondary"}`}>
+                            {preset}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                {/* Custom Date Inputs */}
+                {filterPreset === "custom" && (
+                  <View className="flex-row items-center gap-2">
+                    <TouchableOpacity
+                      onPress={() => setShowFromPicker(true)}
+                      className="flex-1 flex-row items-center bg-surface rounded-lg px-3 py-2 border border-border"
+                    >
+                      <Ionicons name="calendar-outline" size={14} color="#64748B" />
+                      <Text className="ml-2 text-xs text-text-primary">
+                        {customFrom ? customFrom.toLocaleDateString() : "Start Date"}
+                      </Text>
+                    </TouchableOpacity>
+                    <Ionicons name="arrow-forward" size={14} color="#94A3B8" />
+                    <TouchableOpacity
+                      onPress={() => setShowToPicker(true)}
+                      className="flex-1 flex-row items-center bg-surface rounded-lg px-3 py-2 border border-border"
+                    >
+                      <Ionicons name="calendar-outline" size={14} color="#64748B" />
+                      <Text className="ml-2 text-xs text-text-primary">
+                        {customTo ? customTo.toLocaleDateString() : "End Date"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            </ScrollView>
+
+            {/* Footer Buttons */}
+            <View className="p-5 border-t border-border/50 bg-surface flex-row gap-3">
+              <TouchableOpacity 
+                activeOpacity={0.8}
+                onPress={() => {
+                  setSelectedStatuses([]);
+                  setFilterPreset("all");
+                  setCustomFrom(null);
+                  setCustomTo(null);
+                }}
+                className="flex-1 bg-white border border-border rounded-xl items-center justify-center py-3"
+              >
+                <Text className="text-text-secondary font-bold text-sm tracking-wide">Reset</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                activeOpacity={0.8}
+                onPress={() => {
+                  setShowAdvancedFilters(false);
+                  loadRequests();
+                }}
+                className="flex-1 bg-primary rounded-xl items-center justify-center py-3 shadow-sm border border-primary-600"
+              >
+                <Text className="text-white font-bold text-sm tracking-wide">Apply</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
+        {/* Date Pickers */}
+        {showFromPicker && (
+          <DateTimePicker
+            value={customFrom || new Date()}
+            mode="date"
+            display="default"
+            onChange={(_, d) => {
+              setShowFromPicker(false);
+              if (d) setCustomFrom(d);
+            }}
+          />
+        )}
+        {showToPicker && (
+          <DateTimePicker
+            value={customTo || new Date()}
+            mode="date"
+            display="default"
+            onChange={(_, d) => {
+              setShowToPicker(false);
+              if (d) setCustomTo(d);
+            }}
+          />
+        )}
+      </Modal>
 
       {loading && requests.length === 0 ? (
          <View className="flex-1 items-center justify-center">

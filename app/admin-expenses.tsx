@@ -159,7 +159,7 @@ export default function ExpensesScreen() {
   const [approvedFilter, setApprovedFilter] = useState<"PENDING" | "APPROVED" | "ALL">("ALL");
   const [amountFrom, setAmountFrom] = useState<string>("");
   const [amountTo, setAmountTo] = useState<string>("");
-  const [selectedTruckId, setSelectedTruckId] = useState<string>("all");
+  const [selectedTruckIds, setSelectedTruckIds] = useState<string[]>([]);
   const [trucks, setTrucks] = useState<any[]>([{ id: "all", plateNumber: "All Trucks" }]);
   const [showFilters, setShowFilters] = useState(false);
   const [showTruckMenu, setShowTruckMenu] = useState(false);
@@ -207,7 +207,7 @@ export default function ExpensesScreen() {
       if (approvedFilter !== "ALL") filters.approved = approvedFilter;
       if (amountFrom) filters.amountFrom = Number(amountFrom);
       if (amountTo) filters.amountTo = Number(amountTo);
-      if (selectedTruckId !== "all") filters.truckIds = [selectedTruckId];
+      if (selectedTruckIds.length > 0) filters.truckIds = selectedTruckIds;
 
       const res = await expenseService.getMyExpenses(filters);
       const sorted = [...res.expenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -341,31 +341,58 @@ export default function ExpensesScreen() {
 
           {isAdminOrManager && (
             <View className="z-50 relative">
-              <Text className="text-xs font-bold tracking-widest text-text-secondary uppercase mb-1">Truck</Text>
+              <Text className="text-xs font-bold tracking-widest text-text-secondary uppercase mb-1">Trucks</Text>
               <TouchableOpacity
                 onPress={() => setShowTruckMenu(!showTruckMenu)}
                 className="bg-surface border border-border rounded-xl h-10 px-3 flex-row items-center justify-between"
               >
-                <Text className="text-sm text-text-primary">{trucks.find(t => t.id === selectedTruckId)?.plateNumber || "Select Truck"}</Text>
+                <Text className="text-sm text-text-primary">
+                  {selectedTruckIds.length === 0 
+                    ? "All Trucks" 
+                    : selectedTruckIds.length === 1 
+                      ? (trucks.find(t => t.id === selectedTruckIds[0])?.plateNumber || "1 Truck Selected")
+                      : `${selectedTruckIds.length} Trucks Selected`
+                  }
+                </Text>
                 <Ionicons name="chevron-down" size={16} color="#64748B" />
               </TouchableOpacity>
               
               {showTruckMenu && (
-                <View className="absolute top-16 left-0 right-0 bg-white border border-border rounded-xl shadow-lg z-50 overflow-hidden max-h-48">
+                <View className="absolute top-12 left-0 right-0 bg-white border border-border rounded-xl shadow-lg z-50 overflow-hidden max-h-64">
                   <ScrollView nestedScrollEnabled>
-                    {trucks.map(t => (
-                      <TouchableOpacity
-                        key={t.id}
-                        onPress={() => {
-                          setSelectedTruckId(t.id);
-                          setShowTruckMenu(false);
-                        }}
-                        className={`px-4 py-3 border-b border-border-light ${selectedTruckId === t.id ? "bg-primary-50" : ""}`}
-                      >
-                        <Text className={`text-sm ${selectedTruckId === t.id ? "text-primary font-bold" : "text-text-primary"}`}>{t.plateNumber}</Text>
-                      </TouchableOpacity>
-                    ))}
+                    {trucks.map(t => {
+                      const isSelected = t.id === 'all' 
+                        ? selectedTruckIds.length === 0 
+                        : selectedTruckIds.includes(t.id);
+                      
+                      return (
+                        <TouchableOpacity
+                          key={t.id}
+                          onPress={() => {
+                            if (t.id === 'all') {
+                              setSelectedTruckIds([]);
+                            } else {
+                              setSelectedTruckIds(prev => 
+                                prev.includes(t.id) 
+                                  ? prev.filter(id => id !== t.id) 
+                                  : [...prev, t.id]
+                              );
+                            }
+                          }}
+                          className={`px-4 py-3 border-b border-border-light flex-row items-center justify-between ${isSelected ? "bg-primary-50" : ""}`}
+                        >
+                          <Text className={`text-sm ${isSelected ? "text-primary font-bold" : "text-text-primary"}`}>{t.plateNumber}</Text>
+                          {isSelected && <Ionicons name="checkmark" size={16} color="#2563EB" />}
+                        </TouchableOpacity>
+                      );
+                    })}
                   </ScrollView>
+                  <TouchableOpacity 
+                    onPress={() => setShowTruckMenu(false)}
+                    className="bg-surface py-2 items-center border-t border-border"
+                  >
+                    <Text className="text-xs font-bold text-primary">Done</Text>
+                  </TouchableOpacity>
                 </View>
               )}
             </View>
@@ -442,8 +469,8 @@ export default function ExpensesScreen() {
         }
       />
 
-      {/* FAB - Add Expense - Available for all relevant roles */}
-      {(isDriver || isAdminOrManager) && (
+      {/* FAB - Add Expense - Only for Driver */}
+      {isDriver && (
         <TouchableOpacity
           onPress={() => router.push("/add-expense")}
           activeOpacity={0.8}

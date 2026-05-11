@@ -41,6 +41,7 @@ export const expenseService = {
       serviceRequestId: payload.serviceRequestId,
       dynamicData: payload.dynamicData,
       receiptPic: payload.receiptPic,
+      tag: payload.tag,
     };
     console.log("Submit Expense Payload:", JSON.stringify(requestBody, null, 2));
 

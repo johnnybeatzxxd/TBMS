@@ -181,6 +181,14 @@ export default function DriverDashboardScreen() {
       bgColor: "#EDE9FE",
       route: "/admin-requests",
     },
+    {
+      id: "perdiem",
+      title: "Perdiem",
+      icon: "calendar-clock",
+      color: "#0EA5E9",
+      bgColor: "#E0F2FE",
+      route: "/add-perdiem",
+    },
   ];
 
   return (

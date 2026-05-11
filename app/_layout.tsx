@@ -127,6 +127,10 @@ export default function RootLayout() {
           name="add-form-template"
           options={{ presentation: "modal", headerShown: false }}
         />
+        <Stack.Screen
+          name="add-perdiem"
+          options={{ presentation: "modal", headerShown: false }}
+        />
       </Stack>
       <StatusBar style="dark" />
     </ThemeProvider>

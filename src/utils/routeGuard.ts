@@ -38,6 +38,7 @@ const DRIVER_ONLY_ROUTES = [
   'driver-refuels',
   'driver-transfers',
   'add-request',
+  'add-perdiem',
 ];
 
 /**
