@@ -62,6 +62,8 @@ export interface FormSubmission {
   date?: string;                   // request date
   status: "PENDING" | "PROCEED" | "COMPLETED" | "APPROVED" | "DECLINED";
   requiresApproval?: boolean;      // from serviceType.requiresApproval
+  tag?: string;                    // for direct expenses like PERDIME/SALARY
+  serviceRequestId?: string;       // linked service request ID
   createdAt: string;
   updatedAt: string;
 }

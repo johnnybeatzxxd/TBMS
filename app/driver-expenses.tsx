@@ -26,7 +26,7 @@ const getGroupedData = (data: Expense[]) => {
 const ExpenseCard = ({ expense }: { expense: Expense }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  let expenseTitle = expense.serviceRequest?.serviceType?.name || "Expense";
+  let expenseTitle = expense.serviceRequest?.serviceType?.name || (expense.tag ? expense.tag : "Expense");
   let expenseDesc = expense.remark || expense.serviceRequest?.description || "";
   
   if (expense.remark && expense.remark.includes(" | Desc: ")) {
@@ -44,6 +44,20 @@ const ExpenseCard = ({ expense }: { expense: Expense }) => {
 
   const dynamicData = expense.dynamicData || expense.serviceRequest?.dynamicData || null;
 
+  let iconName = "receipt";
+  let iconColor = "#DC2626";
+  let iconBg = "bg-danger-50";
+
+  if (expenseTitle === "PERDIME") {
+    iconName = "calendar-clock";
+    iconColor = "#0EA5E9";
+    iconBg = "bg-sky-50";
+  } else if (expenseTitle === "SALARY") {
+    iconName = "wallet";
+    iconColor = "#8B5CF6";
+    iconBg = "bg-purple-50";
+  }
+
   return (
     <TouchableOpacity
       activeOpacity={0.7}
@@ -52,8 +66,8 @@ const ExpenseCard = ({ expense }: { expense: Expense }) => {
     >
       <View className="flex-row items-center justify-between">
         <View className="flex-row items-center flex-1 pr-2">
-          <View className="w-10 h-10 bg-danger-50 rounded-xl items-center justify-center mr-3">
-            <Ionicons name="receipt" size={20} color="#DC2626" />
+          <View className={`w-10 h-10 ${iconBg} rounded-xl items-center justify-center mr-3`}>
+            <Ionicons name={iconName as any} size={20} color={iconColor} />
           </View>
           <View className="flex-1">
             <Text className="text-text-primary font-bold text-base" numberOfLines={1}>{expenseTitle}</Text>

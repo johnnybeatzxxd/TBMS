@@ -209,6 +209,7 @@ export const formService = {
       throw new Error(err.message || "Failed to fetch service requests");
     }
     const data = await res.json();
+    console.log("[formService] Raw serviceRequests from backend:", JSON.stringify(data.serviceRequests, null, 2));
     const submissions = (data.serviceRequests || []).map(mapBackendRequestToSubmission);
     return { submissions };
   },
@@ -263,6 +264,7 @@ export const formService = {
    * Admin authorizes driver to proceed.
    */
   async markProceed(id: string): Promise<void> {
+    console.log(`[formService] Calling markProceed for ID: ${id} -> PUT /expences/mark-request-to-proceed/${id}`);
     const res = await apiFetch(`/expences/mark-request-to-proceed/${id}`, { method: "PUT" });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -287,6 +289,7 @@ export const formService = {
    * Admin gives final approval to a completed request.
    */
   async markApproved(id: string): Promise<void> {
+    console.log(`[formService] Calling markApproved for ID: ${id} -> PUT /expences/mark-request-to-approved/${id}`);
     const res = await apiFetch(`/expences/mark-request-to-approved/${id}`, { method: "PUT" });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -299,6 +302,7 @@ export const formService = {
    * Admin declines a pending request.
    */
   async markDeclined(id: string): Promise<void> {
+    console.log(`[formService] Calling markDeclined for ID: ${id} -> PUT /expences/mark-request-to-declined/${id}`);
     const res = await apiFetch(`/expences/mark-request-to-declined/${id}`, { method: "PUT" });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -310,7 +314,7 @@ export const formService = {
 // ── Helper: Map backend response to our FormSubmission type ────────────
 
 function mapBackendRequestToSubmission(req: any): FormSubmission {
-  return {
+  const mapped = {
     id: req._id || req.id,
     templateId: req.serviceTypeId?._id || req.serviceTypeId || "",
     templateName: req.serviceTypeId?.name || req.serviceType?.name || req.serviceTypeName || "Unknown",
@@ -325,7 +329,16 @@ function mapBackendRequestToSubmission(req: any): FormSubmission {
     date: req.date,
     status: req.status || "PENDING",
     requiresApproval: req.serviceTypeId?.requiresApproval ?? req.serviceType?.requiresApproval ?? true,
+    tag: req.tag,
+    serviceRequestId: req.serviceRequestId,
     createdAt: req.createdAt || new Date().toISOString(),
     updatedAt: req.updatedAt || new Date().toISOString(),
   };
+  console.log(`[formService] Mapped Submission [${mapped.id}]:`, {
+    templateName: mapped.templateName,
+    tag: mapped.tag,
+    serviceRequestId: mapped.serviceRequestId,
+    status: mapped.status
+  });
+  return mapped;
 }

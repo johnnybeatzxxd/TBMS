@@ -9,6 +9,7 @@ export interface Expense {
   truckId: string;
   driverId: string | null;
   approved: "PENDING" | "APPROVED";
+  tag: string | null;
   createdAt: string;
   updatedAt: string;
   serviceRequest: {

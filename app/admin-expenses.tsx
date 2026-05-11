@@ -29,7 +29,7 @@ const getRelativeDateLabel = (dateStr: string) => {
 const ExpenseCard = ({ exp }: { exp: Expense }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  let expenseTitle = exp.serviceRequest?.serviceType?.name || "Expense";
+  let expenseTitle = exp.serviceRequest?.serviceType?.name || (exp.tag ? exp.tag : "Expense");
   let expenseDesc = exp.remark || exp.serviceRequest?.description || "No description provided.";
   
   if (exp.remark && exp.remark.includes(" | Desc: ")) {
@@ -68,6 +68,16 @@ const ExpenseCard = ({ exp }: { exp: Expense }) => {
     iconColor = "#10B981";
     iconBg = "bg-emerald-50";
     iconBorder = "border-emerald-100";
+  } else if (expenseTitle === "PERDIME") {
+    iconName = "calendar-clock";
+    iconColor = "#0EA5E9";
+    iconBg = "bg-sky-50";
+    iconBorder = "border-sky-100";
+  } else if (expenseTitle === "SALARY") {
+    iconName = "wallet-outline";
+    iconColor = "#8B5CF6";
+    iconBg = "bg-purple-50";
+    iconBorder = "border-purple-100";
   }
 
   return (

@@ -77,7 +77,8 @@ const RequestCard = ({ req, isManager, isDriver, onStatusUpdate }: { req: FormSu
   // Filter out empty values and render dynamic fields
   const filledValues = Object.entries(req.values || {}).filter(([_, v]) => v !== undefined && v !== null && v !== "");
 
-  return (
+    console.log(`[RequestCard] Rendering Card [${req.id}]: templateName="${req.templateName}", tag="${req.tag}"`);
+    return (
     <TouchableOpacity
       activeOpacity={0.8}
       onPress={() => setExpanded(!expanded)}
@@ -94,7 +95,7 @@ const RequestCard = ({ req, isManager, isDriver, onStatusUpdate }: { req: FormSu
               {req.truckPlate || "Unknown Truck"}
             </Text>
             <Text className="text-text-primary font-bold text-base" numberOfLines={1}>
-              {req.templateName}
+              {req.templateName === "Unknown" && req.tag ? req.tag : req.templateName}
             </Text>
             {isManager && req.driverName && (
               <Text className="text-primary-600 text-[10px] mt-0.5">{req.driverName}</Text>
@@ -158,14 +159,16 @@ const RequestCard = ({ req, isManager, isDriver, onStatusUpdate }: { req: FormSu
                 /* requiresApproval === true → show Proceed + Decline */
                 <>
                   <TouchableOpacity
-                    className="flex-1 bg-primary py-2.5 rounded-xl items-center"
+                    className={`flex-1 ${!req.serviceRequestId ? "bg-success-500" : "bg-primary"} py-2.5 rounded-xl items-center`}
                     activeOpacity={0.8}
                     onPress={(e) => {
                       e.stopPropagation();
-                      onStatusUpdate(req.id, "PROCEED");
+                      onStatusUpdate(req.id, !req.serviceRequestId ? "APPROVED" : "PROCEED");
                     }}
                   >
-                    <Text className="text-white font-bold text-sm">Proceed</Text>
+                    <Text className="text-white font-bold text-sm">
+                      {!req.serviceRequestId ? "Approve" : "Proceed"}
+                    </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     className="flex-[0.7] bg-white border border-danger-500 py-2.5 rounded-xl items-center"
