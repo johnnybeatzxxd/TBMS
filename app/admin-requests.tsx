@@ -1,18 +1,18 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { View, Text, TouchableOpacity, ScrollView, SectionList, ActivityIndicator, Dimensions, RefreshControl, Modal } from "react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { router, useFocusEffect } from "expo-router";
-import { useAuthStore, useCacheStore } from "@/src/store";
 import { formService, truckService } from "@/src/api/services";
-import { FormSubmission } from "@/src/types/form.types";
 import { DateFilterPreset } from "@/src/components/DateFilterBar";
+import { useAuthStore, useCacheStore } from "@/src/store";
+import { FormSubmission } from "@/src/types/form.types";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Modal, RefreshControl, ScrollView, SectionList, Text, TouchableOpacity, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const getRelativeDateLabel = (dateStr: string) => {
   const parts = dateStr.split("T")[0].split("-");
   if (parts.length !== 3) return dateStr;
-  
+
   const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
   if (isNaN(d.getTime())) return "Invalid Date";
 
@@ -25,7 +25,7 @@ const getRelativeDateLabel = (dateStr: string) => {
 
   const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  
+
   return `${weekdays[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}`;
 };
 
@@ -76,9 +76,7 @@ const RequestCard = ({ req, isManager, isDriver, onStatusUpdate }: { req: FormSu
 
   // Filter out empty values and render dynamic fields
   const filledValues = Object.entries(req.values || {}).filter(([_, v]) => v !== undefined && v !== null && v !== "");
-
-    console.log(`[RequestCard] Rendering Card [${req.id}]: templateName="${req.templateName}", tag="${req.tag}"`);
-    return (
+  return (
     <TouchableOpacity
       activeOpacity={0.8}
       onPress={() => setExpanded(!expanded)}
@@ -108,7 +106,7 @@ const RequestCard = ({ req, isManager, isDriver, onStatusUpdate }: { req: FormSu
       {/* Expanded Actions & Info */}
       {expanded && (
         <View className="px-4 pb-4 bg-surface/50 border-t border-border pt-4 gap-4">
-          
+
           {/* Amount */}
           {req.amount > 0 && (
             <View>
@@ -151,7 +149,6 @@ const RequestCard = ({ req, isManager, isDriver, onStatusUpdate }: { req: FormSu
               ))}
             </View>
           )}
-
           {/* Manager Actions — PENDING */}
           {isManager && req.status === "PENDING" && (
             <View className="flex-row gap-3 mt-2 border-t border-border pt-4">
@@ -159,16 +156,14 @@ const RequestCard = ({ req, isManager, isDriver, onStatusUpdate }: { req: FormSu
                 /* requiresApproval === true → show Proceed + Decline */
                 <>
                   <TouchableOpacity
-                    className={`flex-1 ${!req.serviceRequestId ? "bg-success-500" : "bg-primary"} py-2.5 rounded-xl items-center`}
+                    className="flex-1 bg-primary py-2.5 rounded-xl items-center"
                     activeOpacity={0.8}
                     onPress={(e) => {
                       e.stopPropagation();
-                      onStatusUpdate(req.id, !req.serviceRequestId ? "APPROVED" : "PROCEED");
+                      onStatusUpdate(req.id, "PROCEED");
                     }}
                   >
-                    <Text className="text-white font-bold text-sm">
-                      {!req.serviceRequestId ? "Approve" : "Proceed"}
-                    </Text>
+                    <Text className="text-white font-bold text-sm">Proceed</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     className="flex-[0.7] bg-white border border-danger-500 py-2.5 rounded-xl items-center"
@@ -222,7 +217,7 @@ const RequestCard = ({ req, isManager, isDriver, onStatusUpdate }: { req: FormSu
               >
                 <Text className="text-primary font-bold text-sm">Edit Request</Text>
               </TouchableOpacity>
-              
+
               {req.status === "PROCEED" && (
                 <TouchableOpacity
                   className="flex-1 bg-indigo-500 py-2.5 rounded-xl items-center"
@@ -268,7 +263,7 @@ export default function RequestsScreen() {
   const { user } = useAuthStore();
   const isManager = user?.role === "manager" || user?.role === "admin";
   const { requests: cachedRequests, setRequests: setCachedRequests } = useCacheStore();
-  
+
   const [loading, setLoading] = useState(cachedRequests.length === 0);
   const [refreshing, setRefreshing] = useState(false);
   const [requests, setRequests] = useState<FormSubmission[]>(cachedRequests);
@@ -299,21 +294,21 @@ export default function RequestsScreen() {
     setLoading(true);
     try {
       const filters: any = {};
-      
+
       // Date filtering
       if (filterPreset !== "all") {
         const now = new Date();
         if (filterPreset === "today") {
-          filters.startDate = new Date(now.setHours(0,0,0,0)).toISOString();
-          filters.endDate = new Date(now.setHours(23,59,59,999)).toISOString();
+          filters.startDate = new Date(now.setHours(0, 0, 0, 0)).toISOString();
+          filters.endDate = new Date(now.setHours(23, 59, 59, 999)).toISOString();
         } else if (filterPreset === "week") {
           const weekAgo = new Date(); weekAgo.setDate(now.getDate() - 7);
           filters.startDate = weekAgo.toISOString();
-          filters.endDate = new Date(now.setHours(23,59,59,999)).toISOString();
+          filters.endDate = new Date(now.setHours(23, 59, 59, 999)).toISOString();
         } else if (filterPreset === "month") {
           const monthAgo = new Date(); monthAgo.setMonth(now.getMonth() - 1);
           filters.startDate = monthAgo.toISOString();
-          filters.endDate = new Date(now.setHours(23,59,59,999)).toISOString();
+          filters.endDate = new Date(now.setHours(23, 59, 59, 999)).toISOString();
         } else if (filterPreset === "custom" && customFrom && customTo) {
           filters.startDate = customFrom.toISOString();
           filters.endDate = customTo.toISOString();
@@ -336,14 +331,14 @@ export default function RequestsScreen() {
       if (isManager) {
         promises.push(truckService.getMyTrucks().catch(() => ({ trucks: [] })));
       }
-      
+
       const [res, trucksRes] = await Promise.all(promises);
 
       // Get unique template IDs from submissions and fetch full details for each
       const uniqueTemplateIds = [...new Set(
         res.submissions.map((s: FormSubmission) => s.templateId).filter(Boolean)
       )] as string[];
-      
+
       const templateResults = await Promise.all(
         uniqueTemplateIds.map((id: string) => formService.getFormTemplate(id).catch(() => null))
       );
@@ -377,9 +372,9 @@ export default function RequestsScreen() {
         }
         return s;
       });
-      
+
       setRequests(processed);
-      
+
       // Update cache only if there are no filters applied
       if (!isManager && filterPreset === "all" && selectedStatuses.length === 0) {
         setCachedRequests(res.submissions);
@@ -432,8 +427,8 @@ export default function RequestsScreen() {
           break;
       }
     } catch (e: any) {
-       console.error("Failed to update status", e);
-       loadRequests();
+      console.error("Failed to update status", e);
+      loadRequests();
     }
   };
 
@@ -455,7 +450,7 @@ export default function RequestsScreen() {
   }, [requests]);
 
   return (
-    <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
+    <SafeAreaView className="flex-1 bg-surface" edges={["top", "bottom"]}>
       {/* Header */}
       <View className="bg-primary z-50 elevation-10 shadow-sm relative pt-4 pb-20 px-5 rounded-b-[40px]">
         <View className="flex-row items-center gap-3 mb-4">
@@ -468,7 +463,7 @@ export default function RequestsScreen() {
               {isManager ? "Manage driver requests" : "Track your requests"}
             </Text>
           </View>
-          
+
           {isManager && (
             <View className="flex-row items-center gap-2">
               <TouchableOpacity
@@ -494,7 +489,7 @@ export default function RequestsScreen() {
                   <Text className="text-white font-medium text-sm">{selectedTruck.plateNumber}</Text>
                   <Ionicons name={showTruckMenu ? "chevron-up" : "chevron-down"} size={16} color="#fff" />
                 </TouchableOpacity>
-                
+
                 {showTruckMenu && (
                   <View className="absolute right-0 top-12 bg-white rounded-2xl border border-border shadow-lg overflow-hidden min-w-[200px] z-[999] elevation-20">
                     <ScrollView style={{ maxHeight: 250 }} showsVerticalScrollIndicator={false}>
@@ -505,15 +500,14 @@ export default function RequestsScreen() {
                             setSelectedTruck(truck);
                             setShowTruckMenu(false);
                           }}
-                          className={`px-4 py-3 border-b border-border/50 flex-row items-center gap-3 ${
-                            selectedTruck.id === truck.id ? "bg-primary-50" : "bg-white"
-                          }`}
+                          className={`px-4 py-3 border-b border-border/50 flex-row items-center gap-3 ${selectedTruck.id === truck.id ? "bg-primary-50" : "bg-white"
+                            }`}
                           activeOpacity={0.7}
                         >
-                          <Ionicons 
-                            name={truck.id === "all" ? "apps-outline" : "car-sport-outline"} 
-                            size={18} 
-                            color={selectedTruck.id === truck.id ? "#2563EB" : "#64748B"} 
+                          <Ionicons
+                            name={truck.id === "all" ? "apps-outline" : "car-sport-outline"}
+                            size={18}
+                            color={selectedTruck.id === truck.id ? "#2563EB" : "#64748B"}
                           />
                           <Text className={`text-sm ${selectedTruck.id === truck.id ? "text-primary font-bold" : "text-text-primary"}`}>
                             {truck.plateNumber}
@@ -574,15 +568,14 @@ export default function RequestsScreen() {
                         <TouchableOpacity
                           key={status}
                           onPress={() => {
-                            setSelectedStatuses(prev => 
-                              prev.includes(status) 
-                                ? prev.filter(s => s !== status) 
+                            setSelectedStatuses(prev =>
+                              prev.includes(status)
+                                ? prev.filter(s => s !== status)
                                 : [...prev, status]
                             );
                           }}
-                          className={`px-3 py-1.5 rounded-lg border ${
-                            isSelected ? "bg-primary-50 border-primary" : "bg-surface border-border"
-                          }`}
+                          className={`px-3 py-1.5 rounded-lg border ${isSelected ? "bg-primary-50 border-primary" : "bg-surface border-border"
+                            }`}
                         >
                           <Text className={`text-[11px] font-bold ${isSelected ? "text-primary" : "text-text-secondary"}`}>
                             {status}
@@ -603,9 +596,8 @@ export default function RequestsScreen() {
                         <TouchableOpacity
                           key={preset}
                           onPress={() => setFilterPreset(preset as any)}
-                          className={`px-3 py-1.5 rounded-lg border ${
-                            isSelected ? "bg-primary-50 border-primary" : "bg-surface border-border"
-                          }`}
+                          className={`px-3 py-1.5 rounded-lg border ${isSelected ? "bg-primary-50 border-primary" : "bg-surface border-border"
+                            }`}
                         >
                           <Text className={`text-[11px] font-bold capitalize ${isSelected ? "text-primary" : "text-text-secondary"}`}>
                             {preset}
@@ -645,7 +637,7 @@ export default function RequestsScreen() {
 
             {/* Footer Buttons */}
             <View className="p-5 border-t border-border/50 bg-surface flex-row gap-3">
-              <TouchableOpacity 
+              <TouchableOpacity
                 activeOpacity={0.8}
                 onPress={() => {
                   setSelectedStatuses([]);
@@ -657,7 +649,7 @@ export default function RequestsScreen() {
               >
                 <Text className="text-text-secondary font-bold text-sm tracking-wide">Reset</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
+              <TouchableOpacity
                 activeOpacity={0.8}
                 onPress={() => {
                   setShowAdvancedFilters(false);
@@ -697,9 +689,9 @@ export default function RequestsScreen() {
       </Modal>
 
       {loading && requests.length === 0 ? (
-         <View className="flex-1 items-center justify-center">
-            <ActivityIndicator size="large" color="#2563EB" />
-         </View>
+        <View className="flex-1 items-center justify-center">
+          <ActivityIndicator size="large" color="#2563EB" />
+        </View>
       ) : (
         <SectionList
           className="flex-1 px-4 z-0 elevation-0"
@@ -715,7 +707,7 @@ export default function RequestsScreen() {
               </View>
               <Text className="text-text-primary font-bold text-lg mb-2">No Requests Found</Text>
               <Text className="text-text-secondary text-center px-6">
-                 No service requests match the selected filters. Tap the + icon below to create one.
+                No service requests match the selected filters. Tap the + icon below to create one.
               </Text>
             </View>
           }

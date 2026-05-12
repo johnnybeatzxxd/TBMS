@@ -328,7 +328,7 @@ function mapBackendRequestToSubmission(req: any): FormSubmission {
     description: req.description || "",
     date: req.date,
     status: req.status || "PENDING",
-    requiresApproval: req.serviceTypeId?.requiresApproval ?? req.serviceType?.requiresApproval ?? true,
+    requiresApproval: req.serviceTypeId?.requiresApproval ?? req.serviceType?.requiresApproval ?? false,
     tag: req.tag,
     serviceRequestId: req.serviceRequestId,
     createdAt: req.createdAt || new Date().toISOString(),
