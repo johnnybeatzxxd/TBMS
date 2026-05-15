@@ -33,9 +33,10 @@ export default function CompaniesListScreen() {
   );
 
   const displayCompanies = useMemo(() => {
-    if (!searchQuery) return companies;
+    const safeCompanies = Array.isArray(companies) ? companies : [];
+    if (!searchQuery) return safeCompanies;
     const q = searchQuery.toLowerCase();
-    return companies.filter((c) => c.name.toLowerCase().includes(q));
+    return safeCompanies.filter((c) => (c.name || "").toLowerCase().includes(q));
   }, [companies, searchQuery]);
 
   return (
@@ -84,18 +85,27 @@ export default function CompaniesListScreen() {
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563EB" />}
         >
+          {!!error && (
+            <View className="bg-red-50 border border-red-100 rounded-xl p-3 mb-1">
+              <Text className="text-red-700 text-sm font-semibold">Failed to refresh companies.</Text>
+              <Text className="text-red-600 text-xs mt-1">{error.message || "Please try again."}</Text>
+            </View>
+          )}
           {displayCompanies.length === 0 ? (
             <View className="items-center py-10">
               <Ionicons name="business-outline" size={48} color="#CBD5E1" />
               <Text className="text-text-secondary font-medium mt-4 text-center">
-                {companies.length === 0
+                {(Array.isArray(companies) ? companies.length : 0) === 0
                   ? "You have no contracted companies.\nTap the + button to register one."
                   : "No companies match your search."}
               </Text>
             </View>
           ) : (
             displayCompanies.map((company) => {
-              const truckCount = company.allowedTrucks?.length || 0;
+              const truckCount = Array.isArray(company.allowedTrucks) ? company.allowedTrucks.length : 0;
+              const currentBalance = Number(company.currentBalance || 0);
+              const totalBalance = Number(company.totalBalance || currentBalance);
+              const totalPaid = Math.max(0, totalBalance - currentBalance);
               return (
                 <TouchableOpacity
                   key={company.id}
@@ -126,19 +136,28 @@ export default function CompaniesListScreen() {
                   <View className="bg-surface rounded-xl p-3 border border-border flex-row gap-3">
                     <View className="flex-1">
                       <Text className="text-text-secondary text-[10px] font-bold tracking-widest uppercase mb-1">
-                        Current Debt
+                        Current Balance
                       </Text>
-                      <Text className={`font-bold text-base ${company.currentBalance > 0 ? "text-amber-600" : "text-text-primary"}`}>
-                        ${company.currentBalance.toLocaleString()}
+                      <Text className={`font-bold text-base ${currentBalance > 0 ? "text-amber-600" : "text-text-primary"}`}>
+                        ${currentBalance.toLocaleString()}
                       </Text>
                     </View>
                     <View className="w-px bg-border my-1" />
                     <View className="flex-1">
                       <Text className="text-text-secondary text-[10px] font-bold tracking-widest uppercase mb-1">
-                        Total Debt
+                        Total Balance
                       </Text>
                       <Text className="text-text-secondary font-bold text-base">
-                        ${(company.totalBalance || company.currentBalance).toLocaleString()}
+                        ${totalBalance.toLocaleString()}
+                      </Text>
+                    </View>
+                    <View className="w-px bg-border my-1" />
+                    <View className="flex-1">
+                      <Text className="text-text-secondary text-[10px] font-bold tracking-widest uppercase mb-1">
+                        Total Paid
+                      </Text>
+                      <Text className="text-success-700 font-bold text-base">
+                        ${totalPaid.toLocaleString()}
                       </Text>
                     </View>
                   </View>

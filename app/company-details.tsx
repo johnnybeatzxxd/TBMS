@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -11,34 +11,46 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
-import { Company, Truck } from "@/src/types";
+import { Company, Truck, TruckCompanyBalance } from "@/src/types";
 import { companyService, truckService } from "@/src/api/services";
+import { useAuthStore } from "@/src/store";
 
 export default function CompanyDetailsScreen() {
-  const { id, name: passedName } = useLocalSearchParams<{ id: string; name?: string }>();
+  const { id } = useLocalSearchParams<{ id: string; name?: string }>();
 
   const [company, setCompany] = useState<Company | null>(null);
   const [allTrucks, setAllTrucks] = useState<Truck[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showTruckPicker, setShowTruckPicker] = useState(false);
+  const [financialTruckId, setFinancialTruckId] = useState<string>("");
+  const [showFinancialTruckMenu, setShowFinancialTruckMenu] = useState(false);
+  const [truckScopedBalance, setTruckScopedBalance] = useState<TruckCompanyBalance | null>(null);
+  const [truckScopeLoading, setTruckScopeLoading] = useState(false);
 
-  const fetchData = async () => {
+  useEffect(() => {
+    setFinancialTruckId("");
+    setShowFinancialTruckMenu(false);
+    setTruckScopedBalance(null);
+    setTruckScopeLoading(false);
+  }, [id]);
+
+  const fetchData = useCallback(async () => {
+    if (!id) return;
     setLoading(true);
     try {
-      const [companiesRes, trucksRes] = await Promise.all([
-        companyService.getCompanies(),
+      const [co, trucksRes] = await Promise.all([
+        companyService.getCompanyById(String(id)),
         truckService.getMyTrucks(),
       ]);
-      const found = (companiesRes || []).find((c: Company) => c.id === id);
-      setCompany(found || null);
+      setCompany(co);
       setAllTrucks(trucksRes.trucks || []);
     } catch (error: any) {
       Alert.alert("Error", error.message || "Failed to load data");
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = async () => {
@@ -49,11 +61,38 @@ export default function CompanyDetailsScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      const { useAuthStore } = require("@/src/store/authStore");
       if (!useAuthStore.getState().isAuthenticated) return;
-      if (id) fetchData();
-    }, [id])
+      if (id) void fetchData();
+    }, [id, fetchData])
   );
+
+  useEffect(() => {
+    if (!company?.id || !financialTruckId) {
+      setTruckScopedBalance(null);
+      setTruckScopeLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setTruckScopeLoading(true);
+    setTruckScopedBalance(null);
+    companyService
+      .getTruckCompanyInfo(financialTruckId, company.id)
+      .then((b) => {
+        if (!cancelled) setTruckScopedBalance(b);
+      })
+      .catch((err: any) => {
+        if (!cancelled) {
+          Alert.alert("Error", err?.message || "Failed to load truck balance");
+          setTruckScopedBalance(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setTruckScopeLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [financialTruckId, company]);
 
   // Trucks assigned to this company
   const assignedTruckIds = new Set(
@@ -65,6 +104,28 @@ export default function CompanyDetailsScreen() {
 
   // Truck objects that ARE assigned
   const assignedTrucks = allTrucks.filter((t) => assignedTruckIds.has(t.id));
+
+  const financialLabel = useMemo(() => {
+    if (!financialTruckId) return "All trucks";
+    return assignedTrucks.find((t) => t.id === financialTruckId)?.plateNumber || "Truck";
+  }, [financialTruckId, assignedTrucks]);
+
+  const overviewBalances = useMemo(() => {
+    if (!company) return { current: 0, total: 0 };
+    if (!financialTruckId) {
+      return {
+        current: company.currentBalance,
+        total: company.totalBalance || company.currentBalance,
+      };
+    }
+    if (truckScopedBalance) {
+      return {
+        current: truckScopedBalance.currentBalance,
+        total: truckScopedBalance.totalBalance,
+      };
+    }
+    return { current: 0, total: 0 };
+  }, [company, financialTruckId, truckScopedBalance]);
 
   const handleAddTruck = async (truckId: string) => {
     if (!id) return;
@@ -153,31 +214,169 @@ export default function CompanyDetailsScreen() {
       >
         {/* Balance Card */}
         <View className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
-          <View className="flex-row items-center gap-2 px-4 pt-4 pb-3 border-b border-border bg-amber-50">
-            <Ionicons name="wallet-outline" size={16} color="#D97706" />
-            <Text className="text-amber-700 font-semibold text-xs tracking-widest uppercase">
-              Financial Overview
-            </Text>
+          <View className="flex-row items-center justify-between px-4 pt-4 pb-3 border-b border-border bg-amber-50">
+            <View className="flex-row items-center gap-2 flex-1 pr-2">
+              <Ionicons name="wallet-outline" size={16} color="#D97706" />
+              <Text className="text-amber-700 font-semibold text-xs tracking-widest uppercase">
+                Financial Overview
+              </Text>
+            </View>
+            <View className="relative" style={{ zIndex: 20, elevation: 12 }}>
+              <TouchableOpacity
+                onPress={() => setShowFinancialTruckMenu((v) => !v)}
+                className="flex-row items-center gap-1 bg-white/90 border border-amber-200 rounded-xl px-2.5 py-1.5 max-w-[140px]"
+                activeOpacity={0.85}
+              >
+                <Ionicons name="car-sport" size={14} color="#D97706" />
+                <Text className="text-amber-900 font-semibold text-xs flex-1" numberOfLines={1}>
+                  {financialLabel}
+                </Text>
+                <Ionicons name={showFinancialTruckMenu ? "chevron-up" : "chevron-down"} size={14} color="#92400E" />
+              </TouchableOpacity>
+
+              {showFinancialTruckMenu && (
+                <View className="absolute right-0 top-9 bg-white rounded-xl border border-border shadow-lg overflow-hidden min-w-[160px] max-h-56">
+                  <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                    <TouchableOpacity
+                      onPress={() => {
+                        setFinancialTruckId("");
+                        setShowFinancialTruckMenu(false);
+                      }}
+                      className={`px-3 py-2.5 flex-row items-center gap-2 border-b border-border ${
+                        financialTruckId === "" ? "bg-amber-50" : ""
+                      }`}
+                    >
+                      <Ionicons
+                        name="apps-outline"
+                        size={16}
+                        color={financialTruckId === "" ? "#D97706" : "#64748B"}
+                      />
+                      <Text
+                        className={`text-sm font-medium flex-1 ${
+                          financialTruckId === "" ? "text-amber-800 font-bold" : "text-text-primary"
+                        }`}
+                      >
+                        All trucks
+                      </Text>
+                      {financialTruckId === "" ? (
+                        <Ionicons name="checkmark" size={14} color="#D97706" />
+                      ) : null}
+                    </TouchableOpacity>
+                    {assignedTrucks.map((truck) => (
+                      <TouchableOpacity
+                        key={truck.id}
+                        onPress={() => {
+                          setFinancialTruckId(truck.id);
+                          setShowFinancialTruckMenu(false);
+                        }}
+                        className={`px-3 py-2.5 flex-row items-center gap-2 border-b border-border ${
+                          financialTruckId === truck.id ? "bg-amber-50" : ""
+                        }`}
+                      >
+                        <MaterialCommunityIcons
+                          name="truck-outline"
+                          size={16}
+                          color={financialTruckId === truck.id ? "#D97706" : "#64748B"}
+                        />
+                        <Text
+                          className={`text-sm font-medium flex-1 ${
+                            financialTruckId === truck.id ? "text-amber-800 font-bold" : "text-text-primary"
+                          }`}
+                          numberOfLines={1}
+                        >
+                          {truck.plateNumber}
+                        </Text>
+                        {financialTruckId === truck.id ? (
+                          <Ionicons name="checkmark" size={14} color="#D97706" />
+                        ) : null}
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
           </View>
           <View className="p-4 flex-row gap-4">
             <View className="flex-1 items-center">
               <Text className="text-text-secondary text-[10px] font-bold tracking-widest uppercase mb-1">
-                Current Debt
+                Current Balance
               </Text>
-              <Text className={`font-bold text-2xl ${company.currentBalance > 0 ? "text-amber-600" : "text-success"}`}>
-                ${company.currentBalance.toLocaleString()}
-              </Text>
+              {truckScopeLoading && financialTruckId ? (
+                <View className="h-8 justify-center mt-1">
+                  <ActivityIndicator size="small" color="#D97706" />
+                </View>
+              ) : (
+                <Text
+                  className={`font-bold text-2xl ${
+                    overviewBalances.current > 0 ? "text-amber-600" : "text-success"
+                  }`}
+                >
+                  ${overviewBalances.current.toLocaleString()}
+                </Text>
+              )}
             </View>
             <View className="w-px bg-border" />
             <View className="flex-1 items-center">
               <Text className="text-text-secondary text-[10px] font-bold tracking-widest uppercase mb-1">
-                Total Debt
+                Total Balance
               </Text>
-              <Text className="text-text-secondary font-bold text-2xl">
-                ${(company.totalBalance || company.currentBalance).toLocaleString()}
-              </Text>
+              {truckScopeLoading && financialTruckId ? (
+                <View className="h-8 justify-center mt-1">
+                  <ActivityIndicator size="small" color="#64748B" />
+                </View>
+              ) : (
+                <Text className="text-text-secondary font-bold text-2xl">
+                  ${overviewBalances.total.toLocaleString()}
+                </Text>
+              )}
             </View>
           </View>
+
+        <View className="px-4 pb-4 flex-row gap-3">
+          <TouchableOpacity
+            disabled={truckScopeLoading && !!financialTruckId}
+            onPress={() => {
+              const assignedPayload = assignedTrucks.map((t) => ({
+                id: t.id,
+                plateNumber: t.plateNumber,
+              }));
+              const navParams: Record<string, string> = {
+                companyId: company.id,
+                name: company.name,
+                currentBalance: String(Math.round(overviewBalances.current)),
+                assignedTrucks: JSON.stringify(assignedPayload),
+              };
+              if (financialTruckId) {
+                navParams.presetTruckId = financialTruckId;
+                navParams.presetTruckPlate =
+                  assignedTrucks.find((t) => t.id === financialTruckId)?.plateNumber || "Truck";
+              }
+              router.push({
+                pathname: "/company-trips",
+                params: navParams,
+              } as any);
+            }}
+            className={`flex-1 flex-row items-center justify-center gap-2 bg-primary-50 border border-primary-100 py-3 rounded-xl ${
+              truckScopeLoading && financialTruckId ? "opacity-50" : ""
+            }`}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="checkmark-circle-outline" size={18} color="#2563EB" />
+            <Text className="text-primary font-bold text-sm">Claim Trips</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() =>
+              router.push(
+                `/company-payments?companyId=${company.id}&name=${encodeURIComponent(company.name)}` as any
+              )
+            }
+            className="flex-1 flex-row items-center justify-center gap-2 bg-success-50 border border-success-200 py-3 rounded-xl"
+            activeOpacity={0.8}
+          >
+            <Ionicons name="cash-outline" size={16} color="#16A34A" />
+            <Text className="text-success-700 font-bold text-sm">Payments</Text>
+          </TouchableOpacity>
+        </View>
         </View>
 
         {/* Assigned Trucks */}

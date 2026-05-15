@@ -62,6 +62,7 @@ export default function RootLayout() {
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="admin-dashboard" options={{ headerShown: false }} />
         <Stack.Screen name="admin-trips" options={{ headerShown: false }} />
+        <Stack.Screen name="admin-trip-filters" options={{ headerShown: false }} />
         <Stack.Screen name="admin-expenses" options={{ headerShown: false }} />
         <Stack.Screen name="admin-transfers" options={{ headerShown: false }} />
         <Stack.Screen name="admin-requests" options={{ headerShown: false }} />
@@ -76,6 +77,8 @@ export default function RootLayout() {
         <Stack.Screen name="trucks" options={{ headerShown: false }} />
         <Stack.Screen name="companies" options={{ headerShown: false }} />
         <Stack.Screen name="company-details" options={{ headerShown: false }} />
+        <Stack.Screen name="company-trips" options={{ headerShown: false }} />
+        <Stack.Screen name="company-payments" options={{ headerShown: false }} />
         <Stack.Screen name="analytics" options={{ headerShown: false }} />
         <Stack.Screen name="profile" options={{ headerShown: false }} />
         <Stack.Screen name="driver-dashboard" options={{ headerShown: false }} />

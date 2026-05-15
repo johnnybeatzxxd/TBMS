@@ -14,6 +14,7 @@ import DateTimePicker, {
   DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
 import { router, useLocalSearchParams } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { tripService, companyService } from "@/src/api/services";
@@ -209,7 +210,7 @@ export default function AddTripModal() {
   };
 
   return (
-    <View className="flex-1 bg-surface">
+    <SafeAreaView className="flex-1 bg-surface" edges={["top", "bottom"]}>
       {/* Modal Header */}
       <View className="flex-row items-center justify-between px-5 pt-4 pb-3 bg-white border-b border-border shadow-sm">
         <TouchableOpacity activeOpacity={0.7} onPress={() => router.back()} className="w-10 h-10 items-center justify-center -ml-2">
@@ -516,6 +517,6 @@ export default function AddTripModal() {
           )}
         </TouchableOpacity>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }

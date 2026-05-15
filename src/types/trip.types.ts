@@ -64,6 +64,8 @@ export interface GetTripsQuery {
   roadExpence?: number;
   volume?: "MCUBE10" | "MCUBE16";
   claimed?: boolean;
+  /** Credit trips: filter by contracted company (if supported by API). */
+  companyId?: string;
 }
 
 export interface PaginatedTrips {

@@ -1,14 +1,18 @@
-import { useState, useEffect, useCallback } from "react";
-import { View, Text, TouchableOpacity, ScrollView, Modal, Alert, ActivityIndicator, SectionList, RefreshControl } from "react-native";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { View, Text, TouchableOpacity, ScrollView, Alert, ActivityIndicator, SectionList, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { router, useLocalSearchParams } from "expo-router";
 import { useAuthStore, useCacheStore } from "@/src/store";
-import { DateFilterBar, DateFilterPreset, passesDateFilter } from "@/src/components/DateFilterBar";
+import { DateFilterBar, DateFilterPreset } from "@/src/components/DateFilterBar";
 import { tripService, truckService } from "@/src/api/services";
 import { Trip, Truck, GetTripsQuery } from "@/src/types";
+import {
+  writeOpenFiltersDraft,
+  consumeAppliedFilters,
+  type AdminTripFiltersSnapshot,
+} from "@/src/utils/adminTripFiltersStorage";
 
 const getRelativeDateLabel = (dateStr: string) => {
   const d = new Date(dateStr);
@@ -88,7 +92,14 @@ const TripCard = ({ trip, isManager, onRefresh, onUpdateTrip, onDelete, activePa
   });
 
   const volumeLabel = trip.volume === "MCUBE10" ? "10 M³" : trip.volume === "MCUBE16" ? "16 M³" : trip.volume;
+  const routeTitle =
+    [trip.loadingSite?.trim(), trip.destinationSite?.trim()].filter(Boolean).join(" — ") ||
+    trip.destinationSite ||
+    trip.loadingSite ||
+    "Trip";
   const isPending = tripPaymentType === "CASH" && trip.approved !== "APPROVED";
+  const showEditTrip = trip.approved !== "APPROVED";
+  const showApproveOrDelete = trip.approved !== "APPROVED";
 
   return (
     <TouchableOpacity
@@ -103,8 +114,8 @@ const TripCard = ({ trip, isManager, onRefresh, onUpdateTrip, onDelete, activePa
             <Ionicons name={tripPaymentType === "CREDIT" ? "business" : "cash"} size={20} color={tripPaymentType === "CREDIT" ? "#2563EB" : "#16A34A"} />
           </View>
           <View className="flex-1">
-            <Text className="text-text-primary font-bold text-base" numberOfLines={1}>
-              {trip.destinationSite}
+            <Text className="text-text-primary font-bold text-base" numberOfLines={2}>
+              {routeTitle}
             </Text>
             <View className="flex-row items-center gap-2 mt-0.5">
               <Text className="text-text-secondary text-xs">{formattedDate}</Text>
@@ -280,27 +291,28 @@ const TripCard = ({ trip, isManager, onRefresh, onUpdateTrip, onDelete, activePa
           </View>
 
           {/* Action Bar (Admin Only) */}
-          {isManager && (
+          {isManager && (showEditTrip || showApproveOrDelete) && (
             <View className="px-4 py-3 bg-white border-t border-border flex-row items-center gap-3">
-              {/* Edit Button */}
-              <TouchableOpacity
-                onPress={(e) => {
-                  e.stopPropagation?.();
-                  // Determine trip type: if trip has companyId it's credit, otherwise use the paymentMethod field
-                  const isCreditTrip = !!trip.companyId || trip.paymentMethod === "CREDIT";
-                  const tripTypeParam = isCreditTrip ? "credit" : "cash";
-                  const qs = `?id=${trip.id}&tripType=${tripTypeParam}&date=${encodeURIComponent(formattedDate)}&loadingSite=${encodeURIComponent(trip.loadingSite)}&unloadingSite=${encodeURIComponent(trip.destinationSite)}&paymentMethod=${isCreditTrip ? "CREDIT" : "CASH"}&cashAmount=${trip.amount || ""}&volume=${trip.volume}&roadExpense=${trip.roadExpence || 0}`;
-                  router.push(`/add-trip${qs}` as any);
-                }}
-                className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-xl bg-primary-50 border border-primary-100"
-                activeOpacity={0.7}
-              >
-                <Ionicons name="pencil" size={16} color="#2563EB" />
-                <Text className="text-primary font-bold text-sm">Edit Trip</Text>
-              </TouchableOpacity>
+              {showEditTrip && (
+                <TouchableOpacity
+                  onPress={(e) => {
+                    e.stopPropagation?.();
+                    // Determine trip type: if trip has companyId it's credit, otherwise use the paymentMethod field
+                    const isCreditTrip = !!trip.companyId || trip.paymentMethod === "CREDIT";
+                    const tripTypeParam = isCreditTrip ? "credit" : "cash";
+                    const qs = `?id=${trip.id}&tripType=${tripTypeParam}&date=${encodeURIComponent(formattedDate)}&loadingSite=${encodeURIComponent(trip.loadingSite)}&unloadingSite=${encodeURIComponent(trip.destinationSite)}&paymentMethod=${isCreditTrip ? "CREDIT" : "CASH"}&cashAmount=${trip.amount || ""}&volume=${trip.volume}&roadExpense=${trip.roadExpence || 0}`;
+                    router.push(`/add-trip${qs}` as any);
+                  }}
+                  className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-xl bg-primary-50 border border-primary-100"
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="pencil" size={16} color="#2563EB" />
+                  <Text className="text-primary font-bold text-sm">Edit Trip</Text>
+                </TouchableOpacity>
+              )}
 
               {/* Accept Button (for any pending trip) */}
-              {trip.approved !== "APPROVED" && (
+              {showApproveOrDelete && (
                 <TouchableOpacity
                   onPress={(e) => {
                     e.stopPropagation?.();
@@ -329,7 +341,7 @@ const TripCard = ({ trip, isManager, onRefresh, onUpdateTrip, onDelete, activePa
               )}
 
               {/* Delete Button (for non-approved trips only) */}
-              {trip.approved !== "APPROVED" && (
+              {showApproveOrDelete && (
                 <TouchableOpacity
                   onPress={(e) => {
                     e.stopPropagation?.();
@@ -401,34 +413,123 @@ export default function TripsListScreen() {
   const [customFrom, setCustomFrom] = useState<Date | null>(null);
   const [customTo, setCustomTo] = useState<Date | null>(null);
 
-  // Advanced Filter Modal State
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [showFromPicker, setShowFromPicker] = useState(false);
-  const [showToPicker, setShowToPicker] = useState(false);
-  
   const [paymentFilter, setPaymentFilter] = useState<"CASH" | "CREDIT">("CASH");
   const [claimFilter, setClaimFilter] = useState<"All" | "Claimed" | "Unclaimed">("All");
 
+  // Advanced filters (applied state; edit on /admin-trip-filters)
+  const [advLoadingSite, setAdvLoadingSite] = useState("");
+  const [advDestinationSite, setAdvDestinationSite] = useState("");
+  const [advAmount, setAdvAmount] = useState("");
+  const [advRoadExpence, setAdvRoadExpence] = useState("");
+  const [advVolume, setAdvVolume] = useState<"" | "MCUBE10" | "MCUBE16">("");
+  const [advApproved, setAdvApproved] = useState<"" | "PENDING" | "APPROVED" | "DECLINED">("");
+  const [advCompanyId, setAdvCompanyId] = useState("");
+
+  type TripFiltersRef = {
+    paymentFilter: "CASH" | "CREDIT";
+    customFrom: Date | null;
+    customTo: Date | null;
+    claimFilter: "All" | "Claimed" | "Unclaimed";
+    advLoadingSite: string;
+    advDestinationSite: string;
+    advAmount: string;
+    advRoadExpence: string;
+    advVolume: "" | "MCUBE10" | "MCUBE16";
+    advApproved: "" | "PENDING" | "APPROVED" | "DECLINED";
+    advCompanyId: string;
+  };
+
+  const tripFiltersRef = useRef<TripFiltersRef>({
+    paymentFilter: "CASH",
+    customFrom: null,
+    customTo: null,
+    claimFilter: "All",
+    advLoadingSite: "",
+    advDestinationSite: "",
+    advAmount: "",
+    advRoadExpence: "",
+    advVolume: "",
+    advApproved: "",
+    advCompanyId: "",
+  });
+
+  useEffect(() => {
+    tripFiltersRef.current = {
+      paymentFilter,
+      customFrom,
+      customTo,
+      claimFilter,
+      advLoadingSite,
+      advDestinationSite,
+      advAmount,
+      advRoadExpence,
+      advVolume,
+      advApproved,
+      advCompanyId,
+    };
+  }, [
+    paymentFilter,
+    customFrom,
+    customTo,
+    claimFilter,
+    advLoadingSite,
+    advDestinationSite,
+    advAmount,
+    advRoadExpence,
+    advVolume,
+    advApproved,
+    advCompanyId,
+  ]);
+
   const buildQuery = (pageNumber: number): GetTripsQuery => {
-    let query: GetTripsQuery = {
+    const tf = tripFiltersRef.current;
+    const query: GetTripsQuery = {
       page: pageNumber,
       perpage: 10,
-      paymentMethod: paymentFilter,
+      paymentMethod: tf.paymentFilter,
     };
 
     if (isManager && selectedTruck.id) {
       query.truckId = selectedTruck.id;
     }
 
-    if (paymentFilter === "CREDIT" && claimFilter !== "All") {
-      query.claimed = claimFilter === "Claimed";
+    if (tf.paymentFilter === "CREDIT") {
+      if (tf.claimFilter === "Claimed") {
+        query.claimed = true;
+      } else if (tf.claimFilter === "Unclaimed") {
+        query.claimed = false;
+      }
+      // All: omit `claimed` — no filter on claim status
     }
 
-    if (customFrom) {
-      query.startDate = customFrom.toISOString();
+    if (tf.paymentFilter === "CREDIT" && tf.advCompanyId.trim()) {
+      query.companyId = tf.advCompanyId.trim();
     }
-    if (customTo) {
-      query.endDate = customTo.toISOString();
+
+    if (tf.customFrom) {
+      query.startDate = tf.customFrom.toISOString();
+    }
+    if (tf.customTo) {
+      query.endDate = tf.customTo.toISOString();
+    }
+
+    const ls = tf.advLoadingSite.trim();
+    if (ls) query.loadingSite = ls;
+    const ds = tf.advDestinationSite.trim();
+    if (ds) query.destinationSite = ds;
+
+    const amt = Number(tf.advAmount);
+    if (tf.advAmount.trim() !== "" && !Number.isNaN(amt)) query.amount = amt;
+
+    const road = Number(tf.advRoadExpence);
+    if (tf.advRoadExpence.trim() !== "" && !Number.isNaN(road)) query.roadExpence = road;
+
+    if (tf.advVolume === "MCUBE10" || tf.advVolume === "MCUBE16") {
+      query.volume = tf.advVolume;
+    }
+
+    if (tf.paymentFilter === "CASH" && tf.advApproved) {
+      query.approved = tf.advApproved;
     }
 
     return query;
@@ -441,8 +542,7 @@ export default function TripsListScreen() {
     try {
       const query = buildQuery(pageNumber);
       const res = await tripService.getTrips(query);
-      const newTrips = append ? [...trips, ...res.data] : res.data;
-      setTrips(newTrips);
+      setTrips((prev) => (append ? [...prev, ...res.data] : res.data));
       setPage(res.meta.currentPage);
       setTotalPages(res.meta.totalPages);
       
@@ -456,7 +556,7 @@ export default function TripsListScreen() {
       if (pageNumber === 1) setLoadingInitial(false);
       else setLoadingMore(false);
     }
-  }, [selectedTruck, paymentFilter, claimFilter, customFrom, customTo, isManager]);
+  }, [selectedTruck, isManager, setCachedTrips, paymentFilter]);
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
@@ -465,11 +565,45 @@ export default function TripsListScreen() {
     setRefreshing(false);
   }, [loadTrips]);
 
-  // Automatically reload trips when returning from another screen (like Add Trip)
+  // Reload when screen is focused; consume filter page "Apply" from AsyncStorage first
   useFocusEffect(
     useCallback(() => {
-      loadTrips(1);
-    }, [loadTrips])
+      let cancelled = false;
+      (async () => {
+        const applied = await consumeAppliedFilters();
+        if (cancelled) return;
+        if (applied) {
+          setFilterPreset(applied.filterPreset ?? "all");
+          setCustomFrom(applied.customFromIso ? new Date(applied.customFromIso) : null);
+          setCustomTo(applied.customToIso ? new Date(applied.customToIso) : null);
+          setClaimFilter(applied.claimFilter);
+          setAdvLoadingSite(applied.advLoadingSite ?? "");
+          setAdvDestinationSite(applied.advDestinationSite ?? "");
+          setAdvAmount(applied.advAmount ?? "");
+          setAdvRoadExpence(applied.advRoadExpence ?? "");
+          setAdvVolume((applied.advVolume as "" | "MCUBE10" | "MCUBE16") || "");
+          setAdvApproved((applied.advApproved as TripFiltersRef["advApproved"]) || "");
+          setAdvCompanyId(applied.advCompanyId ?? "");
+          tripFiltersRef.current = {
+            ...tripFiltersRef.current,
+            customFrom: applied.customFromIso ? new Date(applied.customFromIso) : null,
+            customTo: applied.customToIso ? new Date(applied.customToIso) : null,
+            claimFilter: applied.claimFilter,
+            advLoadingSite: applied.advLoadingSite ?? "",
+            advDestinationSite: applied.advDestinationSite ?? "",
+            advAmount: applied.advAmount ?? "",
+            advRoadExpence: applied.advRoadExpence ?? "",
+            advVolume: (applied.advVolume as TripFiltersRef["advVolume"]) || "",
+            advApproved: (applied.advApproved as TripFiltersRef["advApproved"]) || "",
+            advCompanyId: applied.advCompanyId ?? "",
+          };
+        }
+        if (!cancelled) await loadTrips(1);
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [loadTrips, paymentFilter])
   );
 
   const handleLoadMore = () => {
@@ -487,6 +621,37 @@ export default function TripsListScreen() {
   };
 
   const tripGroups = getGroupedTrips(trips);
+
+  const openTripFiltersPage = useCallback(async () => {
+    const draft: AdminTripFiltersSnapshot = {
+      filterPreset,
+      customFromIso: customFrom?.toISOString() ?? null,
+      customToIso: customTo?.toISOString() ?? null,
+      claimFilter,
+      advLoadingSite,
+      advDestinationSite,
+      advAmount,
+      advRoadExpence,
+      advVolume,
+      advApproved,
+      advCompanyId,
+    };
+    await writeOpenFiltersDraft(draft);
+    router.push(`/admin-trip-filters?paymentMethod=${paymentFilter}` as any);
+  }, [
+    filterPreset,
+    customFrom,
+    customTo,
+    claimFilter,
+    advLoadingSite,
+    advDestinationSite,
+    advAmount,
+    advRoadExpence,
+    advVolume,
+    advApproved,
+    advCompanyId,
+    paymentFilter,
+  ]);
 
   // Refresh trucks from API only when dropdown is opened
   const handleOpenTruckDropdown = async () => {
@@ -584,6 +749,7 @@ export default function TripsListScreen() {
               onPress={() => {
                 setTrips([]);
                 setPaymentFilter("CASH");
+                setAdvCompanyId("");
               }}
               className={`flex-1 flex-row items-center justify-center gap-2 py-2.5 rounded-lg ${
                 paymentFilter === "CASH" ? "bg-white border border-border" : ""
@@ -600,6 +766,7 @@ export default function TripsListScreen() {
               onPress={() => {
                 setTrips([]);
                 setPaymentFilter("CREDIT");
+                setAdvApproved("");
               }}
               className={`flex-1 flex-row items-center justify-center gap-2 py-2.5 rounded-lg ${
                 paymentFilter === "CREDIT" ? "bg-white border border-border" : ""
@@ -621,6 +788,7 @@ export default function TripsListScreen() {
         <View className="flex-1">
           <DateFilterBar
             activePreset={filterPreset}
+            hideCustomPreset
             onPresetChange={(preset) => {
               setFilterPreset(preset);
               if (preset === "all") {
@@ -645,10 +813,7 @@ export default function TripsListScreen() {
           />
         </View>
         <TouchableOpacity 
-          onPress={() => {
-            setFilterPreset("custom");
-            setShowAdvancedFilters(true);
-          }}
+          onPress={() => void openTripFiltersPage()}
           className="w-10 h-10 bg-primary-50 rounded-lg items-center justify-center border border-primary-100 mr-4"
           activeOpacity={0.7}
         >
@@ -656,121 +821,6 @@ export default function TripsListScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Advanced Filter Modal */}
-      <Modal visible={showAdvancedFilters} transparent animationType="fade">
-        <View className="flex-1 bg-black/50 justify-center items-center px-5">
-          <View className="bg-white rounded-3xl w-full max-w-sm overflow-hidden border border-border shadow-2xl">
-            {/* Header */}
-            <View className="flex-row items-center justify-between px-5 pt-5 pb-3 border-b border-border/50">
-              <Text className="text-text-primary font-bold text-lg">Advanced Filters</Text>
-              <TouchableOpacity onPress={() => setShowAdvancedFilters(false)} className="w-8 h-8 bg-surface rounded-full items-center justify-center">
-                <Ionicons name="close" size={18} color="#64748B" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Modal Body */}
-            <View className="px-5 py-4 gap-5">
-              {/* Date Range Section */}
-              <View>
-                <Text className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Custom Date Range</Text>
-                <View className="flex-row items-center gap-2">
-                  <TouchableOpacity
-                    onPress={() => setShowFromPicker(true)}
-                    className="flex-1 flex-row items-center bg-surface rounded-lg px-3 py-2 border border-border"
-                  >
-                    <Ionicons name="calendar-outline" size={14} color="#64748B" />
-                    <Text className="ml-2 text-sm text-text-primary">
-                      {customFrom ? `${customFrom.getMonth() + 1}/${customFrom.getDate()}` : "Start Date"}
-                    </Text>
-                  </TouchableOpacity>
-
-                  <Ionicons name="arrow-forward" size={14} color="#94A3B8" />
-
-                  <TouchableOpacity
-                    onPress={() => setShowToPicker(true)}
-                    className="flex-1 flex-row items-center bg-surface rounded-lg px-3 py-2 border border-border"
-                  >
-                    <Ionicons name="calendar-outline" size={14} color="#64748B" />
-                    <Text className="ml-2 text-sm text-text-primary">
-                      {customTo ? `${customTo.getMonth() + 1}/${customTo.getDate()}` : "End Date"}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Claim Status shown when Credit is selected */}
-
-              {/* Claim Status Section */}
-              {isManager && paymentFilter === "CREDIT" && (
-                <View>
-                  <Text className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Claim Status</Text>
-                  <View className="flex-row gap-2">
-                    {["All", "Claimed", "Unclaimed"].map(status => (
-                      <TouchableOpacity 
-                        key={status}
-                        onPress={() => setClaimFilter(status as any)}
-                        className={`px-3 py-1.5 rounded-full border ${claimFilter === status ? "bg-primary border-primary" : "bg-surface border-border"}`}
-                      >
-                        <Text className={`text-xs font-semibold ${claimFilter === status ? "text-white" : "text-text-secondary"}`}>{status}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              )}
-            </View>
-
-            {/* Footer */}
-            <View className="p-5 border-t border-border/50 bg-surface flex-row gap-3">
-              <TouchableOpacity 
-                activeOpacity={0.8}
-                onPress={() => {
-                  setClaimFilter("All");
-                  setFilterPreset("all");
-                  setCustomFrom(null);
-                  setCustomTo(null);
-                }}
-                className="flex-1 bg-white border border-border rounded-xl items-center justify-center py-3"
-              >
-                <Text className="text-text-secondary font-bold text-sm tracking-wide">Clear</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                activeOpacity={0.8}
-                onPress={() => {
-                  setShowAdvancedFilters(false);
-                  loadTrips(1); // Force immediate execute of new filters map
-                }}
-                className="flex-1 bg-primary rounded-xl items-center justify-center py-3 shadow-sm border border-primary-600"
-              >
-                <Text className="text-white font-bold text-sm tracking-wide">Apply</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-
-        {/* Date Pickers */}
-        {showFromPicker && (
-          <DateTimePicker
-            value={customFrom || new Date()}
-            mode="date"
-            display="default"
-            onChange={(_, d) => {
-              setShowFromPicker(false);
-              if (d) setCustomFrom(d);
-            }}
-          />
-        )}
-        {showToPicker && (
-          <DateTimePicker
-            value={customTo || new Date()}
-            mode="date"
-            display="default"
-            onChange={(_, d) => {
-              setShowToPicker(false);
-              if (d) setCustomTo(d);
-            }}
-          />
-        )}
-      </Modal>
 
       <SectionList
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563EB" />}

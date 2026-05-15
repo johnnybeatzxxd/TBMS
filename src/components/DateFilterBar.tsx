@@ -13,6 +13,8 @@ interface DateFilterBarProps {
   onCustomFromChange: (date: Date) => void;
   onCustomToChange: (date: Date) => void;
   hideCustomDateRow?: boolean;
+  /** Hide the "Custom" pill (Trips uses the filter screen for custom ranges). */
+  hideCustomPreset?: boolean;
 }
 
 const PRESETS: { key: DateFilterPreset; label: string }[] = [
@@ -36,16 +38,19 @@ export function DateFilterBar({
   onCustomFromChange,
   onCustomToChange,
   hideCustomDateRow = false,
+  hideCustomPreset = false,
 }: DateFilterBarProps) {
   const [showFromPicker, setShowFromPicker] = useState(false);
   const [showToPicker, setShowToPicker] = useState(false);
+
+  const presets = hideCustomPreset ? PRESETS.filter((p) => p.key !== "custom") : PRESETS;
 
   return (
     <View className="bg-white py-3 border-b border-border/50">
       {/* Preset Pills */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16 }}>
         <View className="flex-row gap-2">
-          {PRESETS.map((p) => (
+          {presets.map((p) => (
           <TouchableOpacity
             key={p.key}
             onPress={() => onPresetChange(p.key)}

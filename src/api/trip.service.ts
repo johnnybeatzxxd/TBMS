@@ -85,13 +85,17 @@ export const tripService = {
   async getTrips(query: GetTripsQuery = {}): Promise<PaginatedTrips> {
     const params = new URLSearchParams();
     Object.entries(query).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        if (value instanceof Date) {
-          params.append(key, value.toISOString());
-        } else {
-          params.append(key, value.toString());
-        }
+      if (value === undefined || value === null) return;
+      if (typeof value === "string" && value.trim() === "") return;
+      if (value instanceof Date) {
+        params.append(key, value.toISOString());
+        return;
       }
+      if (typeof value === "boolean") {
+        params.append(key, value ? "true" : "false");
+        return;
+      }
+      params.append(key, String(value));
     });
 
     const queryString = params.toString();

@@ -20,3 +20,9 @@ export interface RegisterPaymentPayload {
   amount: number;
   date?: string | Date;
 }
+
+/** Balances for one truck under one company (GET get-truck-company-info). */
+export interface TruckCompanyBalance {
+  currentBalance: number;
+  totalBalance: number;
+}
