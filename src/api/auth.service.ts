@@ -16,12 +16,24 @@ export const authService = {
   async login(credentials: LoginCredentials): Promise<{ user: User }> {
     console.log("[AUTH] Attempting login for:", credentials.username);
 
+    const body: Record<string, string> = {
+      username: credentials.username,
+      password: credentials.password,
+    };
+    if (credentials.deviceToken) {
+      body.deviceToken = credentials.deviceToken;
+    }
+
+    console.log("[AUTH] Login body includes deviceToken:", !!credentials.deviceToken, {
+      tokenLength: credentials.deviceToken?.length ?? 0,
+      tokenPreview: credentials.deviceToken
+        ? `${credentials.deviceToken.slice(0, 16)}…`
+        : null,
+    });
+
     const res = await apiFetch("/auth/login", {
       method: "POST",
-      body: JSON.stringify({
-        username: credentials.username,
-        password: credentials.password,
-      }),
+      body: JSON.stringify(body),
     });
 
     console.log("[AUTH] Response status:", res.status);

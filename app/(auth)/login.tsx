@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -16,12 +16,18 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useCallback } from "react";
 import { BackHandler } from "react-native";
 import { useAuthStore } from "@/src/store";
+import { notificationUtils } from "@/src/utils/notifications";
 
 export default function LoginScreen() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const { login, isLoading, error, clearError } = useAuthStore();
+
+  // Ask notification permission as soon as login screen opens
+  useEffect(() => {
+    notificationUtils.requestPushPermissionOnLoginScreen();
+  }, []);
 
   // Trap hardware back button — login is root of unauth stack; back should exit app
   useFocusEffect(
@@ -42,7 +48,16 @@ export default function LoginScreen() {
 
     clearError();
 
-    await login({ username: username.trim(), password });
+    // Fetch FCM token immediately before login (avoids race with mount effect)
+    console.log("[LOGIN] Fetching FCM token before login…");
+    const deviceToken = await notificationUtils.getFcmDeviceTokenForLogin();
+    console.log("[LOGIN] FCM token for login:", deviceToken ? "present" : "missing");
+
+    await login({
+      username: username.trim(),
+      password,
+      deviceToken: deviceToken ?? undefined,
+    });
 
     // The store catches errors internally, so check state after login
     const state = useAuthStore.getState();

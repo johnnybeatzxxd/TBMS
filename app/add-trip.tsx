@@ -9,6 +9,8 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
+import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 import DateTimePicker, {
   DateTimePickerEvent,
@@ -18,9 +20,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { tripService, companyService } from "@/src/api/services";
-import { Company, AddTripPayload, UpdateTripPayload } from "@/src/types";
+import { AddTripPayload, UpdateTripPayload } from "@/src/types";
 import { useCachedFetch } from "@/src/hooks/useCachedFetch";
 import { useAuthStore } from "@/src/store";
+import {
+  uploadCreditTripReceipt,
+  formatFirebaseError,
+} from "@/src/utils/firebaseUpload";
 
 type Volume = "10MCUBE" | "16MCUBE";
 
@@ -131,7 +137,96 @@ export default function AddTripModal() {
   const [selectedCompany, setSelectedCompany] = useState<string>("");
   const [companyDropdownOpen, setCompanyDropdownOpen] = useState(false);
 
+  const [receiptImage, setReceiptImage] = useState<string | null>(null);
+  const [receiptPicUrl, setReceiptPicUrl] = useState<string | null>(null);
+  const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
+  /** Visual state on the receipt thumbnail */
+  const [receiptUploadStatus, setReceiptUploadStatus] = useState<
+    "idle" | "uploading" | "success" | "failed"
+  >("idle");
+  const [uploadStatus, setUploadStatus] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const uploadReceiptNow = async (localUri: string) => {
+    console.log("[AddTrip] uploadReceiptNow", { localUri });
+    setIsUploadingReceipt(true);
+    setReceiptUploadStatus("uploading");
+    setReceiptPicUrl(null);
+    setUploadStatus("");
+
+    try {
+      const url = await uploadCreditTripReceipt(localUri);
+      setReceiptPicUrl(url);
+      setReceiptUploadStatus("success");
+      setUploadStatus("Receipt uploaded ✓");
+      console.log("[AddTrip] receipt uploaded", { url });
+    } catch (uploadError) {
+      console.error("[AddTrip] receipt upload failed", uploadError);
+      setReceiptPicUrl(null);
+      setReceiptUploadStatus("failed");
+      setUploadStatus("Upload failed — tap photo to retry");
+      Alert.alert("Upload Failed", formatFirebaseError(uploadError));
+    } finally {
+      setIsUploadingReceipt(false);
+    }
+  };
+
+  const pickReceiptImage = async () => {
+    if (isUploadingReceipt) {
+      Alert.alert("Please wait", "A receipt is already uploading.");
+      return;
+    }
+
+    console.log("[AddTrip] pickReceiptImage tapped");
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      console.log("[AddTrip] permission", permissionResult);
+      if (!permissionResult.granted) {
+        Alert.alert("Permission Required", "Please allow access to your photos to upload receipts.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      console.log("[AddTrip] picker result", {
+        canceled: result.canceled,
+        assetCount: result.assets?.length,
+        uri: result.assets?.[0]?.uri,
+      });
+
+      if (!result.canceled && result.assets?.length) {
+        const uri = result.assets[0].uri;
+        setReceiptImage(uri);
+        setReceiptPicUrl(null);
+        setReceiptUploadStatus("uploading");
+        setUploadStatus("Uploading receipt…");
+        console.log("[AddTrip] receipt image set, starting immediate upload");
+        await uploadReceiptNow(uri);
+      } else {
+        console.log("[AddTrip] picker canceled or no assets");
+      }
+    } catch (error) {
+      console.error("[AddTrip] pickReceiptImage error", error);
+      Alert.alert("Error", formatFirebaseError(error));
+    }
+  };
+
+  const removeReceiptImage = () => {
+    setReceiptImage(null);
+    setReceiptPicUrl(null);
+    setReceiptUploadStatus("idle");
+    setUploadStatus("");
+    console.log("[AddTrip] receipt image removed");
+  };
+
+  const retryReceiptUpload = () => {
+    if (receiptImage && !isUploadingReceipt && receiptUploadStatus === "failed") {
+      uploadReceiptNow(receiptImage);
+    }
+  };
 
   const onDateChange = (_: DateTimePickerEvent, selected?: Date) => {
     setShowDatePicker(false);
@@ -164,10 +259,23 @@ export default function AddTripModal() {
       Alert.alert("Validation Error", "Please enter a valid road expense amount.");
       return;
     }
+    if (tripType === "credit" && !isEditMode && isUploadingReceipt) {
+      Alert.alert("Please wait", "Receipt is still uploading. Try again in a moment.");
+      return;
+    }
+    if (tripType === "credit" && !isEditMode && receiptImage && !receiptPicUrl) {
+      Alert.alert(
+        "Receipt not uploaded",
+        "The receipt image did not finish uploading. Please pick the image again."
+      );
+      return;
+    }
 
     setIsSubmitting(true);
 
     try {
+      console.log("[AddTrip] submitting trip", { receiptPicUrl });
+
       const payload: AddTripPayload = {
         date: tripDate,
         loadingSite: loadingSite.trim(),
@@ -177,7 +285,7 @@ export default function AddTripModal() {
         amount: tripType === "cash" ? Number(cashAmount) : Number(paymentAmount),
         roadExpence: roadExpense ? Number(roadExpense) : 0,
         companyId: tripType === "credit" ? selectedCompany : undefined,
-        receiptPic: tripType === "credit" ? "-" : undefined,
+        receiptPic: receiptPicUrl ?? undefined,
       };
 
       if (isEditMode && params.id) {
@@ -203,6 +311,7 @@ export default function AddTripModal() {
         [{ text: "OK", onPress: () => router.back() }]
       );
     } catch (error: any) {
+      console.error("[AddTrip] submit failed", error);
       Alert.alert("Submission Failed", error.message || "Failed to process the trip.");
     } finally {
       setIsSubmitting(false);
@@ -497,16 +606,138 @@ export default function AddTripModal() {
           </View>
         </View>
 
+        {/* Receipt Photo (Credit trips only) */}
+        {tripType === "credit" && !isEditMode && (
+          <View className="bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
+            <View className="flex-row items-center gap-2 px-4 pt-4 pb-3 border-b border-border bg-primary-50">
+              <Ionicons name="camera-outline" size={16} color="#2563EB" />
+              <Text className="text-primary font-semibold text-xs tracking-widest uppercase">
+                Trip Receipt
+              </Text>
+            </View>
+            <View className="p-4">
+              <Text className="text-text-secondary text-xs font-semibold tracking-widest uppercase mb-2">
+                Receipt Photo (Optional)
+              </Text>
+              {uploadStatus ? (
+                <Text
+                  className={`text-xs font-medium mb-2 ${
+                    receiptUploadStatus === "success"
+                      ? "text-emerald-600"
+                      : receiptUploadStatus === "failed"
+                        ? "text-red-600"
+                        : receiptUploadStatus === "uploading"
+                          ? "text-primary"
+                          : "text-text-secondary"
+                  }`}
+                >
+                  {uploadStatus}
+                </Text>
+              ) : null}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row gap-3">
+                {receiptImage && (
+                  <>
+                    {receiptUploadStatus === "failed" ? (
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        onPress={retryReceiptUpload}
+                        disabled={isUploadingReceipt}
+                        className="relative w-24 h-24 rounded-2xl overflow-hidden shadow-sm"
+                        style={{
+                          borderWidth: 2,
+                          borderColor: "#EF4444",
+                        }}
+                      >
+                        <Image source={receiptImage} className="w-full h-full" contentFit="cover" />
+                        <View className="absolute inset-0 bg-black/35 items-center justify-center">
+                          <View className="bg-red-500 w-11 h-11 rounded-full items-center justify-center">
+                            <Ionicons name="cloud-offline-outline" size={26} color="#fff" />
+                          </View>
+                        </View>
+                        <TouchableOpacity
+                          onPress={removeReceiptImage}
+                          className="absolute top-1 left-1 bg-black/55 w-6 h-6 rounded-full items-center justify-center"
+                          activeOpacity={0.8}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons name="close" size={16} color="#fff" />
+                        </TouchableOpacity>
+                      </TouchableOpacity>
+                    ) : (
+                      <View
+                        className="relative w-24 h-24 rounded-2xl overflow-hidden shadow-sm"
+                        style={{
+                          borderWidth: 2,
+                          borderColor:
+                            receiptUploadStatus === "success"
+                              ? "#10B981"
+                              : receiptUploadStatus === "uploading"
+                                ? "#3B82F6"
+                                : "#E2E8F0",
+                        }}
+                      >
+                        <Image source={receiptImage} className="w-full h-full" contentFit="cover" />
+                        {receiptUploadStatus === "uploading" && (
+                          <View className="absolute inset-0 bg-black/45 items-center justify-center">
+                            <ActivityIndicator color="#fff" size="small" />
+                          </View>
+                        )}
+                        {receiptUploadStatus === "success" && (
+                          <>
+                            <View className="absolute bottom-1 right-1 bg-emerald-500 w-8 h-8 rounded-full items-center justify-center border-2 border-white shadow-sm">
+                              <Ionicons name="checkmark" size={20} color="#fff" />
+                            </View>
+                            <TouchableOpacity
+                              onPress={removeReceiptImage}
+                              className="absolute top-1 right-1 bg-black/55 w-6 h-6 rounded-full items-center justify-center"
+                              activeOpacity={0.8}
+                            >
+                              <Ionicons name="close" size={16} color="#fff" />
+                            </TouchableOpacity>
+                          </>
+                        )}
+                      </View>
+                    )}
+                  </>
+                )}
+
+                {!receiptImage && (
+                  <TouchableOpacity
+                    onPress={pickReceiptImage}
+                    disabled={isUploadingReceipt}
+                    className="w-24 h-24 rounded-2xl border-2 border-dashed border-border bg-surface items-center justify-center"
+                    activeOpacity={0.7}
+                  >
+                    {isUploadingReceipt ? (
+                      <ActivityIndicator color="#2563EB" size="small" />
+                    ) : (
+                      <>
+                        <Ionicons name="images-outline" size={28} color="#94A3B8" />
+                        <Text className="text-text-secondary text-xs font-bold mt-1">Add Image</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </ScrollView>
+            </View>
+          </View>
+        )}
+
         {/* Submit Button */}
         <TouchableOpacity
           onPress={handleSubmit}
-          disabled={isSubmitting}
+          disabled={isSubmitting || isUploadingReceipt}
           className="bg-primary rounded-2xl py-4 items-center flex-row justify-center gap-3 shadow-sm z-0"
           activeOpacity={0.85}
           style={{ marginTop: 4, marginBottom: 32 }}
         >
           {isSubmitting ? (
-            <ActivityIndicator color="#fff" size="small" />
+            <>
+              <ActivityIndicator color="#fff" size="small" />
+              <Text className="text-white font-bold text-base tracking-wider uppercase ml-2">
+                {uploadStatus || "Submitting…"}
+              </Text>
+            </>
           ) : (
             <>
               <Ionicons name={isEditMode ? "checkmark-done" : "send"} size={18} color="#fff" />

@@ -22,6 +22,8 @@ export interface User {
 export interface LoginCredentials {
   username: string;
   password: string;
+  /** FCM device token from expo-notifications getDevicePushTokenAsync */
+  deviceToken?: string;
 }
 
 export interface AuthState {

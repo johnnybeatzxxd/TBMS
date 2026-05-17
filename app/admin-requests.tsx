@@ -405,20 +405,16 @@ export default function RequestsScreen() {
   const isDriver = user?.role === "driver";
 
   const handleStatusUpdate = async (id: string, action: string) => {
-    console.log(`[Requests] Status update: id=${id}, action=${action}`);
     setRequests(prev => prev.map(r => r.id === id ? { ...r, status: action as any } : r));
     try {
       switch (action) {
         case "PROCEED":
-          console.log(`[Requests] Calling markProceed for ${id}`);
           await formService.markProceed(id);
           break;
         case "COMPLETED":
-          console.log(`[Requests] Calling markCompleted for ${id}`);
           await formService.markCompleted(id);
           break;
         case "APPROVED":
-          console.log(`[Requests] Calling markApproved for ${id}`);
           await formService.markApproved(id);
           break;
         case "DECLINED":

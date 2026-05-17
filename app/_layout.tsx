@@ -9,6 +9,7 @@ import "../global.css";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuthStore } from "@/src/store";
 import { useRouteGuard } from "@/src/utils/routeGuard";
+import { notificationUtils } from "@/src/utils/notifications";
 
 export const unstable_settings = {
   anchor: "admin-dashboard",
@@ -21,6 +22,11 @@ export default function RootLayout() {
 
   // Activate the role-based route guard
   useRouteGuard();
+
+  // Remote push: tapping a notification opens the app (no deep link for now)
+  useEffect(() => {
+    notificationUtils.registerOpenAppHandler();
+  }, []);
 
   useEffect(() => {
     const bootstrap = async () => {

@@ -12,6 +12,7 @@
       "supportsTablet": true
     },
     "android": {
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -24,7 +25,7 @@
         "barStyle": "dark-content",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.johnnybeatz.TruckBusinessManagmentSystem"
+      "package": "com.tadiwos_fleet_management"
     },
     "web": {
       "output": "static",
@@ -45,7 +46,13 @@
         }
       ],
       "expo-secure-store",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-notifications",
+        {
+          "color": "#2563EB"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

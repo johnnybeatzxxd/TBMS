@@ -7,6 +7,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { refuelService } from "@/src/api/services";
+import { uploadRefuelReceipts, formatFirebaseError } from "@/src/utils/firebaseUpload";
 
 export default function AddRefuelScreen() {
   const params = useLocalSearchParams<{
@@ -79,15 +80,24 @@ export default function AddRefuelScreen() {
         });
         Alert.alert("Success", "Refuel updated successfully!");
       } else {
-        // For now we pass empty receiptPic, pending firebase upload implementation
+        let receiptPic: string[] = [];
+        if (images.length > 0) {
+          try {
+            receiptPic = await uploadRefuelReceipts(images);
+          } catch (uploadError) {
+            Alert.alert("Upload Failed", formatFirebaseError(uploadError));
+            return;
+          }
+        }
+
         await refuelService.registerRefuel({
           liters: Number(volume),
           price: Number(price),
           date: date.toISOString(),
-          receiptPic: [],
+          receiptPic,
           location: location.trim() || undefined,
           km: km ? Number(km) : undefined,
-          fullTank
+          fullTank,
         });
         Alert.alert("Success", "Refuel log added successfully!");
       }

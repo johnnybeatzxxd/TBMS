@@ -4,80 +4,48 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useAuthStore } from "@/src/store";
-import { mockAnalyticsService } from "@/src/api/mock/analytics.mock";
-import { DateFilterBar, DateFilterPreset } from "@/src/components/DateFilterBar";
-import { mockTruckService } from "@/src/api/mock/trucks.mock";
-import { shareCSV } from "@/src/utils/export";
-import { Alert } from "react-native";
+import { analysisService } from "@/src/api/analysis.service";
+import { buildDashboardPayload, buildPayloadFromFilters, buildAnalysisQueryString } from "@/src/utils/analysisFilters";
+import { DashboardResponse, ProfitSummary } from "@/src/types/analysis.types";
+import { AnalysisHeader, AnalysisFilterState, DEFAULT_ANALYSIS_FILTERS } from "@/src/components/AnalysisHeader";
 
 const formatCurrency = (n: number) => n.toLocaleString("en-US");
 
 export default function AnalyticsHubScreen() {
   const { user } = useAuthStore();
   const [loading, setLoading] = useState(true);
-  const [exporting, setExporting] = useState(false);
-  const [summary, setSummary] = useState<any>(null);
-
-  // Filters State
-  const [trucks, setTrucks] = useState<any[]>([]);
-  const [selectedTruck, setSelectedTruck] = useState<any>({ id: "all", plateNumber: "All Trucks" });
-  const [showTruckMenu, setShowTruckMenu] = useState(false);
-
-  const [filterPreset, setFilterPreset] = useState<DateFilterPreset>("all");
-  const [customFrom, setCustomFrom] = useState<Date | null>(null);
-  const [customTo, setCustomTo] = useState<Date | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      const res = await mockTruckService.getMyTrucks();
-      if ("trucks" in res) {
-        setTrucks([{ id: "all", plateNumber: "All Trucks" }, ...res.trucks]);
-      }
-    })();
-  }, []);
+  const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
+  const [profitSummary, setProfitSummary] = useState<ProfitSummary | null>(null);
+  const [filters, setFilters] = useState<AnalysisFilterState>(DEFAULT_ANALYSIS_FILTERS);
 
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const data = await mockAnalyticsService.getSummary({
-        truckId: selectedTruck.id,
-        preset: filterPreset,
-        customFrom,
-        customTo,
-      });
-      setSummary(data);
-      setLoading(false);
-    })();
-  }, [selectedTruck, filterPreset, customFrom, customTo]);
+      try {
+        const dashboardPayload = buildDashboardPayload(
+          filters.preset,
+          filters.truckIds,
+          filters.customFrom,
+          filters.customTo
+        );
+        const profitPayload = buildPayloadFromFilters(filters);
 
-  const handleExport = async () => {
-    try {
-      setExporting(true);
-      // Simulates: GET /api/reports/analytics?from=...&to=...&truck=...
-      // In production, this becomes: const csv = await apiClient.get('/reports/analytics', { params })
-      const csv = await mockAnalyticsService.downloadReport({
-        truckId: selectedTruck.id,
-        preset: filterPreset,
-        customFrom,
-        customTo,
-      });
+        const [dashboardData, profitData] = await Promise.all([
+          analysisService.getDashboard(dashboardPayload),
+          analysisService.getProfit({ ...profitPayload, limit: 1 }),
+        ]);
 
-      if (!csv || csv.split("\n").length <= 1) {
-        Alert.alert("No Data", "There is no data to export for the selected filters.");
-        return;
+        setDashboard(dashboardData);
+        setProfitSummary(profitData.summary);
+      } catch (e) {
+        console.error("Failed to load dashboard:", e);
+      } finally {
+        setLoading(false);
       }
+    })();
+  }, [filters]);
 
-      const dateStr = new Date().toISOString().split('T')[0];
-      await shareCSV(csv, `Analytics_Report_${dateStr}`);
-    } catch (error) {
-      console.error(error);
-      Alert.alert("Export Failed", "There was an error generating your report.");
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  if (loading || !summary) {
+  if (loading || !dashboard) {
     return (
       <SafeAreaView className="flex-1 bg-surface items-center justify-center" edges={["top","bottom"]}>
         <ActivityIndicator size="large" color="#2563EB" />
@@ -86,26 +54,42 @@ export default function AnalyticsHubScreen() {
     );
   }
 
+  const { summary, pending } = dashboard;
+  const totalPending = pending.trips + pending.refuels + pending.expenses + pending.transfers;
+  const qStr = buildAnalysisQueryString(filters);
+
   const kpis = [
-    { label: "Total Trips", value: summary.totalTrips, icon: "truck", color: "#2563EB", bg: "#EFF6FF" },
-    { label: "Cash Revenue", value: `$${formatCurrency(summary.totalCashRevenue)}`, icon: "cash", color: "#16A34A", bg: "#F0FDF4" },
-    { label: "Refuel Cost", value: `$${formatCurrency(summary.totalRefuelCost)}`, icon: "gas-station", color: "#F59E0B", bg: "#FFFBEB" },
-    { label: "Expenses", value: `$${formatCurrency(summary.totalDriverExpense)}`, icon: "receipt", color: "#DC2626", bg: "#FEF2F2" },
+    { label: "Total Trips", value: summary.totalTripsCount, icon: "truck", color: "#2563EB", bg: "#EFF6FF" },
+    { label: "Total Expenses", value: `$${formatCurrency(summary.totalExpensesCost)}`, icon: "receipt", color: "#DC2626", bg: "#FEF2F2" },
+    { label: "Fuel Cost", value: `$${formatCurrency(summary.totalFuelCost)}`, icon: "gas-station", color: "#F59E0B", bg: "#FFFBEB" },
+    { label: "Driver Expense", value: `$${formatCurrency(summary.totalDriverExpense)}`, icon: "account-cash", color: "#7C3AED", bg: "#F5F3FF" },
   ];
 
-  // Convert params to URL query string for deep dives
-  const queryParams = new URLSearchParams();
-  if (selectedTruck.id !== "all") queryParams.append("truckId", selectedTruck.id);
-  if (filterPreset) queryParams.append("preset", filterPreset);
-  if (customFrom) queryParams.append("customFrom", customFrom.toISOString());
-  if (customTo) queryParams.append("customTo", customTo.toISOString());
-  const qStr = queryParams.toString() ? `?${queryParams.toString()}` : "";
+  const financialKpis = profitSummary
+    ? [
+        { label: "Revenue", value: `$${formatCurrency(profitSummary.revenue)}`, icon: "trending-up", color: "#16A34A", bg: "#F0FDF4" },
+        {
+          label: "Net Profit",
+          value: `$${formatCurrency(profitSummary.profit)}`,
+          icon: "cash-multiple",
+          color: profitSummary.profit >= 0 ? "#16A34A" : "#DC2626",
+          bg: profitSummary.profit >= 0 ? "#F0FDF4" : "#FEF2F2",
+        },
+        {
+          label: "Margin",
+          value: `${Math.round(profitSummary.margin)}%`,
+          icon: "percent",
+          color: "#0EA5E9",
+          bg: "#F0F9FF",
+        },
+      ]
+    : [];
 
   const screens = [
     {
       id: "trips",
       title: "Trip Analysis",
-      subtitle: `${summary.cashTripCount} Cash · ${summary.dispatchTripCount} Dispatch`,
+      subtitle: `${summary.cashTripsCount} Cash · ${summary.creditTripsCount} Credit`,
       icon: "truck",
       color: "#2563EB",
       bgColor: "#EFF6FF",
@@ -114,7 +98,7 @@ export default function AnalyticsHubScreen() {
     {
       id: "expenses",
       title: "Expense Analysis",
-      subtitle: `$${formatCurrency(summary.totalDriverExpense)} total spent`,
+      subtitle: `$${formatCurrency(summary.totalExpensesCost)} total · ${summary.expenseCount} entries`,
       icon: "receipt",
       color: "#DC2626",
       bgColor: "#FEF2F2",
@@ -122,102 +106,69 @@ export default function AnalyticsHubScreen() {
     },
     {
       id: "refuel",
-      title: "Refuel Analysis",
-      subtitle: `${formatCurrency(summary.totalRefuelVol)}L · $${formatCurrency(summary.totalRefuelCost)}`,
+      title: "Fuel Analysis",
+      subtitle: `${summary.refuelCount} refuels · $${formatCurrency(summary.totalFuelCost)}`,
       icon: "gas-station",
       color: "#F59E0B",
       bgColor: "#FFFBEB",
       route: `/analytics/refuel${qStr}`,
     },
+    {
+      id: "profit",
+      title: "Profit Analysis",
+      subtitle: profitSummary
+        ? `$${formatCurrency(profitSummary.profit)} profit · ${Math.round(profitSummary.margin)}% margin`
+        : "Revenue vs costs & margins",
+      icon: "chart-line",
+      color: "#16A34A",
+      bgColor: "#F0FDF4",
+      route: `/analytics/profit${qStr}`,
+    },
+    {
+      id: "performance",
+      title: "Performance",
+      subtitle: "Truck & driver rankings",
+      icon: "podium",
+      color: "#7C3AED",
+      bgColor: "#F5F3FF",
+      route: `/analytics/performance${qStr}`,
+    },
+    {
+      id: "compare",
+      title: "Compare",
+      subtitle: "Side-by-side truck & driver metrics",
+      icon: "compare-horizontal",
+      color: "#0EA5E9",
+      bgColor: "#F0F9FF",
+      route: `/analytics/compare${qStr}`,
+    },
+  ];
+
+  const pendingItems = [
+    { label: "Trips", count: pending.trips, icon: "truck-outline", color: "#2563EB" },
+    { label: "Refuels", count: pending.refuels, icon: "gas-station-outline", color: "#F59E0B" },
+    { label: "Expenses", count: pending.expenses, icon: "receipt", color: "#DC2626" },
+    { label: "Transfers", count: pending.transfers, icon: "bank-transfer", color: "#7C3AED" },
   ];
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
-      {/* Header With Dropdown */}
-      <View className="flex-row items-center justify-between px-5 pt-2 pb-3 bg-white border-b border-border shadow-sm z-50 elevation-10">
-        <View className="flex-row items-center">
-          <Ionicons name="bar-chart" size={26} color="#2563EB" />
-          <Text className="text-text-primary font-bold text-xl ml-2 tracking-wide">Analytics</Text>
-        </View>
-        
-        <View className="flex-row items-center gap-3">
-          {/* Export Button */}
-          <TouchableOpacity
-            onPress={handleExport}
-            disabled={exporting}
-            className="w-10 h-10 bg-success-50 rounded-xl items-center justify-center border border-success-100"
-            activeOpacity={0.7}
-          >
-            {exporting ? (
-              <ActivityIndicator size="small" color="#16A34A" />
-            ) : (
-              <Ionicons name="download-outline" size={20} color="#16A34A" />
-            )}
-          </TouchableOpacity>
-
-          <View className="relative z-50">
-            <TouchableOpacity
-              onPress={() => setShowTruckMenu((v) => !v)}
-              className="flex-row items-center gap-1.5 bg-primary-50 border border-primary-100 rounded-xl px-3 py-2"
-              activeOpacity={0.8}
-            >
-              <Ionicons name="car-sport" size={14} color="#2563EB" />
-              <Text className="text-primary font-semibold text-sm">{selectedTruck.plateNumber}</Text>
-              <Ionicons name={showTruckMenu ? "chevron-up" : "chevron-down"} size={14} color="#2563EB" />
-            </TouchableOpacity>
-
-            {showTruckMenu && (
-              <View className="absolute right-0 top-10 bg-white rounded-2xl border border-border shadow-lg overflow-hidden min-w-[160px] z-[999] elevation-20">
-                {trucks.map((truck) => (
-                  <TouchableOpacity
-                    key={truck.id}
-                    onPress={() => {
-                      setSelectedTruck(truck);
-                      setShowTruckMenu(false);
-                    }}
-                    className={`px-4 py-3 flex-row items-center gap-2 ${
-                      selectedTruck.id === truck.id ? "bg-primary-50" : "bg-white"
-                    }`}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons
-                      name={truck.id === "all" ? "apps-outline" : "car-sport-outline"}
-                      size={16}
-                      color={selectedTruck.id === truck.id ? "#2563EB" : "#64748B"}
-                    />
-                    <Text
-                      className={`text-sm font-medium ${
-                        selectedTruck.id === truck.id ? "text-primary font-bold" : "text-text-primary"
-                      }`}
-                    >
-                      {truck.plateNumber}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </View>
-        </View>
-      </View>
-
-      {/* Date Filters beneath header */}
-      <View className="bg-white z-1 elevation-0 border-b border-border shadow-sm">
-        <DateFilterBar
-          activePreset={filterPreset}
-          onPresetChange={setFilterPreset}
-          customFrom={customFrom}
-          customTo={customTo}
-          onCustomFromChange={setCustomFrom}
-          onCustomToChange={setCustomTo}
-        />
-      </View>
+      <AnalysisHeader
+        title="Analytics"
+        icon="chart-bar"
+        iconColor="#2563EB"
+        filters={filters}
+        onFiltersChange={setFilters}
+        hideGroupBy
+        hideDriverFilter
+        hideAdvancedFilters
+      />
 
       <ScrollView
         className="flex-1 z-0 elevation-0"
         contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header Visual */}
         <View className="bg-primary pt-6 pb-20 px-5 rounded-b-[40px]">
           <Text className="text-white/70 text-xs font-semibold tracking-widest uppercase text-center mb-4">
             Business Analytics
@@ -226,16 +177,11 @@ export default function AnalyticsHubScreen() {
             <View className="w-16 h-16 rounded-full bg-white/20 border-4 border-white/30 items-center justify-center mb-3">
               <Ionicons name="bar-chart" size={28} color="#fff" />
             </View>
-            <Text className="text-white text-2xl font-bold tracking-wide">
-              Dashboard
-            </Text>
-            <Text className="text-white/60 text-sm mt-1">
-              {user?.name}'s Fleet Overview
-            </Text>
+            <Text className="text-white text-2xl font-bold tracking-wide">Dashboard</Text>
+            <Text className="text-white/60 text-sm mt-1">{user?.name}'s Fleet Overview</Text>
           </View>
         </View>
 
-        {/* KPI Cards */}
         <View className="px-4 -mt-10">
           <View className="flex-row flex-wrap gap-3">
             {kpis.map((kpi, i) => (
@@ -257,27 +203,70 @@ export default function AnalyticsHubScreen() {
           </View>
         </View>
 
-        {/* Road Expense + Refuel Volume Row */}
+        {financialKpis.length > 0 && (
+          <View className="px-4 mt-3">
+            <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase ml-1 mb-2">
+              Financial Overview
+            </Text>
+            <View className="flex-row gap-3">
+              {financialKpis.map((kpi, i) => (
+                <View key={i} className="flex-1 bg-white rounded-2xl border border-border p-3 shadow-sm items-center">
+                  <View
+                    className="w-9 h-9 rounded-full items-center justify-center mb-1.5"
+                    style={{ backgroundColor: kpi.bg }}
+                  >
+                    <MaterialCommunityIcons name={kpi.icon as any} size={18} color={kpi.color} />
+                  </View>
+                  <Text className="text-text-primary font-bold text-sm" numberOfLines={1}>
+                    {kpi.value}
+                  </Text>
+                  <Text className="text-text-secondary text-[10px] mt-0.5 text-center">{kpi.label}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
         <View className="px-4 mt-4">
           <View className="flex-row gap-3">
             <View className="flex-1 bg-white rounded-2xl border border-border p-4 shadow-sm">
               <View className="flex-row items-center gap-2 mb-2">
-                <Ionicons name="car-outline" size={18} color="#7C3AED" />
-                <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase">Road Expense</Text>
+                <MaterialCommunityIcons name="cash" size={18} color="#16A34A" />
+                <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase">Cash Trips</Text>
               </View>
-              <Text className="text-text-primary font-bold text-xl">${formatCurrency(summary.totalRoadExpense)}</Text>
+              <Text className="text-text-primary font-bold text-xl">{summary.cashTripsCount}</Text>
             </View>
             <View className="flex-1 bg-white rounded-2xl border border-border p-4 shadow-sm">
               <View className="flex-row items-center gap-2 mb-2">
-                <MaterialCommunityIcons name="water" size={18} color="#0EA5E9" />
-                <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase">Total Fuel</Text>
+                <MaterialCommunityIcons name="credit-card" size={18} color="#0EA5E9" />
+                <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase">Credit Trips</Text>
               </View>
-              <Text className="text-text-primary font-bold text-xl">{formatCurrency(summary.totalRefuelVol)}L</Text>
+              <Text className="text-text-primary font-bold text-xl">{summary.creditTripsCount}</Text>
             </View>
           </View>
         </View>
 
-        {/* Deep Dive Navigation */}
+        {totalPending > 0 && (
+          <View className="px-4 mt-4">
+            <View className="bg-amber-50 rounded-2xl border border-amber-200 p-4 shadow-sm">
+              <View className="flex-row items-center gap-2 mb-3">
+                <Ionicons name="time-outline" size={18} color="#F59E0B" />
+                <Text className="text-amber-800 text-xs font-bold tracking-widest uppercase">
+                  Pending Approvals ({totalPending})
+                </Text>
+              </View>
+              <View className="flex-row flex-wrap gap-3">
+                {pendingItems.filter(p => p.count > 0).map((item, i) => (
+                  <View key={i} className="flex-row items-center gap-2 bg-white rounded-xl px-3 py-2 border border-amber-100">
+                    <MaterialCommunityIcons name={item.icon as any} size={16} color={item.color} />
+                    <Text className="text-text-primary text-sm font-medium">{item.count} {item.label}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </View>
+        )}
+
         <View className="px-4 mt-6">
           <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase ml-1 mb-3">
             Deep Dive
