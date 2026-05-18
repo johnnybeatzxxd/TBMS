@@ -52,6 +52,13 @@
         {
           "color": "#2563EB"
         }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow the app to save receipt images to your photo library.",
+          "savePhotosPermission": "Allow the app to save receipt images to your photo library."
+        }
       ]
     ],
     "experiments": {

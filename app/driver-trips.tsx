@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { View, Text, TouchableOpacity, ActivityIndicator, SectionList, StyleSheet, Alert, RefreshControl } from "react-native";
+import { TripReceiptViewer } from "@/src/components/TripReceiptViewer";
+import { hasValidTripReceiptPic } from "@/src/utils/tripReceipt";
 import { useFocusEffect } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -33,9 +35,11 @@ const getGroupedTrips = (trips: Trip[]) => {
 };
 
 const TripCard = ({ trip, companiesMap }: { trip: Trip, companiesMap: Record<string, string> }) => {
+  const [expanded, setExpanded] = useState(false);
   const paymentMethodDisplay = trip.paymentMethod || (trip.companyId ? "CREDIT" : "CASH");
   const isCredit = paymentMethodDisplay === "CREDIT";
   const companyName = trip.contractedCompany?.name || trip.company?.name || companiesMap[trip.companyId || ""];
+  const showReceipt = isCredit && hasValidTripReceiptPic(trip.receiptPic);
 
   let paymentBgClass = "bg-primary-50";
   let paymentTextClass = "text-primary-600";
@@ -53,8 +57,16 @@ const TripCard = ({ trip, companiesMap }: { trip: Trip, companiesMap: Record<str
     }
   }
 
+  const CardWrapper = showReceipt ? TouchableOpacity : View;
+  const cardWrapperProps = showReceipt
+    ? { activeOpacity: 0.85 as const, onPress: () => setExpanded(!expanded) }
+    : {};
+
   return (
-    <View className="bg-white rounded-2xl border border-border mt-3 overflow-hidden shadow-sm p-4">
+    <CardWrapper
+      {...cardWrapperProps}
+      className="bg-white rounded-2xl border border-border mt-3 overflow-hidden shadow-sm p-4"
+    >
       <View className="flex-row justify-between mb-3">
         <View className="flex-1 mr-4">
           <Text className="text-text-secondary text-[10px] font-bold tracking-widest uppercase mb-1">Route</Text>
@@ -66,15 +78,22 @@ const TripCard = ({ trip, companiesMap }: { trip: Trip, companiesMap: Record<str
             </View>
           )}
         </View>
-        <Ionicons 
-          name="location" 
-          size={20} 
-          color={
-             trip.approved === "APPROVED" ? "#16A34A"
-               : trip.approved === "DECLINED" ? "#DC2626"
-               : "#F59E0B"
-          } 
-        />
+        <View className="flex-row items-center gap-2">
+          <Ionicons
+            name="location"
+            size={20}
+            color={
+              trip.approved === "APPROVED"
+                ? "#16A34A"
+                : trip.approved === "DECLINED"
+                  ? "#DC2626"
+                  : "#F59E0B"
+            }
+          />
+          {showReceipt && (
+            <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={18} color="#94A3B8" />
+          )}
+        </View>
       </View>
       <View className="flex-row justify-between pt-3 border-t border-border/50">
         <View className="flex-1">
@@ -98,7 +117,19 @@ const TripCard = ({ trip, companiesMap }: { trip: Trip, companiesMap: Record<str
           </View>
         </View>
       </View>
-    </View>
+
+      {expanded && showReceipt && (
+        <View className="mt-3 pt-3 border-t border-border/50 flex-row items-center justify-between">
+          <View>
+            <Text className="text-text-secondary text-[10px] font-bold tracking-widest uppercase mb-1">
+              Receipt
+            </Text>
+            <Text className="text-text-primary text-sm font-medium">View attached receipt</Text>
+          </View>
+          <TripReceiptViewer receiptPic={trip.receiptPic} />
+        </View>
+      )}
+    </CardWrapper>
   );
 };
 

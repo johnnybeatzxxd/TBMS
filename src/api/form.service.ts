@@ -317,7 +317,15 @@ function mapBackendRequestToSubmission(req: any): FormSubmission {
   const mapped = {
     id: req._id || req.id,
     templateId: req.serviceTypeId?._id || req.serviceTypeId || "",
-    templateName: req.serviceTypeId?.name || req.serviceType?.name || req.serviceTypeName || "Unknown",
+    templateName: (() => {
+      const n =
+        req.serviceTypeId?.name ||
+        req.serviceType?.name ||
+        req.serviceTypeName ||
+        "";
+      if (n && n !== "Unknown") return n;
+      return "Other";
+    })(),
     category: req.serviceTypeId?.category || req.category || "General",
     driverId: req.driverId?._id || req.driverId || "",
     driverName: req.driverId?.name || req.driverName || "",
@@ -331,6 +339,11 @@ function mapBackendRequestToSubmission(req: any): FormSubmission {
     requiresApproval: req.serviceTypeId?.requiresApproval ?? req.serviceType?.requiresApproval ?? false,
     tag: req.tag,
     serviceRequestId: req.serviceRequestId,
+    receiptPic:
+      req.receiptPic ||
+      req.expence?.receiptPic ||
+      (Array.isArray(req.expences) ? req.expences[0]?.receiptPic : undefined) ||
+      null,
     createdAt: req.createdAt || new Date().toISOString(),
     updatedAt: req.updatedAt || new Date().toISOString(),
   };

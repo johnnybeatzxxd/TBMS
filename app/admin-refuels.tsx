@@ -6,6 +6,7 @@ import { router, useFocusEffect } from "expo-router";
 import { useAuthStore, useCacheStore } from "@/src/store";
 import { refuelService, driverService, truckService } from "@/src/api/services";
 import { Refuel } from "@/src/types/refuel.types";
+import { ReceiptPhotosRow } from "@/src/components/TripReceiptViewer";
 import { DateFilterBar, DateFilterPreset, passesDateFilter } from "@/src/components/DateFilterBar";
 
 const getRelativeDateLabel = (dateStr: string) => {
@@ -98,6 +99,8 @@ const RefuelCard = ({ exp, onApprove, onEdit, driverName }: { exp: Refuel, onApp
                  </Text>
                </View>
             </View>
+
+            <ReceiptPhotosRow receiptPic={exp.receiptPic} />
           </View>
 
           {exp.approved !== "APPROVED" && (
@@ -407,14 +410,6 @@ export default function RefuelsScreen() {
           )
         }
       />
-
-      <TouchableOpacity
-        onPress={() => router.push("/add-refuel")}
-        activeOpacity={0.8}
-        className="absolute bottom-6 right-6 w-14 h-14 bg-sky-500 rounded-full items-center justify-center shadow-lg border border-sky-600 elevation-5"
-      >
-        <Ionicons name="add" size={30} color="#fff" />
-      </TouchableOpacity>
     </SafeAreaView>
   );
 }

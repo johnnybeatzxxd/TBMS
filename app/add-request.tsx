@@ -1,15 +1,77 @@
 import { useState, useEffect } from "react";
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Switch,
+  ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Switch, StyleSheet,
 } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { useAuthStore } from "@/src/store";
 import { formService, expenseService } from "@/src/api/services";
+import { ReceiptImageUploader } from "@/src/components/ReceiptImageUploader";
 import { FormTemplate, SubmitFormPayload } from "@/src/types/form.types";
+import { uploadExpenseReceipt } from "@/src/utils/firebaseUpload";
+
+/** Built-in frontend form — submits to POST /expences/expence (not service-request). */
+export const OTHER_SERVICE_ID = "__other__";
+const OTHER_SERVICE_NAME = "Other";
+
+function startOfDay(d: Date) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+function isFutureDate(d: Date) {
+  return startOfDay(d).getTime() > startOfDay(new Date()).getTime();
+}
+
+const imageFieldStyles = StyleSheet.create({
+  slot: {
+    width: 96,
+    height: 96,
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 2,
+    borderColor: "#10B981",
+  },
+  slotImage: { width: "100%", height: "100%" },
+  removeBtn: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  replaceBtn: {
+    position: "absolute",
+    bottom: 4,
+    left: 4,
+    right: 4,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    borderRadius: 8,
+    paddingVertical: 4,
+    alignItems: "center",
+  },
+  addBtn: {
+    width: 96,
+    height: 96,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderStyle: "dashed",
+    borderColor: "#E2E8F0",
+    backgroundColor: "#F8FAFC",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
 
 export default function AddRequestScreen() {
   const { user } = useAuthStore();
@@ -36,14 +98,27 @@ export default function AddRequestScreen() {
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
 
+  // "Other" built-in expense form
+  const [otherDate, setOtherDate] = useState(new Date());
+  const [showOtherDatePicker, setShowOtherDatePicker] = useState(false);
+  const [otherRemark, setOtherRemark] = useState("");
+  const [receiptPicUrls, setReceiptPicUrls] = useState<string[]>([]);
+  const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
+  const [hasIncompleteReceipt, setHasIncompleteReceipt] = useState(false);
+
   // Dynamic Template Fields
   const [values, setValues] = useState<Record<string, any>>({});
+
+  const isOtherService = !isEditMode && selectedServiceId === OTHER_SERVICE_ID;
 
   // ── Load service type names on mount ──────────────────────────────
   useEffect(() => {
     formService.getFormTemplates()
       .then(async (res) => {
         setServiceTypes(res.templates.map(t => ({ id: t.id, name: t.name })));
+        if (!isEditMode) {
+          setSelectedServiceId(OTHER_SERVICE_ID);
+        }
         if (isEditMode && params.id) {
           const sub = await formService.getSubmission(params.id);
           setSelectedServiceId(sub.templateId);
@@ -63,6 +138,13 @@ export default function AddRequestScreen() {
     if (!selectedServiceId) {
       setActiveTemplate(null);
       setValues({});
+      return;
+    }
+
+    if (selectedServiceId === OTHER_SERVICE_ID) {
+      setActiveTemplate(null);
+      setValues({});
+      setLoadingTemplate(false);
       return;
     }
 
@@ -123,14 +205,49 @@ export default function AddRequestScreen() {
 
   // ── Submit ────────────────────────────────────────────────────────
   const handleSubmit = async () => {
-    if (!selectedServiceId || !activeTemplate) {
+    if (!selectedServiceId) {
       return Alert.alert("Missing", "Please select a service type.");
     }
 
-    // Amount validation
     const numAmount = Number(amount);
-    if (isNaN(numAmount) || numAmount < 0) {
+    if (isNaN(numAmount) || numAmount <= 0) {
       return Alert.alert("Validation", "Please enter a valid amount.");
+    }
+
+    if (isOtherService) {
+      if (isFutureDate(otherDate)) {
+        return Alert.alert("Validation", "Date cannot be in the future.");
+      }
+      if (isUploadingReceipt) {
+        return Alert.alert("Please wait", "Receipt is still uploading. Try again in a moment.");
+      }
+      if (hasIncompleteReceipt) {
+        return Alert.alert(
+          "Receipt not uploaded",
+          "The receipt image did not finish uploading. Please retry or remove it."
+        );
+      }
+
+      setSubmitting(true);
+      try {
+        await expenseService.addOtherExpense({
+          amount: numAmount,
+          date: otherDate.toISOString(),
+          remark: otherRemark.trim() || undefined,
+          receiptPic: receiptPicUrls[0],
+        });
+        Alert.alert("Success", "Expense submitted successfully.");
+        router.back();
+      } catch (e: any) {
+        Alert.alert("Error", e.message || "Failed to submit expense.");
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    if (!activeTemplate) {
+      return Alert.alert("Missing", "Please wait for the form to load.");
     }
 
     // Dynamic fields validation
@@ -210,8 +327,12 @@ export default function AddRequestScreen() {
     );
   }
 
-  // ── Selected service name for header ──────────────────────────────
-  const selectedName = serviceTypes.find(s => s.id === selectedServiceId)?.name;
+  const selectedName =
+    selectedServiceId === OTHER_SERVICE_ID
+      ? OTHER_SERVICE_NAME
+      : serviceTypes.find((s) => s.id === selectedServiceId)?.name;
+
+  const formReady = isOtherService || (!!activeTemplate && !loadingTemplate);
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
@@ -251,6 +372,44 @@ export default function AddRequestScreen() {
               {showTypeMenu && (
                 <View className="absolute top-[80px] left-0 right-0 bg-white rounded-2xl border border-border shadow-lg overflow-hidden" style={{ zIndex: 999, elevation: 20 }}>
                   <ScrollView style={{ maxHeight: 250 }}>
+                    {!isEditMode && (
+                      <TouchableOpacity
+                        onPress={() => {
+                          setSelectedServiceId(OTHER_SERVICE_ID);
+                          setShowTypeMenu(false);
+                        }}
+                        className={`px-4 py-3.5 border-b border-border/50 flex-row items-center gap-3 ${
+                          selectedServiceId === OTHER_SERVICE_ID ? "bg-primary-50" : "bg-white"
+                        }`}
+                      >
+                        <View
+                          className={`w-8 h-8 rounded-lg items-center justify-center ${
+                            selectedServiceId === OTHER_SERVICE_ID
+                              ? "bg-primary"
+                              : "bg-surface border border-border"
+                          }`}
+                        >
+                          <Ionicons
+                            name="ellipsis-horizontal"
+                            size={14}
+                            color={selectedServiceId === OTHER_SERVICE_ID ? "#fff" : "#64748B"}
+                          />
+                        </View>
+                        <Text
+                          className={`text-base flex-1 ${
+                            selectedServiceId === OTHER_SERVICE_ID
+                              ? "text-primary font-bold"
+                              : "text-text-primary"
+                          }`}
+                        >
+                          {OTHER_SERVICE_NAME}
+                        </Text>
+                        {selectedServiceId === OTHER_SERVICE_ID && (
+                          <Ionicons name="checkmark" size={18} color="#2563EB" />
+                        )}
+                      </TouchableOpacity>
+                    )}
+
                     {serviceTypes.map((s) => (
                       <TouchableOpacity
                         key={s.id}
@@ -276,8 +435,107 @@ export default function AddRequestScreen() {
               )}
             </View>
 
-            {/* ─── Dynamic Form Fields ─── */}
-            {selectedServiceId ? (
+            {/* ─── Other (built-in expense form) ─── */}
+            {isOtherService ? (
+              <View className="gap-5">
+                <View className="flex-row items-center gap-3 mt-1">
+                  <View className="flex-1 h-px bg-border" />
+                  <Text className="text-text-secondary text-[10px] font-bold tracking-widest uppercase">
+                    Expense details
+                  </Text>
+                  <View className="flex-1 h-px bg-border" />
+                </View>
+
+                <View>
+                  <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase mb-2 ml-1">
+                    Date *
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setShowOtherDatePicker(true)}
+                    className="bg-white border border-border rounded-xl h-14 px-4 flex-row items-center justify-between shadow-sm"
+                    activeOpacity={0.8}
+                  >
+                    <View className="flex-row items-center">
+                      <Ionicons name="calendar-outline" size={20} color="#94A3B8" />
+                      <Text className="text-base font-medium text-text-primary ml-2">
+                        {otherDate.toISOString().split("T")[0]}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  </TouchableOpacity>
+                  {showOtherDatePicker && (
+                    <DateTimePicker
+                      value={otherDate}
+                      mode="date"
+                      display="default"
+                      maximumDate={new Date()}
+                      onChange={(_, selected) => {
+                        if (Platform.OS === "android") setShowOtherDatePicker(false);
+                        if (selected) {
+                          if (isFutureDate(selected)) {
+                            Alert.alert("Validation", "Date cannot be in the future.");
+                            return;
+                          }
+                          setOtherDate(selected);
+                        }
+                      }}
+                    />
+                  )}
+                  {Platform.OS === "ios" && showOtherDatePicker && (
+                    <TouchableOpacity
+                      onPress={() => setShowOtherDatePicker(false)}
+                      className="mt-2 py-2 items-center bg-slate-100 rounded-lg"
+                    >
+                      <Text className="text-primary font-semibold">Done</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                <View>
+                  <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase mb-2 ml-1">
+                    Amount (ETB) *
+                  </Text>
+                  <View className="relative">
+                    <View className="absolute left-4 top-0 bottom-0 justify-center z-10">
+                      <Text className="text-text-secondary font-bold text-lg">ETB</Text>
+                    </View>
+                    <TextInput
+                      value={amount}
+                      onChangeText={setAmount}
+                      placeholder="0.00"
+                      placeholderTextColor="#94A3B8"
+                      keyboardType="numeric"
+                      className="bg-white border border-border rounded-xl h-14 pl-14 pr-4 text-base font-medium text-text-primary shadow-sm"
+                    />
+                  </View>
+                </View>
+
+                <View>
+                  <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase mb-2 ml-1">
+                    Remark
+                  </Text>
+                  <TextInput
+                    value={otherRemark}
+                    onChangeText={setOtherRemark}
+                    placeholder="What was this expense for?"
+                    placeholderTextColor="#94A3B8"
+                    multiline
+                    textAlignVertical="top"
+                    className="bg-white border border-border rounded-xl p-4 min-h-[80px] text-base text-text-primary shadow-sm"
+                  />
+                </View>
+
+                <ReceiptImageUploader
+                  maxImages={1}
+                  uploadImage={uploadExpenseReceipt}
+                  onUrlsChange={setReceiptPicUrls}
+                  onUploadingChange={setIsUploadingReceipt}
+                  onIncompleteChange={setHasIncompleteReceipt}
+                  sectionTitle="Receipt"
+                  fieldLabel="Receipt photo (optional)"
+                />
+              </View>
+            ) : selectedServiceId ? (
               loadingTemplate ? (
                 <View className="py-10 items-center justify-center">
                   <ActivityIndicator size="small" color="#2563EB" />
@@ -351,22 +609,43 @@ export default function AddRequestScreen() {
                         )}
 
                         {field.type === "image" && (
-                          <TouchableOpacity
-                            onPress={() => pickFieldImage(field.id)}
-                            className="bg-white border border-border border-dashed rounded-xl h-24 items-center justify-center shadow-sm"
-                          >
+                          <View>
                             {values[field.id] ? (
-                              <View className="items-center">
-                                <Ionicons name="checkmark-circle" size={24} color="#16A34A" />
-                                <Text className="text-success-600 font-bold mt-1">Image Attached</Text>
+                              <View style={imageFieldStyles.slot}>
+                                <Image
+                                  source={values[field.id]}
+                                  style={imageFieldStyles.slotImage}
+                                  contentFit="cover"
+                                />
+                                <TouchableOpacity
+                                  onPress={() => updateValue(field.id, undefined)}
+                                  style={imageFieldStyles.removeBtn}
+                                  activeOpacity={0.8}
+                                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                >
+                                  <Ionicons name="close" size={16} color="#fff" />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  onPress={() => pickFieldImage(field.id)}
+                                  style={imageFieldStyles.replaceBtn}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text className="text-white text-[10px] font-bold">Replace</Text>
+                                </TouchableOpacity>
                               </View>
                             ) : (
-                              <View className="items-center">
-                                <Ionicons name="cloud-upload-outline" size={24} color="#94A3B8" />
-                                <Text className="text-text-secondary text-sm mt-1">Tap to upload {field.label.toLowerCase()}</Text>
-                              </View>
+                              <TouchableOpacity
+                                onPress={() => pickFieldImage(field.id)}
+                                style={imageFieldStyles.addBtn}
+                                activeOpacity={0.7}
+                              >
+                                <Ionicons name="images-outline" size={28} color="#94A3B8" />
+                                <Text className="text-text-secondary text-xs font-bold mt-1">
+                                  Add Image
+                                </Text>
+                              </TouchableOpacity>
                             )}
-                          </TouchableOpacity>
+                          </View>
                         )}
                       </View>
                     );
@@ -430,14 +709,14 @@ export default function AddRequestScreen() {
       </KeyboardAvoidingView>
 
       {/* Sticky Bottom Submit Button - only show when form is ready */}
-      {selectedServiceId && activeTemplate && !loadingTemplate && (
+      {selectedServiceId && formReady && (
         <View className="p-5 bg-white border-t border-border shadow-lg z-0">
           <TouchableOpacity
             onPress={handleSubmit}
-            disabled={submitting}
+            disabled={submitting || (isOtherService && isUploadingReceipt)}
             activeOpacity={0.8}
             className={`h-14 rounded-xl flex-row items-center justify-center shadow-md ${
-              submitting ? "bg-primary/70" : "bg-primary"
+              submitting || (isOtherService && isUploadingReceipt) ? "bg-primary/70" : "bg-primary"
             }`}
           >
             {submitting ? (

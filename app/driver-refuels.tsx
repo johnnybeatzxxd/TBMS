@@ -6,6 +6,7 @@ import { router } from "expo-router";
 
 import { refuelService } from "@/src/api/services";
 import { Refuel } from "@/src/types/refuel.types";
+import { ReceiptPhotosRow } from "@/src/components/TripReceiptViewer";
 import { useAuthStore } from "@/src/store";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback } from "react";
@@ -80,6 +81,8 @@ const RefuelCard = ({ refuel, userName }: { refuel: Refuel, userName?: string })
                  </Text>
                </View>
             </View>
+
+            <ReceiptPhotosRow receiptPic={refuel.receiptPic} />
           </View>
         </View>
       )}

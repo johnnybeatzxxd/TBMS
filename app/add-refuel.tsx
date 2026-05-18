@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Switch } from "react-native";
-import { Image } from "expo-image";
-import * as ImagePicker from "expo-image-picker";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { refuelService } from "@/src/api/services";
-import { uploadRefuelReceipts, formatFirebaseError } from "@/src/utils/firebaseUpload";
+import { ReceiptImageUploader } from "@/src/components/ReceiptImageUploader";
+import { uploadRefuelReceipt } from "@/src/utils/firebaseUpload";
 
 export default function AddRefuelScreen() {
   const params = useLocalSearchParams<{
@@ -23,11 +22,13 @@ export default function AddRefuelScreen() {
   const isEditMode = !!params.id;
 
   const [loading, setLoading] = useState(false);
+  const [receiptPicUrls, setReceiptPicUrls] = useState<string[]>([]);
+  const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
+  const [hasIncompleteReceipt, setHasIncompleteReceipt] = useState(false);
 
   // Form State — pre-fill from params when editing
   const [volume, setVolume] = useState(params.liters || "");
   const [price, setPrice] = useState(params.price || "");
-  const [images, setImages] = useState<string[]>([]);
   const [date, setDate] = useState(params.date ? new Date(params.date) : new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
 
@@ -35,37 +36,20 @@ export default function AddRefuelScreen() {
   const [km, setKm] = useState(params.km || "");
   const [fullTank, setFullTank] = useState(params.fullTank === "true");
 
-  const pickImage = async () => {
-    try {
-      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
-      if (permissionResult.granted === false) {
-        Alert.alert("Permission Required", "Please allow access to your photos to upload receipts.");
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
-        allowsEditing: true,
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        setImages((prev) => [...prev, result.assets[0].uri]);
-      }
-    } catch (error) {
-      console.error("Error picking image:", error);
-      Alert.alert("Error", "Failed to pick an image.");
-    }
-  };
-
-  const removeImage = (index: number) => {
-    setImages((prev) => prev.filter((_, i) => i !== index));
-  };
-
   const handleSubmit = async () => {
     if (!volume || isNaN(Number(volume))) return Alert.alert("Error", "Please enter a valid volume.");
     if (!price || isNaN(Number(price))) return Alert.alert("Error", "Please enter a valid price.");
+    if (!isEditMode && isUploadingReceipt) {
+      Alert.alert("Please wait", "Receipt is still uploading. Try again in a moment.");
+      return;
+    }
+    if (!isEditMode && hasIncompleteReceipt) {
+      Alert.alert(
+        "Receipt not uploaded",
+        "One or more receipt images did not finish uploading. Please retry or remove them."
+      );
+      return;
+    }
 
     setLoading(true);
     try {
@@ -80,21 +64,11 @@ export default function AddRefuelScreen() {
         });
         Alert.alert("Success", "Refuel updated successfully!");
       } else {
-        let receiptPic: string[] = [];
-        if (images.length > 0) {
-          try {
-            receiptPic = await uploadRefuelReceipts(images);
-          } catch (uploadError) {
-            Alert.alert("Upload Failed", formatFirebaseError(uploadError));
-            return;
-          }
-        }
-
         await refuelService.registerRefuel({
           liters: Number(volume),
           price: Number(price),
           date: date.toISOString(),
-          receiptPic,
+          receiptPic: receiptPicUrls,
           location: location.trim() || undefined,
           km: km ? Number(km) : undefined,
           fullTank,
@@ -108,6 +82,8 @@ export default function AddRefuelScreen() {
       setLoading(false);
     }
   };
+
+  const submitDisabled = loading || isUploadingReceipt;
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
@@ -272,39 +248,16 @@ export default function AddRefuelScreen() {
                />
             </View>
 
-
-            {/* Images Selection (Optional) — only show for new refuels */}
             {!isEditMode && (
-              <View className="z-0 pb-6">
-                <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase mb-2 ml-1">
-                  Receipt / Optional Photos ({images.length}/2)
-                </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row gap-3">
-                  {images.map((imgUri, index) => (
-                    <View key={index} className="relative w-24 h-24 rounded-2xl overflow-hidden border border-border shadow-sm">
-                      <Image source={imgUri} className="w-full h-full" contentFit="cover" />
-                      <TouchableOpacity
-                        onPress={() => removeImage(index)}
-                        className="absolute top-1 right-1 bg-black/50 w-6 h-6 rounded-full items-center justify-center backdrop-blur-sm"
-                        activeOpacity={0.8}
-                      >
-                        <Ionicons name="close" size={16} color="#fff" />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-
-                  {images.length < 2 && (
-                    <TouchableOpacity
-                      onPress={pickImage}
-                      className="w-24 h-24 rounded-2xl border-2 border-dashed border-border bg-surface items-center justify-center"
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="add" size={28} color="#94A3B8" />
-                      <Text className="text-text-secondary text-xs font-bold mt-1">Add Image</Text>
-                    </TouchableOpacity>
-                  )}
-                </ScrollView>
-              </View>
+              <ReceiptImageUploader
+                maxImages={2}
+                uploadImage={uploadRefuelReceipt}
+                onUrlsChange={setReceiptPicUrls}
+                onUploadingChange={setIsUploadingReceipt}
+                onIncompleteChange={setHasIncompleteReceipt}
+                sectionTitle="Refuel Receipt"
+                fieldLabel="Receipt / Optional Photos"
+              />
             )}
 
           </View>
@@ -315,10 +268,10 @@ export default function AddRefuelScreen() {
       <View className="p-5 bg-white border-t border-border shadow-lg z-0">
         <TouchableOpacity
           onPress={handleSubmit}
-          disabled={loading}
+          disabled={submitDisabled}
           activeOpacity={0.8}
           className={`h-14 rounded-xl flex-row items-center justify-center shadow-md ${
-            loading
+            submitDisabled
               ? isEditMode ? "bg-sky-400/70" : "bg-amber-400/70"
               : isEditMode ? "bg-sky-500" : "bg-amber-500"
           }`}

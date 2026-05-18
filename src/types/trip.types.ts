@@ -22,6 +22,8 @@ export interface Trip {
   // Status Fields
   approved?: "PENDING" | "APPROVED" | "DECLINED"; // for Cash trips
   claimed?: boolean; // for Credit trips
+  /** Credit trips: receipt image URL, or "-" when none. */
+  receiptPic?: string;
 
   createdAt: string;
   updatedAt: string;

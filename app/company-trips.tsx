@@ -15,7 +15,9 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useAuthStore } from "@/src/store";
 import { truckService, companyService } from "@/src/api/services";
+import { TripReceiptViewer } from "@/src/components/TripReceiptViewer";
 import { Trip, Truck } from "@/src/types";
+import { hasValidTripReceiptPic } from "@/src/utils/tripReceipt";
 
 /** Backend requires `moneyWorth`; use this when the user leaves sum cap empty (no practical limit). */
 const MONEY_WORTH_NO_CAP = 999_999_999_999;
@@ -322,6 +324,18 @@ const CompanyTripCard = ({
                 </View>
               ) : null;
             })()}
+
+            {hasValidTripReceiptPic(trip.receiptPic) && (
+              <View className="bg-white rounded-xl p-3 border border-border flex-row items-center justify-between">
+                <View>
+                  <Text className="text-text-secondary text-[10px] font-bold tracking-widest uppercase mb-1">
+                    Receipt
+                  </Text>
+                  <Text className="text-text-primary text-sm font-medium">View attached receipt</Text>
+                </View>
+                <TripReceiptViewer receiptPic={trip.receiptPic} />
+              </View>
+            )}
           </View>
         </View>
       )}

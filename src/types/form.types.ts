@@ -64,6 +64,7 @@ export interface FormSubmission {
   requiresApproval?: boolean;      // from serviceType.requiresApproval
   tag?: string;                    // for direct expenses like PERDIME/SALARY
   serviceRequestId?: string;       // linked service request ID
+  receiptPic?: string | null;      // from linked expense or request
   createdAt: string;
   updatedAt: string;
 }

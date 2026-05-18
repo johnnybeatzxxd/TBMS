@@ -33,21 +33,48 @@ export const expenseService = {
    * Register a general expense (Driver).
    */
   async addExpense(truckId: string, payload: Omit<AddExpensePayload, "truckId">): Promise<{ message: string }> {
-    const requestBody = {
+    const requestBody: Record<string, unknown> = {
       amount: payload.price,
       remark: payload.remark,
       date: payload.date,
-      serviceTypeId: payload.serviceTypeId,
-      serviceRequestId: payload.serviceRequestId,
-      dynamicData: payload.dynamicData,
-      receiptPic: payload.receiptPic,
-      tag: payload.tag,
     };
-    console.log("Submit Expense Payload:", JSON.stringify(requestBody, null, 2));
+    if (payload.serviceTypeId) requestBody.serviceTypeId = payload.serviceTypeId;
+    if (payload.serviceRequestId) requestBody.serviceRequestId = payload.serviceRequestId;
+    if (payload.dynamicData) requestBody.dynamicData = payload.dynamicData;
+    if (payload.receiptPic) requestBody.receiptPic = payload.receiptPic;
+    if (payload.tag) requestBody.tag = payload.tag;
 
     const res = await apiFetch("/expences/expence", {
       method: "POST",
       body: JSON.stringify(requestBody),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || "Failed to register expense");
+    }
+    const data = await res.json();
+    return { message: data.message || "Expense registered successfully" };
+  },
+
+  /**
+   * POST /expences/expence — driver "Other" request (remark + optional receipt only).
+   */
+  async addOtherExpense(payload: {
+    amount: number;
+    date: string;
+    remark?: string;
+    receiptPic?: string;
+  }): Promise<{ message: string }> {
+    const body: Record<string, unknown> = {
+      amount: payload.amount,
+      date: payload.date,
+    };
+    if (payload.remark?.trim()) body.remark = payload.remark.trim();
+    if (payload.receiptPic) body.receiptPic = payload.receiptPic;
+
+    const res = await apiFetch("/expences/expence", {
+      method: "POST",
+      body: JSON.stringify(body),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));

@@ -7,7 +7,9 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useAuthStore, useCacheStore } from "@/src/store";
 import { DateFilterBar, DateFilterPreset } from "@/src/components/DateFilterBar";
 import { tripService, truckService } from "@/src/api/services";
+import { TripReceiptViewer } from "@/src/components/TripReceiptViewer";
 import { Trip, Truck, GetTripsQuery } from "@/src/types";
+import { hasValidTripReceiptPic } from "@/src/utils/tripReceipt";
 import {
   writeOpenFiltersDraft,
   consumeAppliedFilters,
@@ -260,6 +262,18 @@ const TripCard = ({ trip, isManager, onRefresh, onUpdateTrip, onDelete, activePa
                     {trip.contractedCompany?.name || trip.company?.name || trip.companyId}
                   </Text>
                 </View>
+              </View>
+            )}
+
+            {tripPaymentType === "CREDIT" && hasValidTripReceiptPic(trip.receiptPic) && (
+              <View className="bg-white rounded-xl p-3 border border-border flex-row items-center justify-between">
+                <View>
+                  <Text className="text-text-secondary text-[10px] font-bold tracking-widest uppercase mb-1">
+                    Receipt
+                  </Text>
+                  <Text className="text-text-primary text-sm font-medium">View attached receipt</Text>
+                </View>
+                <TripReceiptViewer receiptPic={trip.receiptPic} />
               </View>
             )}
 

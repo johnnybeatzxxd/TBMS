@@ -1,7 +1,13 @@
-import { formService, truckService } from "@/src/api/services";
+import { expenseService, formService, truckService } from "@/src/api/services";
 import { DateFilterPreset } from "@/src/components/DateFilterBar";
 import { useAuthStore, useCacheStore } from "@/src/store";
+import { ReceiptPhotosRow } from "@/src/components/TripReceiptViewer";
 import { FormSubmission } from "@/src/types/form.types";
+import {
+  getRequestDisplayName,
+  getRequestImageUrls,
+  isViewableImageUrl,
+} from "@/src/utils/tripReceipt";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { router, useFocusEffect } from "expo-router";
@@ -73,9 +79,17 @@ const StatusBadge = ({ status }: { status: string }) => {
 
 const RequestCard = ({ req, isManager, isDriver, onStatusUpdate }: { req: FormSubmission, isManager: boolean, isDriver: boolean, onStatusUpdate: (id: string, action: string) => void }) => {
   const [expanded, setExpanded] = useState(false);
+  const displayName = getRequestDisplayName(req);
+  const imageUrls = getRequestImageUrls(req);
 
-  // Filter out empty values and render dynamic fields
-  const filledValues = Object.entries(req.values || {}).filter(([_, v]) => v !== undefined && v !== null && v !== "");
+  // Filter out empty values and render dynamic fields (skip raw image URLs — shown via viewer)
+  const filledValues = Object.entries(req.values || {}).filter(
+    ([_, v]) =>
+      v !== undefined &&
+      v !== null &&
+      v !== "" &&
+      !(typeof v === "string" && isViewableImageUrl(v))
+  );
   return (
     <TouchableOpacity
       activeOpacity={0.8}
@@ -93,14 +107,21 @@ const RequestCard = ({ req, isManager, isDriver, onStatusUpdate }: { req: FormSu
               {req.truckPlate || "Unknown Truck"}
             </Text>
             <Text className="text-text-primary font-bold text-base" numberOfLines={1}>
-              {req.templateName === "Unknown" && req.tag ? req.tag : req.templateName}
+              {displayName}
             </Text>
             {isManager && req.driverName && (
               <Text className="text-primary-600 text-[10px] mt-0.5">{req.driverName}</Text>
             )}
           </View>
         </View>
-        <StatusBadge status={req.status} />
+        <View className="flex-row items-center gap-2">
+          {imageUrls.length > 0 && (
+            <View onStartShouldSetResponder={() => true}>
+              <ReceiptPhotosRow receiptPic={imageUrls} compact />
+            </View>
+          )}
+          <StatusBadge status={req.status} />
+        </View>
       </View>
 
       {/* Expanded Actions & Info */}
@@ -122,6 +143,10 @@ const RequestCard = ({ req, isManager, isDriver, onStatusUpdate }: { req: FormSu
               <Text className="text-text-primary text-sm leading-5">{req.description}</Text>
             </View>
           ) : null}
+
+          {imageUrls.length > 0 && (
+            <ReceiptPhotosRow receiptPic={imageUrls} label="Photos" />
+          )}
 
           {/* Date */}
           {req.date && (
@@ -325,14 +350,20 @@ export default function RequestsScreen() {
         filters.status = selectedStatuses;
       }
 
+      const expenseFilters: { startDate?: string; endDate?: string; truckIds?: string[] } = {};
+      if (filters.startDate) expenseFilters.startDate = filters.startDate;
+      if (filters.endDate) expenseFilters.endDate = filters.endDate;
+      if (filters.truckId) expenseFilters.truckIds = [filters.truckId];
+
       const promises: Promise<any>[] = [
         formService.getFormSubmissions(filters),
+        expenseService.getMyExpenses(expenseFilters).catch(() => ({ expenses: [] })),
       ];
       if (isManager) {
         promises.push(truckService.getMyTrucks().catch(() => ({ trucks: [] })));
       }
 
-      const [res, trucksRes] = await Promise.all(promises);
+      const [res, expensesRes, trucksRes] = await Promise.all(promises);
 
       // Get unique template IDs from submissions and fetch full details for each
       const uniqueTemplateIds = [...new Set(
@@ -353,11 +384,23 @@ export default function RequestsScreen() {
         trucksRes.trucks.forEach((t: any) => trucksDict[t.id] = t.plateNumber);
       }
 
+      const expenseByServiceRequestId = new Map<string, { receiptPic?: string | null }>();
+      (expensesRes?.expenses || []).forEach((e: { serviceRequestId?: string | null; receiptPic?: string | null }) => {
+        if (e.serviceRequestId) expenseByServiceRequestId.set(e.serviceRequestId, e);
+      });
+
       let processed = res.submissions.map((s: FormSubmission) => {
         // Look up template info
         const tpl = templatesDict[s.templateId];
-        if (s.templateName === "Unknown" && tpl) {
+        if ((!s.templateName || s.templateName === "Unknown") && tpl) {
           s.templateName = tpl.name;
+        }
+        if (!s.templateName || s.templateName === "Unknown") {
+          s.templateName = "Other";
+        }
+        const linkedExpense = expenseByServiceRequestId.get(s.id);
+        if (linkedExpense?.receiptPic && !s.receiptPic) {
+          s.receiptPic = linkedExpense.receiptPic;
         }
         // Always apply requiresApproval from template if available
         if (tpl) {
@@ -372,6 +415,43 @@ export default function RequestsScreen() {
         }
         return s;
       });
+
+      const seenIds = new Set(processed.map((s) => s.id));
+      const expenseRows: FormSubmission[] = (expensesRes?.expenses || [])
+        .filter((e: { serviceRequestId?: string | null; id: string }) => {
+          const srId = e.serviceRequestId;
+          if (srId && seenIds.has(srId)) return false;
+          if (seenIds.has(e.id)) return false;
+          return true;
+        })
+        .map((e: any) => {
+          const linkedSr = e.serviceRequest;
+          return {
+            id: e.serviceRequestId || e.id,
+            templateId: linkedSr?.serviceType?.name ? "" : "",
+            templateName: getRequestDisplayName({
+              templateName: linkedSr?.serviceType?.name,
+              tag: e.tag,
+            }),
+            category: "General",
+            driverId: e.driverId || "",
+            truckId: e.truckId || "",
+            truckPlate: e.truck?.plateNumber || "",
+            amount: Number(e.amount ?? 0),
+            values: linkedSr?.dynamicData || e.dynamicData || {},
+            description: e.remark || linkedSr?.description || "",
+            date: e.date,
+            status: (e.approved === "APPROVED" ? "APPROVED" : "PENDING") as FormSubmission["status"],
+            receiptPic: e.receiptPic,
+            tag: e.tag,
+            serviceRequestId: e.serviceRequestId,
+            createdAt: e.createdAt || e.date,
+            updatedAt: e.updatedAt || e.date,
+          };
+        });
+
+      expenseRows.forEach((row) => seenIds.add(row.id));
+      processed = [...processed, ...expenseRows];
 
       setRequests(processed);
 

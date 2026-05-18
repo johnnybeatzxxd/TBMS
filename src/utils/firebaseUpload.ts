@@ -7,7 +7,7 @@ import { ensureImageUnderMaxBytes } from "@/src/utils/imageCompress";
 const LOG = "[FirebaseUpload]";
 
 /** Storage path segment: pictures/{uid}/{type}/{filename} */
-export type PictureUploadType = "refule" | "credit";
+export type PictureUploadType = "refule" | "credit" | "expense";
 
 function mimeToExtension(mime: string): string {
   if (mime === "image/png") return ".png";
@@ -174,4 +174,9 @@ export async function uploadRefuelReceipts(localUris: string[]): Promise<string[
     urls.push(await uploadRefuelReceipt(uri));
   }
   return urls;
+}
+
+/** General expense / other request → pictures/{uid}/expense/{uuid}.{ext} */
+export async function uploadExpenseReceipt(localUri: string): Promise<string> {
+  return uploadPictureFromUri(localUri, "expense");
 }
