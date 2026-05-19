@@ -1,12 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { View, Text, TouchableOpacity, Pressable, ScrollView, ActivityIndicator, Alert, SectionList, RefreshControl, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useAuthStore, useCacheStore } from "@/src/store";
-import { expenseService, truckService } from "@/src/api/services";
+import { expenseService, truckService, formService } from "@/src/api/services";
 import { Expense } from "@/src/types";
 import { DateFilterBar, DateFilterPreset } from "@/src/components/DateFilterBar";
+import { ReceiptPhotosRow } from "@/src/components/TripReceiptViewer";
 
 const getRelativeDateLabel = (dateStr: string) => {
   const [year, month, day] = dateStr.split("-").map(Number);
@@ -141,8 +142,7 @@ const ExpenseCard = ({ exp }: { exp: Expense }) => {
             
             {exp.receiptPic && (
               <View className="mt-2">
-                <Text className="text-xs font-bold text-text-secondary tracking-widest uppercase mb-2">Receipt</Text>
-                <Text className="text-sm text-primary underline">View Receipt</Text>
+                <ReceiptPhotosRow receiptPic={exp.receiptPic} label="Receipt" />
               </View>
             )}
           </View>
@@ -171,8 +171,12 @@ export default function ExpensesScreen() {
   const [amountTo, setAmountTo] = useState<string>("");
   const [selectedTruckIds, setSelectedTruckIds] = useState<string[]>([]);
   const [trucks, setTrucks] = useState<any[]>([{ id: "all", plateNumber: "All Trucks" }]);
+  const [forms, setForms] = useState<any[]>([{ id: "all", name: "All Forms" }]);
+  const [selectedFormId, setSelectedFormId] = useState<string>("all");
+  const [showFormMenu, setShowFormMenu] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [showTruckMenu, setShowTruckMenu] = useState(false);
+  const [draftTruckIds, setDraftTruckIds] = useState<string[]>([]);
 
   const isDriver = user?.role === "driver";
   const isAdminOrManager = user?.role === "admin" || user?.role === "manager";
@@ -184,6 +188,52 @@ export default function ExpensesScreen() {
       }).catch(() => {});
     }
   }, [isAdminOrManager]);
+
+  useEffect(() => {
+    expenseService.getServiceRequestNames().then(res => {
+      console.log("Successfully fetched form names:", res);
+      if (res && res.serviceTypes) {
+        setForms([{ id: "all", name: "All Forms" }, ...res.serviceTypes]);
+      }
+    }).catch((err) => {
+      console.error("Failed to load form names in component:", err);
+    });
+  }, []);
+
+  const truckById = useMemo(
+    () => Object.fromEntries(trucks.filter(t => t.id !== "all").map((t) => [t.id, t.plateNumber])),
+    [trucks]
+  );
+
+  const selectedTruckLabel = useMemo(() => {
+    if (selectedTruckIds.length === 0) return "All Trucks";
+    if (selectedTruckIds.length === 1) return truckById[selectedTruckIds[0]] || "1 Truck";
+    return `${selectedTruckIds.length} Trucks`;
+  }, [selectedTruckIds, truckById]);
+
+  const isDraftAllTrucks = draftTruckIds.length === 0;
+
+  const openTruckMenu = () => {
+    setDraftTruckIds([...selectedTruckIds]);
+    setShowTruckMenu(true);
+  };
+
+  const closeTruckMenu = () => setShowTruckMenu(false);
+
+  const applyTruckSelection = () => {
+    setSelectedTruckIds([...draftTruckIds]);
+    closeTruckMenu();
+  };
+
+  const toggleDraftTruck = (truckId: string) => {
+    const selected = new Set(draftTruckIds);
+    if (selected.has(truckId)) {
+      selected.delete(truckId);
+    } else {
+      selected.add(truckId);
+    }
+    setDraftTruckIds(Array.from(selected));
+  };
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = async () => {
@@ -218,6 +268,7 @@ export default function ExpensesScreen() {
       if (amountFrom) filters.amountFrom = Number(amountFrom);
       if (amountTo) filters.amountTo = Number(amountTo);
       if (selectedTruckIds.length > 0) filters.truckIds = selectedTruckIds;
+      if (selectedFormId !== "all") filters.serviceTypeId = selectedFormId;
 
       const res = await expenseService.getMyExpenses(filters);
       const sorted = [...res.expenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -266,7 +317,7 @@ export default function ExpensesScreen() {
     if (filterPreset !== "custom" || (filterPreset === "custom" && customFrom && customTo)) {
       loadInitialData();
     }
-  }, [filterPreset, customFrom, customTo]);
+  }, [filterPreset, customFrom, customTo, selectedTruckIds]);
 
   const groupedExpenses = displayedExpenses.reduce((acc, exp) => {
     if (!acc[exp.date]) acc[exp.date] = [];
@@ -284,15 +335,91 @@ export default function ExpensesScreen() {
     <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
       {/* Header */}
       <View className="flex-row items-center justify-between px-5 pt-2 pb-4 bg-white border-b border-border shadow-sm z-50">
-        <View className="flex-row items-center">
+        <View className="flex-row items-center flex-1 pr-2">
           <Ionicons name="receipt" size={26} color="#2563EB" />
-          <Text className="text-text-primary font-bold text-xl ml-2 tracking-wide">
+          <Text className="text-text-primary font-bold text-xl ml-2 tracking-wide" numberOfLines={1}>
             Expenses
           </Text>
         </View>
-        <TouchableOpacity onPress={() => setShowFilters(!showFilters)} className="bg-surface p-2 rounded-xl border border-border">
-          <Ionicons name="filter" size={20} color="#2563EB" />
-        </TouchableOpacity>
+
+        <View className="flex-row items-center gap-2">
+          {isAdminOrManager && (
+            <View className="relative z-50">
+              <TouchableOpacity
+                onPress={() => (showTruckMenu ? closeTruckMenu() : openTruckMenu())}
+                className="flex-row items-center gap-1.5 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2"
+                activeOpacity={0.8}
+              >
+                <Ionicons name="car-sport" size={14} color="#2563EB" />
+                <Text className="text-blue-600 font-semibold text-xs max-w-[88px]" numberOfLines={1}>
+                  {selectedTruckLabel}
+                </Text>
+                <Ionicons name={showTruckMenu ? "chevron-up" : "chevron-down"} size={14} color="#2563EB" />
+              </TouchableOpacity>
+
+              {showTruckMenu && (
+                <View className="absolute right-0 top-10 bg-white rounded-2xl border border-border shadow-lg overflow-hidden min-w-[200px] z-[999] elevation-20">
+                  <TouchableOpacity
+                    onPress={() => setDraftTruckIds([])}
+                    className={`px-4 py-3 flex-row items-center gap-2 border-b border-border/50 ${
+                      isDraftAllTrucks ? "bg-blue-50" : "bg-white"
+                    }`}
+                  >
+                    <Ionicons
+                      name={isDraftAllTrucks ? "checkbox" : "square-outline"}
+                      size={18}
+                      color={isDraftAllTrucks ? "#2563EB" : "#64748B"}
+                    />
+                    <Text
+                      className={`text-sm flex-1 ${
+                        isDraftAllTrucks ? "text-blue-600 font-bold" : "text-text-primary font-medium"
+                      }`}
+                    >
+                      All Trucks
+                    </Text>
+                  </TouchableOpacity>
+                  <ScrollView style={{ maxHeight: 220 }} nestedScrollEnabled>
+                    {trucks.filter(t => t.id !== "all").map((truck) => {
+                      const checked = draftTruckIds.includes(truck.id);
+                      return (
+                        <TouchableOpacity
+                          key={truck.id}
+                          onPress={() => toggleDraftTruck(truck.id)}
+                          className={`px-4 py-3 flex-row items-center gap-2 ${
+                            checked ? "bg-blue-50" : "bg-white"
+                          }`}
+                        >
+                          <Ionicons
+                            name={checked ? "checkbox" : "square-outline"}
+                            size={18}
+                            color={checked ? "#2563EB" : "#64748B"}
+                          />
+                          <Text
+                            className={`text-sm flex-1 ${
+                              checked ? "text-blue-600 font-bold" : "text-text-primary font-medium"
+                            }`}
+                          >
+                            {truck.plateNumber}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                  <TouchableOpacity
+                    onPress={applyTruckSelection}
+                    className="px-4 py-2.5 bg-blue-600 border-t border-blue-600 items-center"
+                  >
+                    <Text className="text-white font-semibold text-sm">Done</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          )}
+
+          <TouchableOpacity onPress={() => setShowFilters(!showFilters)} className="bg-surface p-2 rounded-xl border border-border">
+            <Ionicons name="filter" size={20} color="#2563EB" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Extended Filters */}
@@ -349,65 +476,40 @@ export default function ExpensesScreen() {
             </View>
           </View>
 
-          {isAdminOrManager && (
-            <View className="z-50 relative">
-              <Text className="text-xs font-bold tracking-widest text-text-secondary uppercase mb-1">Trucks</Text>
-              <TouchableOpacity
-                onPress={() => setShowTruckMenu(!showTruckMenu)}
-                className="bg-surface border border-border rounded-xl h-10 px-3 flex-row items-center justify-between"
-              >
-                <Text className="text-sm text-text-primary">
-                  {selectedTruckIds.length === 0 
-                    ? "All Trucks" 
-                    : selectedTruckIds.length === 1 
-                      ? (trucks.find(t => t.id === selectedTruckIds[0])?.plateNumber || "1 Truck Selected")
-                      : `${selectedTruckIds.length} Trucks Selected`
-                  }
-                </Text>
-                <Ionicons name="chevron-down" size={16} color="#64748B" />
-              </TouchableOpacity>
-              
-              {showTruckMenu && (
-                <View className="absolute top-12 left-0 right-0 bg-white border border-border rounded-xl shadow-lg z-50 overflow-hidden max-h-64">
-                  <ScrollView nestedScrollEnabled>
-                    {trucks.map(t => {
-                      const isSelected = t.id === 'all' 
-                        ? selectedTruckIds.length === 0 
-                        : selectedTruckIds.includes(t.id);
-                      
-                      return (
-                        <TouchableOpacity
-                          key={t.id}
-                          onPress={() => {
-                            if (t.id === 'all') {
-                              setSelectedTruckIds([]);
-                            } else {
-                              setSelectedTruckIds(prev => 
-                                prev.includes(t.id) 
-                                  ? prev.filter(id => id !== t.id) 
-                                  : [...prev, t.id]
-                              );
-                            }
-                          }}
-                          className={`px-4 py-3 border-b border-border-light flex-row items-center justify-between ${isSelected ? "bg-primary-50" : ""}`}
-                        >
-                          <Text className={`text-sm ${isSelected ? "text-primary font-bold" : "text-text-primary"}`}>{t.plateNumber}</Text>
-                          {isSelected && <Ionicons name="checkmark" size={16} color="#2563EB" />}
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
-                  <TouchableOpacity 
-                    onPress={() => setShowTruckMenu(false)}
-                    className="bg-surface py-2 items-center border-t border-border"
-                  >
-                    <Text className="text-xs font-bold text-primary">Done</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          )}
-
+          {/* Form Filter */}
+          <View className="z-50 relative mt-2">
+            <Text className="text-xs font-bold tracking-widest text-text-secondary uppercase mb-1">By Form</Text>
+            <TouchableOpacity
+              onPress={() => setShowFormMenu(!showFormMenu)}
+              className="bg-surface border border-border rounded-xl h-10 px-3 flex-row items-center justify-between"
+            >
+              <Text className="text-sm text-text-primary">
+                {forms.find(f => f.id === selectedFormId)?.name || "All Forms"}
+              </Text>
+              <Ionicons name="chevron-down" size={16} color="#64748B" />
+            </TouchableOpacity>
+            
+            {showFormMenu && (
+              <View className="absolute top-12 left-0 right-0 bg-white border border-border rounded-xl shadow-lg z-50 overflow-hidden max-h-48">
+                <ScrollView nestedScrollEnabled>
+                  {forms.map(f => (
+                    <TouchableOpacity
+                      key={f.id}
+                      onPress={() => {
+                        setSelectedFormId(f.id);
+                        setShowFormMenu(false);
+                      }}
+                      className={`px-4 py-3 border-b border-border-light flex-row items-center justify-between ${selectedFormId === f.id ? "bg-primary-50" : ""}`}
+                    >
+                      <Text className={`text-sm ${selectedFormId === f.id ? "text-primary font-bold" : "text-text-primary"}`}>{f.name}</Text>
+                      {selectedFormId === f.id && <Ionicons name="checkmark" size={16} color="#2563EB" />}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+          </View>
+          
           <TouchableOpacity
             onPress={() => { setShowFilters(false); loadInitialData(); }}
             className="bg-primary rounded-xl py-3 mt-2 items-center"

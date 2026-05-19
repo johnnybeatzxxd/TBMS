@@ -39,6 +39,7 @@ export const mockFormService = {
     const template: FormTemplate = {
       id: generateId(),
       ...payload,
+      isActive: payload.isActive ?? true,
       createdAt: now,
       updatedAt: now,
     };

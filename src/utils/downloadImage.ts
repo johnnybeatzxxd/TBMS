@@ -61,7 +61,7 @@ export async function downloadRemoteImage(imageUrl: string): Promise<void> {
   const localUri = `${baseDir}${fileName}`;
   const { uri } = await FileSystem.downloadAsync(imageUrl, localUri);
 
-  const { status } = await MediaLibrary.requestPermissionsAsync();
+  const { status } = await MediaLibrary.requestPermissionsAsync(true);
   if (status === "granted") {
     await MediaLibrary.saveToLibraryAsync(uri);
     Alert.alert("Saved", "Image saved to your photo library.");

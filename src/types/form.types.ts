@@ -32,6 +32,7 @@ export interface FormTemplate {
   fields: FormField[];       // Custom fields defined by admin
   adminId?: string;          // Owner admin
   allowedTruckIds?: string[]; // IDs of trucks allowed to use this form
+  isActive: boolean;         // Whether the form is enabled/active
   createdAt: string;         // ISO timestamp
   updatedAt: string;         // ISO timestamp
 }
@@ -44,6 +45,7 @@ export interface CreateFormTemplatePayload {
   requiresApproval: boolean;
   fields: FormField[];
   allowedTruckIds?: string[];
+  isActive?: boolean;
 }
 
 // What a driver submits when filling a form

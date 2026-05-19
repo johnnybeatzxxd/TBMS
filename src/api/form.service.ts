@@ -37,6 +37,7 @@ export const formService = {
       requiresApproval: st.requiresApproval ?? true,
       fields: st.formData || [],
       adminId: st.adminId,
+      isActive: st.isActive ?? true,
       createdAt: st.createdAt || new Date().toISOString(),
       updatedAt: st.updatedAt || new Date().toISOString(),
     }));
@@ -65,6 +66,7 @@ export const formService = {
       fields: st.formData || [],
       allowedTruckIds: st.allowedTrucks?.map((t: any) => t.id) || [],
       adminId: st.adminId,
+      isActive: st.isActive ?? true,
       createdAt: st.createdAt || new Date().toISOString(),
       updatedAt: st.updatedAt || new Date().toISOString(),
     };
@@ -81,7 +83,7 @@ export const formService = {
         name: payload.name,
         requiresApproval: payload.requiresApproval,
         formData: payload.fields,
-        isActive: true,
+        isActive: payload.isActive ?? true,
         allowedTruckIds: payload.allowedTruckIds?.length ? payload.allowedTruckIds : undefined,
       }),
     });
@@ -99,6 +101,7 @@ export const formService = {
       requiresApproval: st.requiresApproval ?? payload.requiresApproval,
       fields: st.formData || payload.fields,
       adminId: st.adminId,
+      isActive: st.isActive ?? payload.isActive ?? true,
       createdAt: st.createdAt || new Date().toISOString(),
       updatedAt: st.updatedAt || new Date().toISOString(),
     };
@@ -114,6 +117,7 @@ export const formService = {
     if (payload.requiresApproval !== undefined) body.requiresApproval = payload.requiresApproval;
     if (payload.fields) body.formData = payload.fields;
     if (payload.allowedTruckIds !== undefined) body.allowedTruckIds = payload.allowedTruckIds.length ? payload.allowedTruckIds : undefined;
+    if (payload.isActive !== undefined) body.isActive = payload.isActive;
 
     const res = await apiFetch(`/expences/update-service-request-form/${id}`, {
       method: "PUT",
@@ -132,6 +136,7 @@ export const formService = {
       description: payload.description || "",
       requiresApproval: st.requiresApproval ?? true,
       fields: st.formData || [],
+      isActive: st.isActive ?? true,
       createdAt: st.createdAt || new Date().toISOString(),
       updatedAt: st.updatedAt || new Date().toISOString(),
     };

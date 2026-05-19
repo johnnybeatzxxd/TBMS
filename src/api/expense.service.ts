@@ -83,4 +83,23 @@ export const expenseService = {
     const data = await res.json();
     return { message: data.message || "Expense registered successfully" };
   },
+
+  /**
+   * GET /expences/get-service-request-names
+   * Fetch the list of forms / service request types
+   */
+  async getServiceRequestNames(): Promise<{ serviceTypes: { id: string, name: string }[] }> {
+    console.log("Calling /expences/get-service-request-names");
+    const res = await apiFetch("/expences/get-service-request-names", {
+      method: "GET",
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      console.error("Failed to fetch service request names:", err);
+      throw new Error(err.message || "Failed to fetch service request names");
+    }
+    const data = await res.json();
+    console.log("Service Request Names Response:", data);
+    return data;
+  },
 };

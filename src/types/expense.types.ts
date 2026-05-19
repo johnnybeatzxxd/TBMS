@@ -31,6 +31,7 @@ export interface ExpenseFilters {
   startDate?: string;
   endDate?: string;
   truckIds?: string[];
+  serviceTypeId?: string;
   serviceRequestId?: string;
   amountFrom?: number;
   amountTo?: number;

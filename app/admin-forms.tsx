@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { View, Text, TouchableOpacity, ActivityIndicator, Alert, FlatList, RefreshControl } from "react-native";
+import { View, Text, TouchableOpacity, ActivityIndicator, Alert, FlatList, RefreshControl, Switch } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
@@ -14,10 +14,11 @@ const FIELD_TYPE_LABELS: Record<string, string> = {
   boolean: "Yes/No",
 };
 
-const TemplateCard = ({ template, onEdit, onDelete }: {
+const TemplateCard = ({ template, onEdit, onDelete, onToggleActive }: {
   template: FormTemplate;
   onEdit: (t: FormTemplate) => void;
   onDelete: (id: string) => void;
+  onToggleActive: (t: FormTemplate, isActive: boolean) => void;
 }) => {
   return (
     <View className="bg-white rounded-2xl border border-border shadow-sm mb-3 p-4 flex-row items-center justify-between">
@@ -35,7 +36,14 @@ const TemplateCard = ({ template, onEdit, onDelete }: {
       </View>
 
       {/* Actions */}
-      <View className="flex-row gap-2">
+      <View className="flex-row items-center gap-2">
+        <Switch
+          value={template.isActive ?? true}
+          onValueChange={(val) => onToggleActive(template, val)}
+          trackColor={{ false: "#E2E8F0", true: "#C7D2FE" }}
+          thumbColor={template.isActive !== false ? "#6366F1" : "#94A3B8"}
+          style={{ transform: [{ scale: 0.8 }] }}
+        />
         <TouchableOpacity
           className="w-10 h-10 items-center justify-center bg-indigo-50 rounded-lg border border-indigo-100"
           activeOpacity={0.8}
@@ -101,6 +109,18 @@ export default function AdminFormsScreen() {
     router.push(`/add-form-template?id=${template.id}` as any);
   };
 
+  const handleToggleActive = async (template: FormTemplate, isActive: boolean) => {
+    // Optimistic update
+    setTemplates(prev => prev.map(t => t.id === template.id ? { ...t, isActive } : t));
+    try {
+      await formService.updateFormTemplate(template.id, { isActive });
+    } catch (e: any) {
+      // Revert on failure
+      setTemplates(prev => prev.map(t => t.id === template.id ? { ...t, isActive: template.isActive } : t));
+      Alert.alert("Error", e.message || "Failed to update form status");
+    }
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top", "bottom"]}>
       {/* Header */}
@@ -132,7 +152,7 @@ export default function AdminFormsScreen() {
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#6366F1" />}
           renderItem={({ item }) => (
-            <TemplateCard template={item} onEdit={handleEdit} onDelete={handleDelete} />
+            <TemplateCard template={item} onEdit={handleEdit} onDelete={handleDelete} onToggleActive={handleToggleActive} />
           )}
           ListEmptyComponent={
             <View className="items-center justify-center py-20 opacity-60">
