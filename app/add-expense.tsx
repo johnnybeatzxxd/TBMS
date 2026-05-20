@@ -89,6 +89,8 @@ export default function AddExpenseModal() {
         price: parsedPrice,
         date: formattedDate,
       });
+      const { clearCachePrefix } = require("@/src/hooks/useCachedFetch");
+      clearCachePrefix("DRIVER_EXPENSES");
       Alert.alert("Success", "Expense registered successfully.");
       router.back();
     } catch (error: any) {

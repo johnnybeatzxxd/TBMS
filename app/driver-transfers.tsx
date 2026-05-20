@@ -9,6 +9,7 @@ import { Transfer } from "@/src/types/transfer.types";
 import { useAuthStore } from "@/src/store";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback } from "react";
+import { useCachedFetch } from "@/src/hooks/useCachedFetch";
 
 const getGroupedData = (data: Transfer[]) => {
   const grouped = data.reduce((acc, item) => {
@@ -95,10 +96,34 @@ export default function DriverTransfersScreen() {
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchTransfers = async (pageNum: number, append = false, isRefresh = false) => {
-    if (pageNum === 1 && !isRefresh) setLoadingInitial(true);
-    else if (pageNum > 1) setLoadingMore(true);
+  const fetchPageOne = useCallback(async () => {
+    const response = await transferService.getTransfers({
+      page: 1,
+      perpage: 10,
+      driverId: user?.id,
+    });
+    return response;
+  }, [user?.id]);
 
+  const { data: pageOneRes, isLoading: isPageOneLoading, refetch } = useCachedFetch<any>(
+    "DRIVER_TRANSFERS",
+    fetchPageOne,
+    null
+  );
+
+  useEffect(() => {
+    if (pageOneRes) {
+      setTransfers(pageOneRes.transfers);
+      setPage(pageOneRes.meta.currentPage);
+      setHasMore(pageOneRes.meta.currentPage < pageOneRes.meta.totalPages);
+      setLoadingInitial(false);
+    } else if (isPageOneLoading) {
+      setLoadingInitial(true);
+    }
+  }, [pageOneRes, isPageOneLoading]);
+
+  const fetchTransfers = async (pageNum: number, append = false) => {
+    setLoadingMore(true);
     try {
       const response = await transferService.getTransfers({
         page: pageNum,
@@ -113,22 +138,23 @@ export default function DriverTransfersScreen() {
       console.log("Error loading transfers:", error);
       setHasMore(false);
     } finally {
-      if (pageNum === 1) setLoadingInitial(false);
-      else setLoadingMore(false);
+      setLoadingMore(false);
     }
   };
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchTransfers(1, false, true);
+    await refetch(true);
     setRefreshing(false);
   };
 
   // Automatically reload when screen is focused
   useFocusEffect(
     useCallback(() => {
-      fetchTransfers(1, false);
-    }, [])
+      const { useAuthStore } = require("@/src/store/authStore");
+      if (!useAuthStore.getState().isAuthenticated) return;
+      refetch(false);
+    }, [refetch])
   );
 
   const handleLoadMore = () => {

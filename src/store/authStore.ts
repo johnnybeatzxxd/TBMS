@@ -42,6 +42,12 @@ export const useAuthStore = create<AuthStore>((set) => ({
       // Persist the full user object locally (name, role, profile, trucks, etc.)
       await SecureStore.setItemAsync(USER_PROFILE_KEY, JSON.stringify(user));
 
+      // Seed USER_PROFILE_DATA cache instantly so Profile screen works offline/instantly
+      const { memoryCache } = require("../hooks/useCachedFetch");
+      const cacheKey = "USER_PROFILE_DATA";
+      memoryCache[cacheKey] = user.profile;
+      await SecureStore.setItemAsync(`cache_${cacheKey}`, JSON.stringify(user.profile)).catch(() => {});
+
       set({ user, isAuthenticated: true, isLoading: false });
     } catch (err: any) {
       set({ error: err.message || "Login failed", isLoading: false });
@@ -53,6 +59,11 @@ export const useAuthStore = create<AuthStore>((set) => ({
     set({ user: null, isAuthenticated: false, isLoading: false, error: null });
 
     // 2. Nuke ALL local storage to prevent data leakage between users
+    const { clearCacheKey } = require("../hooks/useCachedFetch");
+    clearCacheKey("USER_PROFILE_DATA");
+    clearCacheKey("DRIVERS");
+    clearCacheKey("TRUCKS");
+
     await Promise.allSettled([
       SecureStore.deleteItemAsync(USER_PROFILE_KEY),
       clearSessionCookie(),
@@ -72,12 +83,17 @@ export const useAuthStore = create<AuthStore>((set) => ({
         return;
       }
       const user: User = JSON.parse(profileStr);
+      
+      // Seed memoryCache on session restore so Profile opens instantly on app cold starts
+      const { memoryCache } = require("../hooks/useCachedFetch");
+      memoryCache["USER_PROFILE_DATA"] = user.profile;
+
       set({
         user,
         isAuthenticated: true,
         isLoading: false,
       });
-    } catch {
+    } catch (error) {
       // Corrupted data — clear and send to login
       await SecureStore.deleteItemAsync(USER_PROFILE_KEY);
       set({ isLoading: false });

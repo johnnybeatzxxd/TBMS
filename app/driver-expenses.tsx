@@ -1,4 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useCachedFetch } from "@/src/hooks/useCachedFetch";
+import { useFocusEffect } from "expo-router";
 import { View, Text, TouchableOpacity, Pressable, ActivityIndicator, SectionList, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -121,9 +123,6 @@ const ExpenseCard = ({ expense }: { expense: Expense }) => {
 };
 
 export default function DriverExpensesScreen() {
-  const [loading, setLoading] = useState(true);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
   // Filters State
@@ -134,51 +133,58 @@ export default function DriverExpensesScreen() {
   const [amountFrom, setAmountFrom] = useState<string>("");
   const [amountTo, setAmountTo] = useState<string>("");
 
-  const loadExpenses = async () => {
-    try {
-      const filters: any = {};
-      const now = new Date();
-      if (filterPreset === "today") {
-         filters.startDate = new Date(now.setHours(0,0,0,0)).toISOString();
-         filters.endDate = new Date(now.setHours(23,59,59,999)).toISOString();
-      } else if (filterPreset === "week") {
-         const weekAgo = new Date(); weekAgo.setDate(now.getDate() - 7);
-         filters.startDate = weekAgo.toISOString();
-         filters.endDate = new Date(now.setHours(23,59,59,999)).toISOString();
-      } else if (filterPreset === "month") {
-         const monthAgo = new Date(); monthAgo.setMonth(now.getMonth() - 1);
-         filters.startDate = monthAgo.toISOString();
-         filters.endDate = new Date(now.setHours(23,59,59,999)).toISOString();
-      } else if (filterPreset === "custom" && customFrom && customTo) {
-         filters.startDate = customFrom.toISOString();
-         filters.endDate = customTo.toISOString();
-      }
-
-      if (approvedFilter !== "ALL") filters.approved = approvedFilter;
-      if (amountFrom) filters.amountFrom = Number(amountFrom);
-      if (amountTo) filters.amountTo = Number(amountTo);
-
-      const res = await expenseService.getMyExpenses(filters);
-      const sorted = [...res.expenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      setExpenses(sorted);
-    } catch (error) {
-      console.log("Failed to load expenses", error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+  const loadExpenses = useCallback(async () => {
+    const filters: any = {};
+    const now = new Date();
+    if (filterPreset === "today") {
+       filters.startDate = new Date(now.setHours(0,0,0,0)).toISOString();
+       filters.endDate = new Date(now.setHours(23,59,59,999)).toISOString();
+    } else if (filterPreset === "week") {
+       const weekAgo = new Date(); weekAgo.setDate(now.getDate() - 7);
+       filters.startDate = weekAgo.toISOString();
+       filters.endDate = new Date(now.setHours(23,59,59,999)).toISOString();
+    } else if (filterPreset === "month") {
+       const monthAgo = new Date(); monthAgo.setMonth(now.getMonth() - 1);
+       filters.startDate = monthAgo.toISOString();
+       filters.endDate = new Date(now.setHours(23,59,59,999)).toISOString();
+    } else if (filterPreset === "custom" && customFrom && customTo) {
+       filters.startDate = customFrom.toISOString();
+       filters.endDate = customTo.toISOString();
     }
-  };
 
-  const onRefresh = () => {
+    if (approvedFilter !== "ALL") filters.approved = approvedFilter;
+    if (amountFrom) filters.amountFrom = Number(amountFrom);
+    if (amountTo) filters.amountTo = Number(amountTo);
+
+    const res = await expenseService.getMyExpenses(filters);
+    return [...res.expenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [filterPreset, customFrom, customTo, approvedFilter, amountFrom, amountTo]);
+
+  // Unique cache key per filter combination so filter transitions remain instant & correct
+  const cacheKey = `DRIVER_EXPENSES_${filterPreset}_${customFrom?.getTime()}_${customTo?.getTime()}_${approvedFilter}_${amountFrom}_${amountTo}`;
+
+  const { data: expensesRes, isLoading: loading, refetch } = useCachedFetch<Expense[]>(
+    cacheKey,
+    loadExpenses,
+    []
+  );
+
+  const expenses = expensesRes || [];
+
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = async () => {
     setRefreshing(true);
-    loadExpenses();
+    await refetch(true);
+    setRefreshing(false);
   };
 
-  useEffect(() => {
-    if (filterPreset !== "custom" || (filterPreset === "custom" && customFrom && customTo)) {
-      loadExpenses();
-    }
-  }, [filterPreset, customFrom, customTo]);
+  useFocusEffect(
+    useCallback(() => {
+      const { useAuthStore } = require("@/src/store/authStore");
+      if (!useAuthStore.getState().isAuthenticated) return;
+      refetch(false);
+    }, [refetch])
+  );
 
   const sections = getGroupedData(expenses);
 

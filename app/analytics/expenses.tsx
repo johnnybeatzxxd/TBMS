@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Dimensions } from "react-native";
+import { useState, useEffect, useCallback } from "react";
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Dimensions, RefreshControl } from "react-native";
+import { useCachedFetch } from "@/src/hooks/useCachedFetch";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
@@ -35,7 +36,6 @@ const CATEGORY_COLORS: Record<string, { color: string; bg: string; icon: string 
 
 export default function ExpensesAnalysisScreen() {
   const params = useLocalSearchParams();
-  const [loading, setLoading] = useState(true);
   const [data, setData] = useState<ExpensesResponse | null>(null);
   const [breakdownItems, setBreakdownItems] = useState<ExpensesBreakdownItem[]>([]);
   const [breakdownPage, setBreakdownPage] = useState(1);
@@ -43,28 +43,24 @@ export default function ExpensesAnalysisScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [filters, setFilters] = useState<AnalysisFilterState>(() => getInitialFiltersFromParams(params, "day"));
 
+  const { data: cachedData, isLoading, refetch } = useCachedFetch<{ expensesData: ExpensesResponse } | null>(
+    `EXPENSES_ANALYSIS_${JSON.stringify(filters)}`,
+    async () => {
+      const payload = buildPayloadFromFilters(filters, { page: 1, limit: ANALYSIS_PAGE_SIZE });
+      const expensesData = await analysisService.getExpenses(payload);
+      return { expensesData };
+    },
+    null
+  );
+
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
+    if (cachedData) {
+      setData(cachedData.expensesData);
+      setBreakdownItems(cachedData.expensesData.breakdown?.data || []);
+      setBreakdownTotal(cachedData.expensesData.breakdown?.total ?? 0);
       setBreakdownPage(1);
-      try {
-        const payload = buildPayloadFromFilters(filters, { page: 1, limit: ANALYSIS_PAGE_SIZE });
-        const result = await analysisService.getExpenses(payload);
-        if (cancelled) return;
-        setData(result);
-        setBreakdownItems(result.breakdown?.data || []);
-        setBreakdownTotal(result.breakdown?.total ?? 0);
-      } catch (e) {
-        console.error("Failed to load expense analysis:", e);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [filters]);
+    }
+  }, [cachedData]);
 
   const handleLoadMore = async () => {
     if (loadingMore || !hasMoreAnalysisPages(breakdownPage, breakdownTotal)) return;
@@ -112,12 +108,24 @@ export default function ExpensesAnalysisScreen() {
         groupByOptions={["day", "week", "month", "truck", "driver"]}
       />
 
-      {loading ? (
+      {isLoading && !data ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color="#DC2626" />
         </View>
       ) : (
-        <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={isLoading}
+              onRefresh={() => refetch(true)}
+              colors={["#DC2626"]}
+              tintColor="#DC2626"
+            />
+          }
+        >
           {/* KPI Row */}
           <View className="flex-row gap-3 mb-4">
             <View className="flex-1 bg-white rounded-2xl border border-border p-4 items-center shadow-sm">

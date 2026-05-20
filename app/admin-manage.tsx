@@ -55,16 +55,6 @@ export default function ManageScreen() {
   const isAdmin = user?.role === "admin";
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchActiveDrivers = useCallback(async () => {
-    const res = await driverService.getMyDrivers();
-    return (res.drivers || []).filter(d => d.accountActive).length;
-  }, []);
-
-  const fetchActiveTrucks = useCallback(async () => {
-    const res = await truckService.getMyTrucks();
-    return (res.trucks || []).length;
-  }, []);
-
   const fetchTripsToday = useCallback(async () => {
     const start = new Date();
     start.setHours(0, 0, 0, 0);
@@ -78,9 +68,12 @@ export default function ManageScreen() {
     return res.meta.totalItems;
   }, []);
 
-  const { data: activeDrivers, refetch: refetchDrivers } = useCachedFetch<number | string>("STAT_DRIVERS", fetchActiveDrivers, "...");
-  const { data: activeTrucks, refetch: refetchTrucks } = useCachedFetch<number | string>("STAT_TRUCKS", fetchActiveTrucks, "...");
+  const { data: driversRes, refetch: refetchDrivers } = useCachedFetch<any>("DRIVERS", driverService.getMyDrivers, { drivers: [] });
+  const { data: trucksRes, refetch: refetchTrucks } = useCachedFetch<any>("TRUCKS", truckService.getMyTrucks, { trucks: [] });
   const { data: tripsToday, refetch: refetchTrips } = useCachedFetch<number | string>("STAT_TRIPS", fetchTripsToday, "...");
+
+  const activeDrivers = driversRes?.drivers ? (driversRes.drivers || []).filter((d: any) => d.accountActive).length : "...";
+  const activeTrucks = trucksRes?.trucks ? (trucksRes.trucks || []).length : "...";
 
   useFocusEffect(
     useCallback(() => {

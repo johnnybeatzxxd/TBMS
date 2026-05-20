@@ -61,6 +61,7 @@ export const authService = {
     }
 
     const profile: UserProfile = {
+      ...data.profile,
       id: data.profile.id,
       name: data.profile.name,
       accountId: data.profile.accountId,

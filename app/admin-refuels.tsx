@@ -100,7 +100,7 @@ const RefuelCard = ({ exp, onApprove, onEdit, driverName }: { exp: Refuel, onApp
                </View>
             </View>
 
-            <ReceiptPhotosRow receiptPic={exp.receiptPic} />
+            <ReceiptPhotosRow receiptPic={exp.receiptPic || (exp as any).receiptPics || (exp as any).receiptPicUrls || (exp as any).receiptPicUrl} />
           </View>
 
           {exp.approved !== "APPROVED" && (
@@ -161,6 +161,29 @@ export default function RefuelsScreen() {
   const [trucks, setTrucks] = useState<{id: string, plateNumber: string}[]>([]);
   const [selectedTruckId, setSelectedTruckId] = useState<string>("");
   const [showTruckMenu, setShowTruckMenu] = useState(false);
+  const [refreshingTrucks, setRefreshingTrucks] = useState(false);
+
+  const handleOpenTruckDropdown = async () => {
+    const isManager = user?.role === "admin" || (user?.role as string) === "manager";
+    if (!showTruckMenu) {
+      setShowTruckMenu(true);
+      if (isManager) {
+        setRefreshingTrucks(true);
+        try {
+          const res = await truckService.getMyTrucks();
+          if (res && res.trucks) {
+            setTrucks(res.trucks);
+          }
+        } catch (e) {
+          // Silently fail
+        } finally {
+          setRefreshingTrucks(false);
+        }
+      }
+    } else {
+      setShowTruckMenu(false);
+    }
+  };
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = async () => {
@@ -277,7 +300,7 @@ export default function RefuelsScreen() {
         {user?.role !== "driver" && (
           <View className="relative">
             <TouchableOpacity
-              onPress={() => setShowTruckMenu(!showTruckMenu)}
+              onPress={handleOpenTruckDropdown}
               className="flex-row items-center gap-1.5 bg-sky-50 border border-sky-100 rounded-xl px-3 py-2"
               activeOpacity={0.8}
             >
@@ -285,7 +308,11 @@ export default function RefuelsScreen() {
               <Text className="text-sky-600 font-semibold text-sm">
                 {selectedTruckId ? trucks.find(t => t.id === selectedTruckId)?.plateNumber || "Unknown" : "All Trucks"}
               </Text>
-              <Ionicons name={showTruckMenu ? "chevron-up" : "chevron-down"} size={14} color="#0EA5E9" />
+              {refreshingTrucks ? (
+                <ActivityIndicator size="small" color="#0EA5E9" style={{ width: 14, height: 14 }} />
+              ) : (
+                <Ionicons name={showTruckMenu ? "chevron-up" : "chevron-down"} size={14} color="#0EA5E9" />
+              )}
             </TouchableOpacity>
 
             {showTruckMenu && (

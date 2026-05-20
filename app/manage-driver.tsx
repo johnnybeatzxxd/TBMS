@@ -15,6 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, router } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { driverService, truckService } from "@/src/api/services";
+import { clearCacheKey } from "@/src/hooks/useCachedFetch";
 
 export default function ManageDriverModal() {
   const { mode, id, name: initialName, truckId: initialTruckId, username: initialUsername, password: initialPassword, licenseRenewalDate: initialLicense } = useLocalSearchParams();
@@ -106,6 +107,7 @@ export default function ManageDriverModal() {
         }
 
         await driverService.updateDriverProfile(id.toString(), profilePayload);
+        clearCacheKey("DRIVERS");
         Alert.alert("Success", "Driver profile updated!", [{ text: "OK", onPress: () => router.back() }]);
       } else {
         await driverService.createDriverAccount({
@@ -115,6 +117,7 @@ export default function ManageDriverModal() {
           truckId: truckId.trim(),
           licenseRenewalDate: licenseDate ? licenseDate.toISOString().split("T")[0] : undefined,
         });
+        clearCacheKey("DRIVERS");
         Alert.alert("Success", "Driver account created!", [{ text: "OK", onPress: () => router.back() }]);
       }
     } catch (error: any) {

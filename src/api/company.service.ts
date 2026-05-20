@@ -275,6 +275,19 @@ export const companyService = {
   },
 
   /**
+   * Get payments for a company
+   */
+  async getCompanyPayments(companyId: string): Promise<any[]> {
+    const res = await apiFetch(`/company/company-payments?companyId=${companyId}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || "Failed to fetch company payments");
+    }
+    const data = await res.json();
+    return Array.isArray(data?.payments) ? data.payments : Array.isArray(data) ? data : [];
+  },
+
+  /**
    * Delete a company (Admin only)
    */
   async deleteCompany(id: string): Promise<void> {

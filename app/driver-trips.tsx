@@ -149,10 +149,37 @@ export default function DriverTripsScreen() {
   const [tripType, setTripType] = useState<"Cash" | "Credit">("Cash");
   const [refreshing, setRefreshing] = useState(false);
 
+  // Cached page 1 fetcher for instant load on mount/tab change
+  const fetchPageOne = useCallback(async () => {
+    const response = await tripService.getTrips({
+      page: 1,
+      perpage: 10,
+      paymentMethod: tripType.toUpperCase() as "CASH" | "CREDIT",
+    });
+    return response;
+  }, [tripType]);
+
+  const { data: pageOneRes, isLoading: isPageOneLoading, refetch } = useCachedFetch<any>(
+    `DRIVER_TRIPS_${tripType}`,
+    fetchPageOne,
+    null
+  );
+
+  useEffect(() => {
+    if (pageOneRes) {
+      setTrips(pageOneRes.data);
+      setPage(pageOneRes.meta.currentPage);
+      setTotalPages(pageOneRes.meta.totalPages);
+      setLoading(false);
+    } else if (isPageOneLoading) {
+      setLoading(true);
+    }
+  }, [pageOneRes, isPageOneLoading]);
+
+  // General paginator for next pages (>1)
   const fetchTrips = useCallback(async (pageNum: number, type: "Cash" | "Credit", append = false) => {
     try {
-      if (pageNum === 1) setLoading(true);
-      else setLoadingMore(true);
+      setLoadingMore(true);
 
       const response = await tripService.getTrips({
         page: pageNum,
@@ -166,28 +193,23 @@ export default function DriverTripsScreen() {
     } catch (error: any) {
       Alert.alert("Error", error.message || "Failed to load trips.");
     } finally {
-      setLoading(false);
       setLoadingMore(false);
     }
   }, []);
 
-  const handleRefresh = useCallback(() => {
+  const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    setTrips([]);
-    fetchTrips(1, tripType, false).finally(() => setRefreshing(false));
-  }, [tripType, fetchTrips]);
-
-  useEffect(() => {
-    fetchTrips(1, tripType, false);
-  }, [tripType, fetchTrips]);
+    await refetch(true);
+    setRefreshing(false);
+  }, [refetch]);
 
   // Automatically reload when screen is focused (e.g. coming back from adding a trip)
   useFocusEffect(
     useCallback(() => {
       const { useAuthStore } = require("@/src/store/authStore");
       if (!useAuthStore.getState().isAuthenticated) return;
-      fetchTrips(1, tripType, false);
-    }, [tripType, fetchTrips])
+      refetch(false);
+    }, [refetch])
   );
 
   const loadMoreData = () => {

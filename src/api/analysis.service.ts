@@ -150,4 +150,27 @@ export const analysisService = {
     if (!res.ok) await handleError(res, "Failed to fetch comparison");
     return res.json();
   },
+
+  /**
+   * POST /analysis/export
+   * Generates and downloads a CSV report for various analytical data types.
+   */
+  async exportData(payload: {
+    report: "refules" | "trips" | "expenses" | "moneyTransfer" | "fuel";
+    truckIds?: string[];
+    driverId?: string;
+    startDate?: string;
+    endDate?: string;
+    tags?: string[];
+    serviceTypeIds?: string[];
+    tripType?: "CASH" | "CREDIT";
+    companyId?: string;
+  }): Promise<string> {
+    const res = await apiFetch("/analysis/export", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) await handleError(res, "Failed to export data");
+    return res.text();
+  },
 };

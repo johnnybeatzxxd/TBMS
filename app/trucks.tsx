@@ -21,7 +21,7 @@ export default function TrucksListScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await refetch();
+    await refetch(true);
     setRefreshing(false);
   }, [refetch]);
 
@@ -29,7 +29,7 @@ export default function TrucksListScreen() {
     useCallback(() => {
       const { useAuthStore } = require("@/src/store/authStore");
       if (!useAuthStore.getState().isAuthenticated) return;
-      refetch();
+      refetch(false);
     }, [refetch])
   );
 

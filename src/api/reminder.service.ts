@@ -7,10 +7,28 @@ export const reminderService = {
   // ------------------------------------
   
   async getPendingRemindersDriver(): Promise<{ pending: Reminder[] }> {
-    const res = await apiFetch("/reminder/pending");
+    let res = await apiFetch("/reminders/pending");
+    if (!res.ok) {
+      res = await apiFetch("/reminder/pending");
+    }
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.message || "Failed to fetch pending driver reminders");
+    }
+    return res.json();
+  },
+
+  async getNotificationsDriver(): Promise<{ notifications: any[] }> {
+    let res = await apiFetch("/reminders/notificaitons");
+    if (!res.ok) {
+      res = await apiFetch("/reminder/notifications");
+    }
+    if (!res.ok) {
+      res = await apiFetch("/reminders/notifications");
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || "Failed to fetch driver notifications");
     }
     return res.json();
   },

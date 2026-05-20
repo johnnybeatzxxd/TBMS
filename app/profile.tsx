@@ -15,6 +15,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { authService } from "@/src/api/auth.service";
 import { useAuthStore } from "@/src/store";
+import { useCachedFetch } from "@/src/hooks/useCachedFetch";
 const getInitials = (name: string) =>
   name
     .split(" ")
@@ -50,8 +51,11 @@ export default function ProfileScreen() {
   const { user, logout } = useAuthStore();
   const isDriver = user?.role === "driver";
 
-  const [loading, setLoading] = useState(true);
-  const [profileData, setProfileData] = useState<any>(null);
+  const { data: profileData, isLoading: loading, refetch } = useCachedFetch<any>(
+    "USER_PROFILE_DATA",
+    authService.getProfile,
+    null
+  );
 
   // Change credentials modal
   const [showCredModal, setShowCredModal] = useState(false);
@@ -64,24 +68,8 @@ export default function ProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchProfileData();
+    await refetch(true);
     setRefreshing(false);
-  };
-
-  useEffect(() => {
-    fetchProfileData();
-  }, []);
-
-  const fetchProfileData = async () => {
-    setLoading(true);
-    try {
-      const data = await authService.getProfile();
-      setProfileData(data);
-    } catch (error: any) {
-      Alert.alert("Error", error.message || "Failed to load profile data");
-    } finally {
-      setLoading(false);
-    }
   };
 
   const handleSaveCredentials = async () => {

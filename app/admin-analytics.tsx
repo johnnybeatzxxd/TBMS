@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Dimensions } from "react-native";
+import { useState, useEffect, useCallback } from "react";
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Dimensions, Modal, TextInput, Alert, Platform, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -8,44 +8,147 @@ import { analysisService } from "@/src/api/analysis.service";
 import { buildDashboardPayload, buildPayloadFromFilters, buildAnalysisQueryString } from "@/src/utils/analysisFilters";
 import { DashboardResponse, ProfitSummary } from "@/src/types/analysis.types";
 import { AnalysisHeader, AnalysisFilterState, DEFAULT_ANALYSIS_FILTERS } from "@/src/components/AnalysisHeader";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import { shareCSV } from "@/src/utils/export";
+import { companyService, driverService, truckService } from "@/src/api/services";
+import { useCachedFetch } from "@/src/hooks/useCachedFetch";
 
 const formatCurrency = (n: number) => n.toLocaleString("en-US");
 
 export default function AnalyticsHubScreen() {
   const { user } = useAuthStore();
-  const [loading, setLoading] = useState(true);
-  const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
-  const [profitSummary, setProfitSummary] = useState<ProfitSummary | null>(null);
   const [filters, setFilters] = useState<AnalysisFilterState>(DEFAULT_ANALYSIS_FILTERS);
 
+  // Export Modal State
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportReport, setExportReport] = useState<"refules" | "trips" | "expenses" | "moneyTransfer" | "fuel">("trips");
+  
+  // Dynamic Data Lists
+  const [exportTrucks, setExportTrucks] = useState<{ id: string; plateNumber: string }[]>([]);
+  const [exportDrivers, setExportDrivers] = useState<{ id: string; name: string }[]>([]);
+  const [exportCompanies, setExportCompanies] = useState<{ id: string; name: string }[]>([]);
+
+  // Selected Export Filters
+  const [exportSelectedTruckId, setExportSelectedTruckId] = useState<string>("");
+  const [exportSelectedDriverId, setExportSelectedDriverId] = useState<string>("");
+  const [exportStartDate, setExportStartDate] = useState<Date | null>(null);
+  const [exportEndDate, setExportEndDate] = useState<Date | null>(null);
+  const [exportStartDateStr, setExportStartDateStr] = useState("");
+  const [exportEndDateStr, setExportEndDateStr] = useState("");
+  
+  // Specific Filters
+  const [exportTripType, setExportTripType] = useState<"CASH" | "CREDIT">("CASH");
+  const [exportCompanyId, setExportCompanyId] = useState<string>("");
+  const [exportTags, setExportTags] = useState<string>("");
+
+  // Loading / Dropdown UI States
+  const [exporting, setExporting] = useState(false);
+
+
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        const dashboardPayload = buildDashboardPayload(
-          filters.preset,
-          filters.truckIds,
-          filters.customFrom,
-          filters.customTo
-        );
-        const profitPayload = buildPayloadFromFilters(filters);
+    if (showExportModal) {
+      // Reset inputs
+      setExportStartDateStr("");
+      setExportEndDateStr("");
+      setExportStartDate(null);
+      setExportEndDate(null);
 
-        const [dashboardData, profitData] = await Promise.all([
-          analysisService.getDashboard(dashboardPayload),
-          analysisService.getProfit({ ...profitPayload, limit: 1 }),
-        ]);
+      // Fetch Trucks
+      truckService.getMyTrucks().then(res => {
+        if ("trucks" in res) {
+          setExportTrucks(res.trucks.map((t: any) => ({ id: t.id, plateNumber: t.plateNumber })));
+        }
+      }).catch(err => console.log("Export trucks load failed", err));
 
-        setDashboard(dashboardData);
-        setProfitSummary(profitData.summary);
-      } catch (e) {
-        console.error("Failed to load dashboard:", e);
-      } finally {
-        setLoading(false);
+      // Fetch Drivers
+      driverService.getMyDrivers().then(res => {
+        setExportDrivers(res.drivers.map((d: any) => ({ id: d.id, name: d.name })));
+      }).catch(err => console.log("Export drivers load failed", err));
+
+      // Fetch Companies
+      companyService.getCompanies().then(res => {
+        setExportCompanies(res.map((c: any) => ({ id: c.id, name: c.name })));
+      }).catch(err => console.log("Export companies load failed", err));
+    }
+  }, [showExportModal]);
+
+  const handleTriggerExport = async () => {
+    setExporting(true);
+    try {
+      const payload: any = {
+        report: exportReport,
+      };
+
+      if (exportSelectedTruckId) {
+        payload.truckIds = [exportSelectedTruckId];
       }
-    })();
-  }, [filters]);
+      if (exportSelectedDriverId) {
+        payload.driverId = exportSelectedDriverId;
+      }
+      if (exportStartDate) {
+        payload.startDate = exportStartDate.toISOString();
+      }
+      if (exportEndDate) {
+        payload.endDate = exportEndDate.toISOString();
+      }
 
-  if (loading || !dashboard) {
+      // Add report-specific parameters
+      if (exportReport === "trips") {
+        payload.tripType = exportTripType;
+        if (exportTripType === "CREDIT" && exportCompanyId) {
+          payload.companyId = exportCompanyId;
+        }
+      } else if (exportReport === "expenses") {
+        const cleanedTags = exportTags.split(",").map(t => t.trim()).filter(Boolean);
+        if (cleanedTags.length > 0) {
+          payload.tags = cleanedTags;
+        }
+      }
+
+      const csvContent = await analysisService.exportData(payload);
+      
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const reportLabel = exportReport === "moneyTransfer" ? "money_transfers" : exportReport;
+      const fileName = `${reportLabel}_export_${timestamp}`;
+      
+      await shareCSV(csvContent, fileName);
+      Alert.alert("Success", "Report exported successfully!");
+      setShowExportModal(false);
+    } catch (err: any) {
+      Alert.alert("Export Error", err.message || "Failed to export report CSV.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const { data: cachedData, isLoading, refetch } = useCachedFetch<{ dashboard: DashboardResponse; profitSummary: ProfitSummary | null } | null>(
+    `ADMIN_ANALYTICS_${JSON.stringify(filters)}`,
+    async () => {
+      const dashboardPayload = buildDashboardPayload(
+        filters.preset,
+        filters.truckIds,
+        filters.customFrom,
+        filters.customTo
+      );
+      const profitPayload = buildPayloadFromFilters(filters);
+
+      const [dashboardData, profitData] = await Promise.all([
+        analysisService.getDashboard(dashboardPayload),
+        analysisService.getProfit({ ...profitPayload, limit: 1 }),
+      ]);
+
+      return {
+        dashboard: dashboardData,
+        profitSummary: profitData.summary,
+      };
+    },
+    null
+  );
+
+  const dashboard = cachedData?.dashboard;
+  const profitSummary = cachedData?.profitSummary;
+
+  if (isLoading || !dashboard) {
     return (
       <SafeAreaView className="flex-1 bg-surface items-center justify-center" edges={["top","bottom"]}>
         <ActivityIndicator size="large" color="#2563EB" />
@@ -168,6 +271,14 @@ export default function AnalyticsHubScreen() {
         className="flex-1 z-0 elevation-0"
         contentContainerStyle={{ paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isLoading}
+            onRefresh={() => refetch(true)}
+            colors={["#2563EB"]}
+            tintColor="#2563EB"
+          />
+        }
       >
         <View className="bg-primary pt-6 pb-20 px-5 rounded-b-[40px]">
           <Text className="text-white/70 text-xs font-semibold tracking-widest uppercase text-center mb-4">
@@ -269,6 +380,28 @@ export default function AnalyticsHubScreen() {
 
         <View className="px-4 mt-6">
           <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase ml-1 mb-3">
+            Export Data
+          </Text>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            className="bg-white rounded-2xl border border-border overflow-hidden shadow-sm"
+            onPress={() => setShowExportModal(true)}
+          >
+            <View className="flex-row items-center p-5 gap-4">
+              <View className="w-14 h-14 rounded-2xl items-center justify-center bg-success-50">
+                <MaterialCommunityIcons name="file-export" size={28} color="#16A34A" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-text-primary font-bold text-lg">Export CSV Reports</Text>
+                <Text className="text-text-secondary text-sm mt-0.5">Download trips, fuel, expenses or transfers</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        <View className="px-4 mt-6">
+          <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase ml-1 mb-3">
             Deep Dive
           </Text>
           <View className="gap-3">
@@ -297,6 +430,345 @@ export default function AnalyticsHubScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* Export CSV Overlay (Absolute Overlay style to preserve navigation and React contexts) */}
+      {showExportModal && (
+        <View className="absolute top-0 left-0 right-0 bottom-0 bg-black/50 justify-end z-[999]" style={{ elevation: 99 }}>
+          <View className="bg-white rounded-t-[32px] max-h-[90%] border-t border-border" style={{ elevation: 20 }}>
+            {/* Header */}
+            <View className="flex-row items-center justify-between px-6 py-5 border-b border-border">
+              <View className="flex-row items-center gap-2">
+                <MaterialCommunityIcons name="file-export" size={22} color="#16A34A" />
+                <Text className="text-text-primary font-bold text-lg">Export CSV Reports</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowExportModal(false)}
+                disabled={exporting}
+                className="w-8 h-8 rounded-full bg-slate-100 items-center justify-center"
+              >
+                <Ionicons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView className="px-6 py-4" contentContainerStyle={{ gap: 20, paddingBottom: 50 }}>
+              
+              {/* Report Type Selector */}
+              <View className="gap-2">
+                <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase">
+                  1. Report Type *
+                </Text>
+                <View className="flex-row flex-wrap gap-2.5">
+                  {[
+                    { id: "trips", label: "Trips", icon: "truck", color: "#2563EB", bg: "#EFF6FF" },
+                    { id: "fuel", label: "Fuel Usage", icon: "gas-station", color: "#16A34A", bg: "#F0FDF4" },
+                    { id: "refules", label: "Refuel Logs", icon: "gas-station-outline", color: "#F59E0B", bg: "#FFFBEB" },
+                    { id: "expenses", label: "Expenses", icon: "receipt", color: "#DC2626", bg: "#FEF2F2" },
+                    { id: "moneyTransfer", label: "Transfers", icon: "bank-transfer", color: "#7C3AED", bg: "#F5F3FF" }
+                  ].map((item) => {
+                    const isSelected = exportReport === item.id;
+                    return (
+                      <TouchableOpacity
+                        key={item.id}
+                        onPress={() => {
+                          setExportReport(item.id as any);
+                          // Reset report-specific state
+                          setExportCompanyId("");
+                          setExportTags("");
+                        }}
+                        className={`flex-row items-center px-4 py-3 rounded-xl border gap-2.5 ${
+                          isSelected ? "bg-slate-900 border-slate-900" : "bg-white border-border"
+                        }`}
+                        style={{ width: "48%" }}
+                        activeOpacity={0.8}
+                      >
+                        <MaterialCommunityIcons 
+                          name={item.icon as any} 
+                          size={18} 
+                          color={isSelected ? "#fff" : item.color} 
+                        />
+                        <Text className={`text-sm font-semibold ${isSelected ? "text-white" : "text-text-primary"}`}>
+                          {item.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Date Filters */}
+              <View className="gap-2">
+                <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase">
+                  2. Date Range (Optional)
+                </Text>
+                <View className="flex-row gap-3">
+                  {/* Start Date */}
+                  <View className="flex-1 flex-row items-center bg-surface border border-border rounded-xl px-4 py-1">
+                    <Ionicons name="calendar-outline" size={16} color="#64748B" />
+                    <TextInput
+                      className="flex-1 text-sm font-medium text-text-primary ml-2.5 py-3"
+                      placeholder="Start: YYYY-MM-DD"
+                      placeholderTextColor="#94A3B8"
+                      value={exportStartDateStr}
+                      onChangeText={(val) => {
+                        setExportStartDateStr(val);
+                        if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+                          const d = new Date(val);
+                          if (!isNaN(d.getTime())) setExportStartDate(d);
+                        } else if (!val) {
+                          setExportStartDate(null);
+                        }
+                      }}
+                    />
+                  </View>
+
+                  {/* End Date */}
+                  <View className="flex-1 flex-row items-center bg-surface border border-border rounded-xl px-4 py-1">
+                    <Ionicons name="calendar-outline" size={16} color="#64748B" />
+                    <TextInput
+                      className="flex-1 text-sm font-medium text-text-primary ml-2.5 py-3"
+                      placeholder="End: YYYY-MM-DD"
+                      placeholderTextColor="#94A3B8"
+                      value={exportEndDateStr}
+                      onChangeText={(val) => {
+                        setExportEndDateStr(val);
+                        if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+                          const d = new Date(val);
+                          if (!isNaN(d.getTime())) setExportEndDate(d);
+                        } else if (!val) {
+                          setExportEndDate(null);
+                        }
+                      }}
+                    />
+                  </View>
+                </View>
+
+                {(exportStartDateStr || exportEndDateStr || exportStartDate || exportEndDate) && (
+                  <TouchableOpacity 
+                    onPress={() => {
+                      setExportStartDateStr("");
+                      setExportEndDateStr("");
+                      setExportStartDate(null);
+                      setExportEndDate(null);
+                    }}
+                    className="self-start mt-1.5"
+                  >
+                    <Text className="text-danger-600 text-xs font-semibold">Clear date range</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Truck Selector */}
+              <View className="gap-2">
+                <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase">
+                  3. Filter by Truck (Optional)
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-1">
+                  <View className="flex-row gap-2">
+                    <TouchableOpacity
+                      onPress={() => setExportSelectedTruckId("")}
+                      className={`px-4 py-2 rounded-full border ${
+                        !exportSelectedTruckId ? "bg-slate-900 border-slate-900" : "bg-white border-border"
+                      }`}
+                    >
+                      <Text className={`text-xs font-bold ${!exportSelectedTruckId ? "text-white" : "text-text-primary"}`}>
+                        All Trucks
+                      </Text>
+                    </TouchableOpacity>
+                    {exportTrucks.map(truck => (
+                      <TouchableOpacity
+                        key={truck.id}
+                        onPress={() => setExportSelectedTruckId(truck.id)}
+                        className={`px-4 py-2 rounded-full border ${
+                          exportSelectedTruckId === truck.id ? "bg-slate-900 border-slate-900" : "bg-white border-border"
+                        }`}
+                      >
+                        <Text className={`text-xs font-bold ${exportSelectedTruckId === truck.id ? "text-white" : "text-text-primary"}`}>
+                          {truck.plateNumber}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+              </View>
+
+              {/* Driver Selector */}
+              <View className="gap-2">
+                <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase">
+                  4. Filter by Driver (Optional)
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-1">
+                  <View className="flex-row gap-2">
+                    <TouchableOpacity
+                      onPress={() => setExportSelectedDriverId("")}
+                      className={`px-4 py-2 rounded-full border ${
+                        !exportSelectedDriverId ? "bg-slate-900 border-slate-900" : "bg-white border-border"
+                      }`}
+                    >
+                      <Text className={`text-xs font-bold ${!exportSelectedDriverId ? "text-white" : "text-text-primary"}`}>
+                        All Drivers
+                      </Text>
+                    </TouchableOpacity>
+                    {exportDrivers.map(drv => (
+                      <TouchableOpacity
+                        key={drv.id}
+                        onPress={() => setExportSelectedDriverId(drv.id)}
+                        className={`px-4 py-2 rounded-full border ${
+                          exportSelectedDriverId === drv.id ? "bg-slate-900 border-slate-900" : "bg-white border-border"
+                        }`}
+                      >
+                        <Text className={`text-xs font-bold ${exportSelectedDriverId === drv.id ? "text-white" : "text-text-primary"}`}>
+                          {drv.name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+              </View>
+
+              {/* REPORT SPECIFIC: Trips Cash/Credit */}
+              {exportReport === "trips" && (
+                <View className="gap-4">
+                  <View className="gap-2">
+                    <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase">
+                      5. Trip Payment Type
+                    </Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-1">
+                      <View className="flex-row gap-2">
+                        <TouchableOpacity
+                          onPress={() => {
+                            console.log("[DEBUG] Clicked CASH. Current state:", exportTripType);
+                            try {
+                              setExportTripType("CASH");
+                            } catch (e) {
+                              console.log("[DEBUG] State update CASH failed", e);
+                            }
+                          }}
+                          className={`px-4 py-2 rounded-full border ${
+                            exportTripType === "CASH" ? "bg-slate-900 border-slate-900" : "bg-white border-border"
+                          }`}
+                        >
+                          <Text className={`text-xs font-bold ${exportTripType === "CASH" ? "text-white" : "text-text-primary"}`}>
+                            Cash Trips
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => {
+                            console.log("[DEBUG] Clicked CREDIT. Current state:", exportTripType);
+                            try {
+                              setExportTripType("CREDIT");
+                            } catch (e) {
+                              console.log("[DEBUG] State update CREDIT failed", e);
+                            }
+                          }}
+                          className={`px-4 py-2 rounded-full border ${
+                            exportTripType === "CREDIT" ? "bg-slate-900 border-slate-900" : "bg-white border-border"
+                          }`}
+                        >
+                          <Text className={`text-xs font-bold ${exportTripType === "CREDIT" ? "text-white" : "text-text-primary"}`}>
+                            Credit Trips
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </ScrollView>
+                  </View>
+
+                  {/* Company Select for Credit Trips */}
+                  {exportTripType === "CREDIT" && (
+                    <View className="gap-2">
+                      <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase">
+                        Credit Company Filter (Optional)
+                      </Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-1">
+                        <View className="flex-row gap-2">
+                          <TouchableOpacity
+                            onPress={() => {
+                              console.log("[DEBUG] Clearing Company Filter");
+                              setExportCompanyId("");
+                            }}
+                            className={`px-4 py-2 rounded-full border ${
+                              !exportCompanyId ? "bg-slate-900 border-slate-900" : "bg-white border-border"
+                            }`}
+                          >
+                            <Text className={`text-xs font-bold ${!exportCompanyId ? "text-white" : "text-text-primary"}`}>
+                              All Companies
+                            </Text>
+                          </TouchableOpacity>
+                          {Array.isArray(exportCompanies) && exportCompanies.filter(Boolean).map(comp => {
+                            if (!comp || !comp.id) return null;
+                            return (
+                              <TouchableOpacity
+                                key={comp.id}
+                                onPress={() => {
+                                  console.log("[DEBUG] Selecting Company:", comp.id, comp.name);
+                                  setExportCompanyId(comp.id);
+                                }}
+                                className={`px-4 py-2 rounded-full border ${
+                                  exportCompanyId === comp.id ? "bg-slate-900 border-slate-900" : "bg-white border-border"
+                                }`}
+                              >
+                                <Text className={`text-xs font-bold ${exportCompanyId === comp.id ? "text-white" : "text-text-primary"}`}>
+                                  {comp.name || "Unnamed Company"}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </ScrollView>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* REPORT SPECIFIC: Expense Tags */}
+              {exportReport === "expenses" && (
+                <View className="gap-2 z-0">
+                  <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase">
+                    5. Filter by Expense Tags (Optional)
+                  </Text>
+                  <View className="flex-row items-center bg-surface border border-border rounded-xl px-4 py-3.5">
+                    <Ionicons name="pricetag-outline" size={16} color="#64748B" />
+                    <TextInput
+                      className="flex-1 text-sm text-text-primary ml-2.5 py-0"
+                      placeholder="e.g. SALARY, FUEL, PERDIME (comma-separated)"
+                      placeholderTextColor="#94A3B8"
+                      value={exportTags}
+                      onChangeText={setExportTags}
+                      autoCapitalize="characters"
+                    />
+                  </View>
+                </View>
+              )}
+
+              {/* Submit Buttons */}
+              <View className="flex-row gap-4 mt-6 z-0">
+                <TouchableOpacity
+                  onPress={() => setShowExportModal(false)}
+                  disabled={exporting}
+                  className="flex-1 py-4 bg-slate-100 rounded-xl items-center border border-slate-200"
+                >
+                  <Text className="text-text-secondary font-bold text-base">Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={handleTriggerExport}
+                  disabled={exporting}
+                  className="flex-1 py-4 bg-success rounded-xl items-center shadow-sm shadow-success-500 flex-row justify-center gap-2"
+                >
+                  {exporting ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="download" size={18} color="#fff" />
+                      <Text className="text-white font-bold text-base">Export CSV</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+            </ScrollView>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }

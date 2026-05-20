@@ -62,6 +62,8 @@ export default function AddRefuelScreen() {
           km: km ? Number(km) : undefined,
           fullTank,
         });
+        const { clearCachePrefix } = require("@/src/hooks/useCachedFetch");
+        clearCachePrefix("DRIVER_REFUELS");
         Alert.alert("Success", "Refuel updated successfully!");
       } else {
         await refuelService.registerRefuel({
@@ -73,6 +75,8 @@ export default function AddRefuelScreen() {
           km: km ? Number(km) : undefined,
           fullTank,
         });
+        const { clearCachePrefix } = require("@/src/hooks/useCachedFetch");
+        clearCachePrefix("DRIVER_REFUELS");
         Alert.alert("Success", "Refuel log added successfully!");
       }
       router.back();

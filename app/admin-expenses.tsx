@@ -177,6 +177,7 @@ export default function ExpensesScreen() {
   const [showFilters, setShowFilters] = useState(false);
   const [showTruckMenu, setShowTruckMenu] = useState(false);
   const [draftTruckIds, setDraftTruckIds] = useState<string[]>([]);
+  const [refreshingTrucks, setRefreshingTrucks] = useState(false);
 
   const isDriver = user?.role === "driver";
   const isAdminOrManager = user?.role === "admin" || user?.role === "manager";
@@ -213,9 +214,26 @@ export default function ExpensesScreen() {
 
   const isDraftAllTrucks = draftTruckIds.length === 0;
 
-  const openTruckMenu = () => {
-    setDraftTruckIds([...selectedTruckIds]);
-    setShowTruckMenu(true);
+  const handleOpenTruckDropdown = async () => {
+    if (!showTruckMenu) {
+      setDraftTruckIds([...selectedTruckIds]);
+      setShowTruckMenu(true);
+      if (isAdminOrManager) {
+        setRefreshingTrucks(true);
+        try {
+          const res = await truckService.getMyTrucks();
+          if ("trucks" in res) {
+            setTrucks([{ id: "all", plateNumber: "All Trucks" }, ...res.trucks]);
+          }
+        } catch (e) {
+          // Silently fail
+        } finally {
+          setRefreshingTrucks(false);
+        }
+      }
+    } else {
+      setShowTruckMenu(false);
+    }
   };
 
   const closeTruckMenu = () => setShowTruckMenu(false);
@@ -346,7 +364,7 @@ export default function ExpensesScreen() {
           {isAdminOrManager && (
             <View className="relative z-50">
               <TouchableOpacity
-                onPress={() => (showTruckMenu ? closeTruckMenu() : openTruckMenu())}
+                onPress={handleOpenTruckDropdown}
                 className="flex-row items-center gap-1.5 bg-blue-50 border border-blue-100 rounded-xl px-3 py-2"
                 activeOpacity={0.8}
               >
@@ -354,7 +372,11 @@ export default function ExpensesScreen() {
                 <Text className="text-blue-600 font-semibold text-xs max-w-[88px]" numberOfLines={1}>
                   {selectedTruckLabel}
                 </Text>
-                <Ionicons name={showTruckMenu ? "chevron-up" : "chevron-down"} size={14} color="#2563EB" />
+                {refreshingTrucks ? (
+                  <ActivityIndicator size="small" color="#2563EB" style={{ width: 14, height: 14 }} />
+                ) : (
+                  <Ionicons name={showTruckMenu ? "chevron-up" : "chevron-down"} size={14} color="#2563EB" />
+                )}
               </TouchableOpacity>
 
               {showTruckMenu && (

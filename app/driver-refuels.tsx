@@ -10,6 +10,7 @@ import { ReceiptPhotosRow } from "@/src/components/TripReceiptViewer";
 import { useAuthStore } from "@/src/store";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback } from "react";
+import { useCachedFetch } from "@/src/hooks/useCachedFetch";
 
 const getGroupedData = (data: Refuel[]) => {
   if (!data) return [];
@@ -99,10 +100,33 @@ export default function DriverRefuelsScreen() {
   const [refuels, setRefuels] = useState<Refuel[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchRefuels = async (pageNum: number, append = false, isRefresh = false) => {
-    if (pageNum === 1 && !isRefresh) setLoadingInitial(true);
-    else if (pageNum > 1) setLoadingMore(true);
+  const fetchPageOne = useCallback(async () => {
+    const response = await refuelService.getRefuels({
+      page: 1,
+      perpage: 10,
+    });
+    return response;
+  }, []);
 
+  const { data: pageOneRes, isLoading: isPageOneLoading, refetch } = useCachedFetch<any>(
+    "DRIVER_REFUELS",
+    fetchPageOne,
+    null
+  );
+
+  useEffect(() => {
+    if (pageOneRes) {
+      setRefuels(pageOneRes.refuels);
+      setPage(pageOneRes.meta.currentPage);
+      setHasMore(pageOneRes.meta.currentPage < pageOneRes.meta.totalPages);
+      setLoadingInitial(false);
+    } else if (isPageOneLoading) {
+      setLoadingInitial(true);
+    }
+  }, [pageOneRes, isPageOneLoading]);
+
+  const fetchRefuels = async (pageNum: number, append = false) => {
+    setLoadingMore(true);
     try {
       const response = await refuelService.getRefuels({
         page: pageNum,
@@ -116,21 +140,22 @@ export default function DriverRefuelsScreen() {
       console.log("Error loading driver refuels:", error);
       setHasMore(false);
     } finally {
-      if (pageNum === 1) setLoadingInitial(false);
-      else setLoadingMore(false);
+      setLoadingMore(false);
     }
   };
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchRefuels(1, false, true);
+    await refetch(true);
     setRefreshing(false);
   };
 
   useFocusEffect(
     useCallback(() => {
-      fetchRefuels(1, false);
-    }, [])
+      const { useAuthStore } = require("@/src/store/authStore");
+      if (!useAuthStore.getState().isAuthenticated) return;
+      refetch(false);
+    }, [refetch])
   );
 
   const handleLoadMore = () => {

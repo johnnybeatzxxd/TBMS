@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, TouchableOpacity, ScrollView, Animated, Modal, BackHandler } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, Animated, Modal, BackHandler, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -90,7 +90,7 @@ export default function DriverDashboardScreen() {
 
   const [pendingReminders, setPendingReminders] = useState<Reminder[]>([]);
   const [dynamicTips, setDynamicTips] = useState<string[]>(TIPS);
-  const [showNotifications, setShowNotifications] = useState(false);
+   const [showNotifications, setShowNotifications] = useState(false);
 
   useEffect(() => {
     notificationUtils.setupPushNotificationsAsync();
@@ -214,7 +214,7 @@ export default function DriverDashboardScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          onPress={() => setShowNotifications(true)}
+          onPress={() => router.push("/driver-notifications")}
           className="w-12 h-12 bg-slate-50 rounded-full items-center justify-center border border-slate-200 relative"
           activeOpacity={0.7}
         >
@@ -263,49 +263,7 @@ export default function DriverDashboardScreen() {
         </View>
       </ScrollView>
 
-      {/* Notification Center Modal */}
-      <Modal
-        visible={showNotifications}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowNotifications(false)}
-      >
-        <SafeAreaView className="flex-1 bg-surface">
-          <View className="flex-row items-center justify-between px-6 pt-4 pb-4 border-b border-border bg-white shadow-sm z-50">
-            <Text className="text-xl font-bold text-text-primary">Notifications</Text>
-            <TouchableOpacity onPress={() => setShowNotifications(false)} className="w-10 h-10 items-center justify-center bg-slate-50 rounded-full">
-              <Ionicons name="close" size={24} color="#64748B" />
-            </TouchableOpacity>
-          </View>
-          <ScrollView className="flex-1 px-4 py-4" contentContainerStyle={{ paddingBottom: 60 }}>
-            {pendingReminders.length === 0 ? (
-              <View className="py-20 items-center justify-center opacity-60">
-                <Ionicons name="notifications-off-outline" size={64} color="#94A3B8" />
-                <Text className="text-text-secondary text-base mt-4 text-center">
-                  You're all caught up!
-                </Text>
-              </View>
-            ) : (
-              pendingReminders.map(rem => (
-                <View key={rem._id || rem.id} className="bg-white border border-border rounded-2xl p-4 mb-3 shadow-sm flex-row items-start">
-                  <View className="w-12 h-12 bg-rose-50 rounded-full items-center justify-center border border-rose-100 mr-3">
-                    <Ionicons name="alert-circle" size={24} color="#E11D48" />
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-text-primary font-bold text-base mb-1">{rem.reminderName}</Text>
-                    <Text className="text-text-secondary text-sm leading-5">{rem.reminderMessage}</Text>
-                    <View className="mt-3 pt-3 border-t border-border-light flex-row justify-between items-center">
-                      <Text className="text-primary-600 text-[10px] uppercase font-bold tracking-widest bg-primary-50 px-2 py-1 rounded-md">
-                        {rem.reminderType === "ONE_TIME" ? `Deadline: ${rem.deadline ? rem.deadline.split("T")[0] : "N/A"}` : `Frequency: ${rem.frequency}`}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              ))
-            )}
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
+
 
     </SafeAreaView>
   );

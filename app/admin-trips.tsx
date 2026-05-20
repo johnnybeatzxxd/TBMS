@@ -5,6 +5,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useAuthStore, useCacheStore } from "@/src/store";
+import { useCachedFetch } from "@/src/hooks/useCachedFetch";
 import { DateFilterBar, DateFilterPreset } from "@/src/components/DateFilterBar";
 import { tripService, truckService } from "@/src/api/services";
 import { TripReceiptViewer } from "@/src/components/TripReceiptViewer";
@@ -513,7 +514,6 @@ export default function TripsListScreen() {
       } else if (tf.claimFilter === "Unclaimed") {
         query.claimed = false;
       }
-      // All: omit `claimed` — no filter on claim status
     }
 
     if (tf.paymentFilter === "CREDIT" && tf.advCompanyId.trim()) {
@@ -549,35 +549,72 @@ export default function TripsListScreen() {
     return query;
   };
 
-  const loadTrips = useCallback(async (pageNumber: number, append = false) => {
-    if (pageNumber === 1) setLoadingInitial(true);
-    else setLoadingMore(true);
+  const fetchPageOne = useCallback(async () => {
+    const query = buildQuery(1);
+    const res = await tripService.getTrips(query);
+    return res;
+  }, [
+    selectedTruck.id,
+    paymentFilter,
+    filterPreset,
+    customFrom,
+    customTo,
+    claimFilter,
+    advLoadingSite,
+    advDestinationSite,
+    advAmount,
+    advRoadExpence,
+    advVolume,
+    advApproved,
+    advCompanyId,
+  ]);
 
+  const cacheKey = `ADMIN_TRIPS_${selectedTruck.id}_${paymentFilter}_${filterPreset}_${customFrom?.getTime()}_${customTo?.getTime()}_${claimFilter}_${advLoadingSite}_${advDestinationSite}_${advAmount}_${advRoadExpence}_${advVolume}_${advApproved}_${advCompanyId}`;
+
+  const { data: pageOneRes, isLoading: isPageOneLoading, refetch } = useCachedFetch<any>(
+    cacheKey,
+    fetchPageOne,
+    null
+  );
+
+  useEffect(() => {
+    if (pageOneRes) {
+      setTrips(pageOneRes.data);
+      setPage(pageOneRes.meta.currentPage);
+      setTotalPages(pageOneRes.meta.totalPages);
+      setLoadingInitial(false);
+      
+      // Update global cache if we fetched the default list (Page 1, All Trucks, CASH)
+      const query = buildQuery(1);
+      if (!query.truckId && query.paymentMethod === "CASH" && query.startDate === undefined) {
+        setCachedTrips(pageOneRes.data);
+      }
+    } else if (isPageOneLoading) {
+      setLoadingInitial(true);
+    }
+  }, [pageOneRes, isPageOneLoading, setCachedTrips]);
+
+  const loadTrips = useCallback(async (pageNumber: number, append = false) => {
+    setLoadingMore(true);
     try {
       const query = buildQuery(pageNumber);
       const res = await tripService.getTrips(query);
       setTrips((prev) => (append ? [...prev, ...res.data] : res.data));
       setPage(res.meta.currentPage);
       setTotalPages(res.meta.totalPages);
-      
-      // Update global cache if we fetched the default list (Page 1, All Trucks, CASH)
-      if (pageNumber === 1 && !append && !query.truckId && query.paymentMethod === "CASH" && query.startDate === undefined) {
-        setCachedTrips(res.data);
-      }
     } catch (e: any) {
       Alert.alert("Error", e.message || "Failed to load trips");
     } finally {
-      if (pageNumber === 1) setLoadingInitial(false);
-      else setLoadingMore(false);
+      setLoadingMore(false);
     }
-  }, [selectedTruck, isManager, setCachedTrips, paymentFilter]);
+  }, [selectedTruck.id, isManager]);
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadTrips(1);
+    await refetch(true);
     setRefreshing(false);
-  }, [loadTrips]);
+  }, [refetch]);
 
   // Reload when screen is focused; consume filter page "Apply" from AsyncStorage first
   useFocusEffect(
@@ -612,12 +649,12 @@ export default function TripsListScreen() {
             advCompanyId: applied.advCompanyId ?? "",
           };
         }
-        if (!cancelled) await loadTrips(1);
+        if (!cancelled) refetch(false);
       })();
       return () => {
         cancelled = true;
       };
-    }, [loadTrips, paymentFilter])
+    }, [refetch])
   );
 
   const handleLoadMore = () => {
@@ -628,10 +665,14 @@ export default function TripsListScreen() {
 
   const handleDeleteTripInList = (tripId: string) => {
     setTrips(prev => prev.filter(t => t.id !== tripId));
+    const { clearCachePrefix } = require("@/src/hooks/useCachedFetch");
+    clearCachePrefix("ADMIN_TRIPS");
   };
 
   const handleUpdateTripInList = (updatedTrip: Trip) => {
     setTrips(prev => prev.map(t => t.id === updatedTrip.id ? { ...t, ...updatedTrip } : t));
+    const { clearCachePrefix } = require("@/src/hooks/useCachedFetch");
+    clearCachePrefix("ADMIN_TRIPS");
   };
 
   const tripGroups = getGroupedTrips(trips);
@@ -723,7 +764,6 @@ export default function TripsListScreen() {
                   <TouchableOpacity
                     key={truck.id || "__all__"}
                     onPress={() => {
-                      setTrips([]);
                       setSelectedTruck(truck);
                       setShowTruckMenu(false);
                     }}
@@ -761,7 +801,6 @@ export default function TripsListScreen() {
           <View className="flex-row bg-surface rounded-xl p-1 border border-border">
             <TouchableOpacity
               onPress={() => {
-                setTrips([]);
                 setPaymentFilter("CASH");
                 setAdvCompanyId("");
               }}
@@ -778,7 +817,6 @@ export default function TripsListScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => {
-                setTrips([]);
                 setPaymentFilter("CREDIT");
                 setAdvApproved("");
               }}

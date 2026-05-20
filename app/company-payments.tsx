@@ -60,9 +60,8 @@ export default function CompanyPaymentsScreen() {
       const found: any = (companies || []).find((c: any) => c.id === companyId);
       setCompany(found || null);
 
-      // Some backends include payment history on company object.
-      // If available, normalize and show it.
-      const rawPayments = Array.isArray(found?.payments) ? found.payments : [];
+      // Fetch payments using the dedicated endpoint
+      const rawPayments = await companyService.getCompanyPayments(companyId);
       const normalized = rawPayments
         .map((item: any, index: number) => ({
           id: String(item?.id || item?._id || `${index}-${item?.date || "payment"}`),

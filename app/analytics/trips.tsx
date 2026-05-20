@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Dimensions } from "react-native";
+import { useState, useEffect, useCallback } from "react";
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Dimensions, RefreshControl } from "react-native";
+import { useCachedFetch } from "@/src/hooks/useCachedFetch";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
@@ -26,7 +27,6 @@ const chartConfig = {
 
 export default function TripsAnalysisScreen() {
   const params = useLocalSearchParams();
-  const [loading, setLoading] = useState(true);
   const [data, setData] = useState<TripsSummaryResponse | null>(null);
   const [routes, setRoutes] = useState<RouteItem[]>([]);
   const [breakdownItems, setBreakdownItems] = useState<TripBreakdownItem[]>([]);
@@ -35,32 +35,28 @@ export default function TripsAnalysisScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [filters, setFilters] = useState<AnalysisFilterState>(() => getInitialFiltersFromParams(params, "day"));
 
+  const { data: cachedData, isLoading, refetch } = useCachedFetch<{ tripData: TripsSummaryResponse; routeData: any } | null>(
+    `TRIP_ANALYSIS_${JSON.stringify(filters)}`,
+    async () => {
+      const payload = buildPayloadFromFilters(filters, { page: 1, limit: ANALYSIS_PAGE_SIZE });
+      const [tripData, routeData] = await Promise.all([
+        analysisService.getTripsSummary(payload),
+        analysisService.getRoutes(buildPayloadFromFilters(filters)),
+      ]);
+      return { tripData, routeData };
+    },
+    null
+  );
+
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
+    if (cachedData) {
+      setData(cachedData.tripData);
+      setBreakdownItems(cachedData.tripData.breakdown?.data || []);
+      setBreakdownTotal(cachedData.tripData.breakdown?.total ?? 0);
+      setRoutes(cachedData.routeData.data || []);
       setBreakdownPage(1);
-      try {
-        const payload = buildPayloadFromFilters(filters, { page: 1, limit: ANALYSIS_PAGE_SIZE });
-        const [tripData, routeData] = await Promise.all([
-          analysisService.getTripsSummary(payload),
-          analysisService.getRoutes(buildPayloadFromFilters(filters)),
-        ]);
-        if (cancelled) return;
-        setData(tripData);
-        setBreakdownItems(tripData.breakdown?.data || []);
-        setBreakdownTotal(tripData.breakdown?.total ?? 0);
-        setRoutes(routeData.data || []);
-      } catch (e) {
-        console.error("Failed to load trip analysis:", e);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [filters]);
+    }
+  }, [cachedData]);
 
   const handleLoadMore = async () => {
     if (loadingMore || !hasMoreAnalysisPages(breakdownPage, breakdownTotal)) return;
@@ -96,12 +92,24 @@ export default function TripsAnalysisScreen() {
         groupByOptions={["day", "week", "month", "truck", "driver"]}
       />
 
-      {loading ? (
+      {isLoading && !data ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color="#2563EB" />
         </View>
       ) : (
-        <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={isLoading}
+              onRefresh={() => refetch(true)}
+              colors={["#2563EB"]}
+              tintColor="#2563EB"
+            />
+          }
+        >
           {/* KPI Row */}
           <View className="flex-row gap-3 mb-4">
             <View className="flex-1 bg-white rounded-2xl border border-border p-4 items-center shadow-sm">

@@ -80,6 +80,8 @@ export default function AddTransferModal() {
         date: formattedDate,
         bank: bank.trim() || undefined,
       });
+      const { clearCachePrefix } = require("@/src/hooks/useCachedFetch");
+      clearCachePrefix("DRIVER_TRANSFERS");
       router.back();
     } catch (error: any) {
       Alert.alert("Error", error.message || "Failed to log transfer");

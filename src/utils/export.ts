@@ -1,19 +1,14 @@
 import * as Sharing from 'expo-sharing';
-import { writeAsStringAsync, documentDirectory, EncodingType } from 'expo-file-system';
-
-/**
- * Downloads a CSV from the backend (or mock) and shares it via the platform sharing dialog.
- * In real usage, replace `mockFetchReportCSV` with a real API call that returns CSV text.
- */
+import * as FileSystem from 'expo-file-system/legacy';
 
 /**
  * Saves a CSV string to a temp file and opens the share dialog.
  */
 export const shareCSV = async (csvContent: string, fileName: string): Promise<void> => {
-  const fileUri = `${documentDirectory}${fileName}.csv`;
+  const fileUri = `${FileSystem.documentDirectory}${fileName}.csv`;
 
-  await writeAsStringAsync(fileUri, csvContent, {
-    encoding: EncodingType.UTF8,
+  await FileSystem.writeAsStringAsync(fileUri, csvContent, {
+    encoding: FileSystem.EncodingType.UTF8,
   });
 
   const isAvailable = await Sharing.isAvailableAsync();

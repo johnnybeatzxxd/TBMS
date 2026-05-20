@@ -14,6 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { truckService } from "@/src/api/services";
+import { clearCacheKey } from "@/src/hooks/useCachedFetch";
 
 export default function AddTruckModal() {
   const params = useLocalSearchParams<{
@@ -54,6 +55,7 @@ export default function AddTruckModal() {
         await truckService.addTruck(payload);
       }
 
+      clearCacheKey("TRUCKS");
       router.back();
     } catch (error: any) {
       Alert.alert("Error", error.message || `Failed to ${isEditMode ? "update" : "add"} truck`);

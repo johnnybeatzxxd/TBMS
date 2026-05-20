@@ -2,7 +2,24 @@ import { useState, useEffect, useCallback } from 'react';
 import * as SecureStore from 'expo-secure-store';
 
 // Global memory cache to eliminate any async retrieval delay on fast navigations
-const memoryCache: Record<string, any> = {};
+export const memoryCache: Record<string, any> = {};
+export const cacheTimestamps: Record<string, number> = {};
+
+export function clearCacheKey(key: string) {
+  delete memoryCache[key];
+  delete cacheTimestamps[key];
+  SecureStore.deleteItemAsync(`cache_${key}`).catch(() => {});
+}
+
+export function clearCachePrefix(prefix: string) {
+  Object.keys(memoryCache).forEach((key) => {
+    if (key.startsWith(prefix)) {
+      delete memoryCache[key];
+      delete cacheTimestamps[key];
+      SecureStore.deleteItemAsync(`cache_${key}`).catch(() => {});
+    }
+  });
+}
 
 export function useCachedFetch<T>(key: string, fetcher: () => Promise<T>, fallbackData: T) {
   // 1. Initialize immediately with memory cache if available, protecting layout shifts.
@@ -15,7 +32,15 @@ export function useCachedFetch<T>(key: string, fetcher: () => Promise<T>, fallba
   const [isLoading, setIsLoading] = useState(!memoryCache[key]);
   const [error, setError] = useState<Error | null>(null);
 
-  const fetchData = useCallback(async (silent = true) => {
+  // If the key changes, we must sync the state immediately to prevent stale data leaking from a different key
+  const [prevKey, setPrevKey] = useState(key);
+  if (key !== prevKey) {
+    setPrevKey(key);
+    setData(memoryCache[key] !== undefined ? memoryCache[key] : fallbackData);
+    setIsLoading(!memoryCache[key]);
+  }
+
+  const fetchData = useCallback(async (silent = true, force = false) => {
     if (!silent && !memoryCache[key]) {
        setIsLoading(true);
     }
@@ -35,9 +60,17 @@ export function useCachedFetch<T>(key: string, fetcher: () => Promise<T>, fallba
       }
     }
 
+    // Optimization: Skip network fetch if it was fetched in the last 15 seconds (unless forced)
+    const lastFetch = cacheTimestamps[key] || 0;
+    if (!force && memoryCache[key] && (Date.now() - lastFetch < 15000)) {
+      setIsLoading(false);
+      return;
+    }
+
     // 3. Stale-While-Revalidate network fetch
     try {
       const result = await fetcher();
+      cacheTimestamps[key] = Date.now();
       
       // Prevent useless UI rerenders if data is literally equal (simple serialization check for simplicity)
       if (JSON.stringify(memoryCache[key]) !== JSON.stringify(result)) {
@@ -66,6 +99,6 @@ export function useCachedFetch<T>(key: string, fetcher: () => Promise<T>, fallba
     data, 
     isLoading, 
     error, 
-    refetch: () => fetchData(false) 
+    refetch: (force = false) => fetchData(false, force) 
   };
 }

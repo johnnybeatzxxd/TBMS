@@ -39,14 +39,14 @@ export default function DriversListScreen() {
 
   const loading = driversLoading || trucksLoading;
 
-  const fetchData = async () => {
-    await Promise.all([refetchDrivers(), refetchTrucks()]);
+  const fetchData = async (force = false) => {
+    await Promise.all([refetchDrivers(force), refetchTrucks(force)]);
   };
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchData();
+    await fetchData(true);
     setRefreshing(false);
   };
 
@@ -54,8 +54,8 @@ export default function DriversListScreen() {
     useCallback(() => {
       const { useAuthStore } = require("@/src/store/authStore");
       if (!useAuthStore.getState().isAuthenticated) return;
-      refetchDrivers();
-      refetchTrucks();
+      refetchDrivers(false);
+      refetchTrucks(false);
     }, [refetchDrivers, refetchTrucks])
   );
 
@@ -67,7 +67,7 @@ export default function DriversListScreen() {
       } else {
         await driverService.activateDriver(driver.id);
       }
-      await fetchData();
+      await fetchData(true);
     } catch (error: any) {
       Alert.alert("Error", error.message || "Failed to change status");
     } finally {
@@ -88,7 +88,7 @@ export default function DriversListScreen() {
             setActionLoading(driver.id);
             try {
               await driverService.deleteDriver(driver.id);
-              await fetchData();
+              await fetchData(true);
             } catch (error: any) {
               Alert.alert("Error", error.message || "Failed to delete driver");
             } finally {

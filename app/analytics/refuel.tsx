@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Dimensions } from "react-native";
+import { useState, useEffect, useCallback } from "react";
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Dimensions, RefreshControl } from "react-native";
+import { useCachedFetch } from "@/src/hooks/useCachedFetch";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
@@ -27,7 +28,6 @@ const chartConfig = {
 
 export default function RefuelAnalysisScreen() {
   const params = useLocalSearchParams();
-  const [loading, setLoading] = useState(true);
   const [usage, setUsage] = useState<FuelUsageResponse | null>(null);
   const [fuelList, setFuelList] = useState<FuelListItem[]>([]);
   const [listPage, setListPage] = useState(1);
@@ -35,6 +35,30 @@ export default function RefuelAnalysisScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [truckPlates, setTruckPlates] = useState<Record<string, string>>({});
   const [filters, setFilters] = useState<AnalysisFilterState>(() => getInitialFiltersFromParams(params, "day"));
+
+  const { data: cachedData, isLoading, refetch } = useCachedFetch<{ usageData: FuelUsageResponse; listData: any } | null>(
+    `REFUEL_ANALYSIS_${JSON.stringify(filters)}`,
+    async () => {
+      const usagePayload = buildPayloadFromFilters(filters);
+      const listPayload = buildPayloadFromFilters(filters, { page: 1, limit: ANALYSIS_PAGE_SIZE });
+
+      const [usageData, listData] = await Promise.all([
+        analysisService.getFuelUsage(usagePayload),
+        analysisService.getFuelList(listPayload),
+      ]);
+      return { usageData, listData };
+    },
+    null
+  );
+
+  useEffect(() => {
+    if (cachedData) {
+      setUsage(cachedData.usageData);
+      setFuelList(cachedData.listData.data || []);
+      setListTotal(cachedData.listData.total ?? 0);
+      setListPage(1);
+    }
+  }, [cachedData]);
 
   useEffect(() => {
     (async () => {
@@ -48,35 +72,6 @@ export default function RefuelAnalysisScreen() {
       }
     })();
   }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setListPage(1);
-      try {
-        const usagePayload = buildPayloadFromFilters(filters);
-        const listPayload = buildPayloadFromFilters(filters, { page: 1, limit: ANALYSIS_PAGE_SIZE });
-
-        const [usageData, listData] = await Promise.all([
-          analysisService.getFuelUsage(usagePayload),
-          analysisService.getFuelList(listPayload),
-        ]);
-
-        if (cancelled) return;
-        setUsage(usageData);
-        setFuelList(listData.data || []);
-        setListTotal(listData.total ?? 0);
-      } catch (e) {
-        console.error("Failed to load fuel analysis:", e);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [filters]);
 
   const handleLoadMore = async () => {
     if (loadingMore || !hasMoreAnalysisPages(listPage, listTotal)) return;
@@ -115,12 +110,24 @@ export default function RefuelAnalysisScreen() {
         groupByOptions={["day", "week", "month", "truck", "driver"]}
       />
 
-      {loading ? (
+      {isLoading && !usage ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator size="large" color="#F59E0B" />
         </View>
       ) : (
-        <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={isLoading}
+              onRefresh={() => refetch(true)}
+              colors={["#F59E0B"]}
+              tintColor="#F59E0B"
+            />
+          }
+        >
           {/* KPI Row */}
           <View className="flex-row gap-3 mb-4">
             <View className="flex-1 bg-white rounded-2xl border border-border p-4 items-center shadow-sm">

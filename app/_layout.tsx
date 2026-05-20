@@ -92,6 +92,7 @@ export default function RootLayout() {
         <Stack.Screen name="driver-expenses" options={{ headerShown: false }} />
         <Stack.Screen name="driver-refuels" options={{ headerShown: false }} />
         <Stack.Screen name="driver-transfers" options={{ headerShown: false }} />
+        <Stack.Screen name="driver-notifications" options={{ headerShown: false }} />
         <Stack.Screen
           name="add-refuel"
           options={{ presentation: "modal", headerShown: false }}

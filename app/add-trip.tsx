@@ -215,6 +215,9 @@ export default function AddTripModal() {
 
       await saveNewLocations(payload.loadingSite, payload.destinationSite);
 
+      const { clearCachePrefix } = require("@/src/hooks/useCachedFetch");
+      clearCachePrefix("DRIVER_TRIPS");
+
       Alert.alert(
         "Success",
         isEditMode ? "Trip updated successfully!" : "Trip logged successfully!",
