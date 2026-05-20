@@ -36,6 +36,9 @@ export default function AdminDashboardScreen() {
   const [pendingTripsCount, setPendingTripsCount] = useState(0);
   const [pendingTransfersCount, setPendingTransfersCount] = useState(0);
   const [pendingRemindersCount, setPendingRemindersCount] = useState(0);
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+  const [pendingRefuelsCount, setPendingRefuelsCount] = useState(0);
+  const [pendingExpensesCount, setPendingExpensesCount] = useState(0);
 
   const { setTrips, setTransfers, setExpenses, setRefuels, setRequests } = useCacheStore();
 
@@ -44,8 +47,9 @@ export default function AdminDashboardScreen() {
     useCallback(() => {
       const prefetchAllData = async () => {
         try {
-          const [tripsRes, transfersRes, remindersRes, expensesRes, refuelsRes, requestsRes] = await Promise.allSettled([
+          const [cashTripsRes, creditTripsRes, transfersRes, remindersRes, expensesRes, refuelsRes, requestsRes] = await Promise.allSettled([
             tripService.getTrips({ page: 1, paymentMethod: "CASH" }),
+            tripService.getTrips({ page: 1, paymentMethod: "CREDIT" }),
             transferService.getTransfers({ page: 1 }),
             reminderService.getPendingRemindersAdmin(),
             expenseService.getMyExpenses(),
@@ -53,32 +57,50 @@ export default function AdminDashboardScreen() {
             formService.getFormSubmissions()
           ]);
           
-          if (tripsRes.status === "fulfilled") {
-            const fetchedTrips = tripsRes.value.data;
-            setTrips(fetchedTrips);
-            const pendingTrips = fetchedTrips.filter((t: any) => t.approved !== "APPROVED");
-            setPendingTripsCount(pendingTrips.length);
+          // Trips (Both Cash and Credit)
+          let cashTrips: any[] = [];
+          let creditTrips: any[] = [];
+          
+          if (cashTripsRes.status === "fulfilled") {
+            cashTrips = cashTripsRes.value.data || [];
+            // Cache the default CASH trips into the global cache (since admin-trips default tab is CASH)
+            setTrips(cashTrips);
           }
+          if (creditTripsRes.status === "fulfilled") {
+            creditTrips = creditTripsRes.value.data || [];
+          }
+          const allTrips = [...cashTrips, ...creditTrips];
+          setPendingTripsCount(allTrips.filter((t: any) => t.approved !== "APPROVED").length);
 
+          // Transfers
           if (transfersRes.status === "fulfilled") {
-            const fetchedTransfers = transfersRes.value.transfers;
+            const fetchedTransfers = transfersRes.value.transfers || [];
             setTransfers(fetchedTransfers);
-            const pendingTransfers = fetchedTransfers.filter((t: any) => t.status === "PENDING" || t.approved === "PENDING");
-            setPendingTransfersCount(pendingTransfers.length);
+            setPendingTransfersCount(fetchedTransfers.filter((t: any) => t.status === "PENDING" || t.approved === "PENDING").length);
           }
 
+          // Expenses
           if (expensesRes.status === "fulfilled") {
-            setExpenses(expensesRes.value.expenses);
+            const fetchedExpenses = expensesRes.value.expenses || [];
+            setExpenses(fetchedExpenses);
+            setPendingExpensesCount(fetchedExpenses.filter((e: any) => e.approved !== "APPROVED").length);
           }
 
+          // Refuels
           if (refuelsRes.status === "fulfilled") {
-            setRefuels(refuelsRes.value.refuels);
+            const fetchedRefuels = refuelsRes.value.refuels || [];
+            setRefuels(fetchedRefuels);
+            setPendingRefuelsCount(fetchedRefuels.filter((r: any) => r.approved !== "APPROVED").length);
           }
 
+          // Service Requests
           if (requestsRes.status === "fulfilled") {
-            setRequests(requestsRes.value.submissions);
+            const fetchedRequests = requestsRes.value.submissions || [];
+            setRequests(fetchedRequests);
+            setPendingRequestsCount(fetchedRequests.filter((r: any) => r.status === "PENDING" || r.approved === "PENDING").length);
           }
 
+          // Reminders
           if (remindersRes.status === "fulfilled") {
             setPendingRemindersCount(remindersRes.value.pending?.length || 0);
           }
@@ -90,21 +112,21 @@ export default function AdminDashboardScreen() {
     }, [])
   );
 
-  const totalActionable = pendingTripsCount + pendingTransfersCount + pendingRemindersCount;
+  const totalActionable = pendingTripsCount + pendingTransfersCount + pendingRemindersCount + pendingRequestsCount + pendingRefuelsCount + pendingExpensesCount;
 
   const navSections = [
     {
       title: "Operations",
       items: [
         { id: "trips", title: "Trip Management", subtitle: "Review and approve driver logs", icon: "truck", route: "/admin-trips", color: "#3B82F6", unread: pendingTripsCount },
-        { id: "requests", title: "Service Requests", subtitle: "Manage fleet maintenance", icon: "document-text", route: "/admin-requests", color: "#10B981", unread: 0 },
-        { id: "refuels", title: "Refuels", subtitle: "Fuel consumption logs", icon: "water", route: "/admin-refuels", color: "#0EA5E9", unread: 0 },
+        { id: "requests", title: "Service Requests", subtitle: "Manage fleet maintenance", icon: "document-text", route: "/admin-requests", color: "#10B981", unread: pendingRequestsCount },
+        { id: "refuels", title: "Refuels", subtitle: "Fuel consumption logs", icon: "water", route: "/admin-refuels", color: "#0EA5E9", unread: pendingRefuelsCount },
       ]
     },
     {
       title: "Finance",
       items: [
-        { id: "expenses", title: "Expenses", subtitle: "Road and operational spendings", icon: "receipt", route: "/admin-expenses", color: "#EF4444", unread: 0 },
+        { id: "expenses", title: "Expenses", subtitle: "Road and operational spendings", icon: "receipt", route: "/admin-expenses", color: "#EF4444", unread: pendingExpensesCount },
         { id: "transfers", title: "Money Transfers", subtitle: "Internal fleet balancing", icon: "swap-horizontal", route: "/admin-transfers", color: "#F59E0B", unread: pendingTransfersCount },
       ]
     },
