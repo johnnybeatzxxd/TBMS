@@ -170,7 +170,11 @@ export default function ExpensesScreen() {
   const [amountFrom, setAmountFrom] = useState<string>("");
   const [amountTo, setAmountTo] = useState<string>("");
   const [selectedTruckIds, setSelectedTruckIds] = useState<string[]>([]);
-  const [trucks, setTrucks] = useState<any[]>([{ id: "all", plateNumber: "All Trucks" }]);
+  const cachedTrucks = (user?.profile?.trucks || []).map((t: any) => ({
+    id: t.id || t._id,
+    plateNumber: t.plateNumber,
+  }));
+  const [trucks, setTrucks] = useState<any[]>([{ id: "all", plateNumber: "All Trucks" }, ...cachedTrucks]);
   const [forms, setForms] = useState<any[]>([{ id: "all", name: "All Forms" }]);
   const [selectedFormId, setSelectedFormId] = useState<string>("all");
   const [showFormMenu, setShowFormMenu] = useState(false);

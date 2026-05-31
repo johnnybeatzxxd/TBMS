@@ -43,14 +43,17 @@ export default function ExpensesAnalysisScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [filters, setFilters] = useState<AnalysisFilterState>(() => getInitialFiltersFromParams(params, "day"));
 
+  const fetchExpenses = useCallback(async () => {
+    const payload = buildPayloadFromFilters(filters, { page: 1, limit: ANALYSIS_PAGE_SIZE });
+    const expensesData = await analysisService.getExpenses(payload);
+    return { expensesData };
+  }, [filters]);
+
   const { data: cachedData, isLoading, refetch } = useCachedFetch<{ expensesData: ExpensesResponse } | null>(
     `EXPENSES_ANALYSIS_${JSON.stringify(filters)}`,
-    async () => {
-      const payload = buildPayloadFromFilters(filters, { page: 1, limit: ANALYSIS_PAGE_SIZE });
-      const expensesData = await analysisService.getExpenses(payload);
-      return { expensesData };
-    },
-    null
+    fetchExpenses,
+    null,
+    { alwaysFetch: true }
   );
 
   useEffect(() => {

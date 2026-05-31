@@ -21,7 +21,7 @@ import { tripService, companyService } from "@/src/api/services";
 import { ReceiptImageUploader } from "@/src/components/ReceiptImageUploader";
 import { AddTripPayload, UpdateTripPayload } from "@/src/types";
 import { useCachedFetch } from "@/src/hooks/useCachedFetch";
-import { useAuthStore } from "@/src/store";
+import { useAuthStore, useActionStore } from "@/src/store";
 import { uploadCreditTripReceipt } from "@/src/utils/firebaseUpload";
 
 type Volume = "10MCUBE" | "16MCUBE";
@@ -136,7 +136,10 @@ export default function AddTripModal() {
   const [receiptPicUrls, setReceiptPicUrls] = useState<string[]>([]);
   const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
   const [hasIncompleteReceipt, setHasIncompleteReceipt] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { startAction, stopAction, isActionPending } = useActionStore();
+  
+  const actionKey = isEditMode ? `update_trip_${params.id}` : "submit_new_trip";
+  const isSubmitting = isActionPending(actionKey);
 
   const onDateChange = (_: DateTimePickerEvent, selected?: Date) => {
     setShowDatePicker(false);
@@ -181,7 +184,7 @@ export default function AddTripModal() {
       return;
     }
 
-    setIsSubmitting(true);
+    startAction(actionKey);
 
     try {
       const receiptPicUrl = receiptPicUrls[0];
@@ -227,7 +230,7 @@ export default function AddTripModal() {
       console.error("[AddTrip] submit failed", error);
       Alert.alert("Submission Failed", error.message || "Failed to process the trip.");
     } finally {
-      setIsSubmitting(false);
+      stopAction(actionKey);
     }
   };
 

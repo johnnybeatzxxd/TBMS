@@ -138,6 +138,7 @@ export default function AdminDashboardScreen() {
         { id: "displays", title: "Billboard", subtitle: "Live driver announcement config", icon: "chatbubbles", route: "/admin-displays", color: "#3B82F6", unread: 0 },
         { id: "reminders", title: "Reminders", subtitle: "Alerts & Scheduled Notifs", icon: "notifications", route: "/admin-reminders", color: "#8B5CF6", unread: pendingRemindersCount },
         { id: "analytics", title: "Reports & Analytics", subtitle: "Export CSV and view fleet trends", icon: "bar-chart", route: "/admin-analytics", color: "#F43F5E", unread: 0 },
+        { id: "commitments", title: "Financial Commitments", subtitle: "Manage recurring financial obligations", icon: "card", route: "/admin-commitments", color: "#10B981", unread: 0 },
       ]
     }
   ];

@@ -15,6 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { truckService } from "@/src/api/services";
 import { clearCacheKey } from "@/src/hooks/useCachedFetch";
+import { useActionStore } from "@/src/store";
 
 export default function AddTruckModal() {
   const params = useLocalSearchParams<{
@@ -32,7 +33,8 @@ export default function AddTruckModal() {
   const [brand, setBrand] = useState(params.brand || "");
   const [model, setModel] = useState(params.model || "");
   
-  const [loading, setLoading] = useState(false);
+  const { isActionPending, startAction, stopAction } = useActionStore();
+  const loading = isActionPending("submit_truck");
 
   const handleSubmit = async () => {
     if (!plateNumber.trim()) {
@@ -40,7 +42,7 @@ export default function AddTruckModal() {
       return;
     }
 
-    setLoading(true);
+    startAction("submit_truck");
     try {
       const payload = {
         plateNumber: plateNumber.trim().toUpperCase(),
@@ -60,7 +62,7 @@ export default function AddTruckModal() {
     } catch (error: any) {
       Alert.alert("Error", error.message || `Failed to ${isEditMode ? "update" : "add"} truck`);
     } finally {
-      setLoading(false);
+      stopAction("submit_truck");
     }
   };
 

@@ -36,19 +36,22 @@ export default function RefuelAnalysisScreen() {
   const [truckPlates, setTruckPlates] = useState<Record<string, string>>({});
   const [filters, setFilters] = useState<AnalysisFilterState>(() => getInitialFiltersFromParams(params, "day"));
 
+  const fetchRefuel = useCallback(async () => {
+    const usagePayload = buildPayloadFromFilters(filters);
+    const listPayload = buildPayloadFromFilters(filters, { page: 1, limit: ANALYSIS_PAGE_SIZE });
+
+    const [usageData, listData] = await Promise.all([
+      analysisService.getFuelUsage(usagePayload),
+      analysisService.getFuelList(listPayload),
+    ]);
+    return { usageData, listData };
+  }, [filters]);
+
   const { data: cachedData, isLoading, refetch } = useCachedFetch<{ usageData: FuelUsageResponse; listData: any } | null>(
     `REFUEL_ANALYSIS_${JSON.stringify(filters)}`,
-    async () => {
-      const usagePayload = buildPayloadFromFilters(filters);
-      const listPayload = buildPayloadFromFilters(filters, { page: 1, limit: ANALYSIS_PAGE_SIZE });
-
-      const [usageData, listData] = await Promise.all([
-        analysisService.getFuelUsage(usagePayload),
-        analysisService.getFuelList(listPayload),
-      ]);
-      return { usageData, listData };
-    },
-    null
+    fetchRefuel,
+    null,
+    { alwaysFetch: true }
   );
 
   useEffect(() => {

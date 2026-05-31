@@ -138,7 +138,8 @@ export default function DriverDetailScreen() {
     );
   }
 
-  const licenseDate = driver.licenseRenewalDate ? new Date(driver.licenseRenewalDate) : null;
+  const rawLicenseDate = driver.licenceExpiryDate || driver.licenseRenewalDate;
+  const licenseDate = rawLicenseDate ? new Date(rawLicenseDate) : null;
   const isLicenseExpired = licenseDate ? licenseDate < new Date() : false;
   const licenseDaysLeft = licenseDate
     ? Math.ceil((licenseDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
@@ -154,7 +155,8 @@ export default function DriverDetailScreen() {
         <Text className="text-text-primary font-bold text-lg">Driver Profile</Text>
         <TouchableOpacity
           onPress={() => {
-            const qs = `?mode=edit&id=${driver.id}&name=${encodeURIComponent(driver.name)}&truckId=${encodeURIComponent(driver.truckId)}&licenseRenewalDate=${encodeURIComponent(driver.licenseRenewalDate || "")}`;
+            const licenseVal = driver.licenceExpiryDate || driver.licenseRenewalDate || "";
+            const qs = `?mode=edit&id=${driver.id}&name=${encodeURIComponent(driver.name)}&truckId=${encodeURIComponent(driver.truckId)}&licenseRenewalDate=${encodeURIComponent(licenseVal)}`;
             router.push(`/manage-driver${qs}` as any);
           }}
           className="w-10 h-10 items-center justify-center rounded-full bg-primary-50 border border-primary-100"
@@ -277,7 +279,8 @@ export default function DriverDetailScreen() {
           <View className="gap-2">
             <TouchableOpacity
               onPress={() => {
-                const qs = `?mode=edit&id=${driver.id}&name=${encodeURIComponent(driver.name)}&truckId=${encodeURIComponent(driver.truckId)}&licenseRenewalDate=${encodeURIComponent(driver.licenseRenewalDate || "")}`;
+                const licenseVal = driver.licenceExpiryDate || driver.licenseRenewalDate || "";
+                const qs = `?mode=edit&id=${driver.id}&name=${encodeURIComponent(driver.name)}&truckId=${encodeURIComponent(driver.truckId)}&licenseRenewalDate=${encodeURIComponent(licenseVal)}`;
                 router.push(`/manage-driver${qs}` as any);
               }}
               className="flex-row items-center gap-3 bg-primary-50 rounded-xl px-4 py-3 border border-primary-100"

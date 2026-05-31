@@ -14,7 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { authService } from "@/src/api/auth.service";
-import { useAuthStore } from "@/src/store";
+import { useAuthStore, useActionStore } from "@/src/store";
 import { useCachedFetch } from "@/src/hooks/useCachedFetch";
 const getInitials = (name: string) =>
   name
@@ -63,7 +63,8 @@ export default function ProfileScreen() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [savingCreds, setSavingCreds] = useState(false);
+  const { isActionPending, startAction, stopAction } = useActionStore();
+  const savingCreds = isActionPending("submit_credentials");
   
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = async () => {
@@ -86,7 +87,7 @@ export default function ProfileScreen() {
       return;
     }
 
-    setSavingCreds(true);
+    startAction("submit_credentials");
     try {
       Alert.alert("Notice", "Profile credentials updates should be managed by your admin.");
       setShowCredModal(false);
@@ -95,7 +96,7 @@ export default function ProfileScreen() {
     } catch (error: any) {
       Alert.alert("Error", error.message || "Failed to update credentials.");
     } finally {
-      setSavingCreds(false);
+      stopAction("submit_credentials");
     }
   };
 

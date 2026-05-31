@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, ActivityIndicator, Alert, SectionList, Re
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
-import { useAuthStore, useCacheStore } from "@/src/store";
+import { useAuthStore, useCacheStore, useActionStore } from "@/src/store";
 import { refuelService, driverService, truckService } from "@/src/api/services";
 import { Refuel } from "@/src/types/refuel.types";
 import { ReceiptPhotosRow } from "@/src/components/TripReceiptViewer";
@@ -31,6 +31,8 @@ const getRelativeDateLabel = (dateStr: string) => {
 
 const RefuelCard = ({ exp, onApprove, onEdit, driverName }: { exp: Refuel, onApprove: (id: string) => void, onEdit: (refuel: Refuel) => void, driverName?: string }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const refuelId = exp._id || (exp as any).id;
+  const isApproving = useActionStore((state) => !!state.pendingActions[`approve_refuel_${refuelId}`]);
   
   return (
     <TouchableOpacity
@@ -94,9 +96,9 @@ const RefuelCard = ({ exp, onApprove, onEdit, driverName }: { exp: Refuel, onApp
             <View className="flex-row items-center justify-between pt-2 border-t border-border/30">
                <Text className="text-text-secondary text-xs uppercase font-bold tracking-widest">Tank Fill</Text>
                <View className={`px-2 py-0.5 rounded ${exp.fullTank ? "bg-success-100" : "bg-surface border border-border"}`}>
-                 <Text className={`text-[10px] font-bold uppercase tracking-wider ${exp.fullTank ? "text-success-700" : "text-text-secondary"}`}>
-                   {exp.fullTank ? "Full Tank" : "Partial"}
-                 </Text>
+                  <Text className={`text-[10px] font-bold uppercase tracking-wider ${exp.fullTank ? "text-success-700" : "text-text-secondary"}`}>
+                    {exp.fullTank ? "Full Tank" : "Partial"}
+                  </Text>
                </View>
             </View>
 
@@ -116,23 +118,15 @@ const RefuelCard = ({ exp, onApprove, onEdit, driverName }: { exp: Refuel, onApp
                <TouchableOpacity
                  className="flex-1 flex-row items-center justify-center py-2.5 bg-success-500 rounded-lg"
                  activeOpacity={0.8}
-                 onPress={(e) => { e.stopPropagation(); onApprove(exp._id || (exp as any).id); }}
+                 disabled={isApproving}
+                 onPress={(e) => { e.stopPropagation(); onApprove(refuelId); }}
                >
-                 <Ionicons name="checkmark-circle-outline" size={14} color="#fff" style={{marginRight: 4}} />
-                 <Text className="text-white font-bold text-sm">Approve</Text>
-               </TouchableOpacity>
-            </View>
-          )}
-
-          {exp.approved === "APPROVED" && (
-            <View className="flex-row justify-end pt-1">
-               <TouchableOpacity
-                 className="px-5 py-2 bg-sky-50 rounded-lg border border-sky-100 flex-row items-center"
-                 activeOpacity={0.8}
-                 onPress={(e) => { e.stopPropagation(); onEdit(exp); }}
-               >
-                 <Ionicons name="pencil" size={14} color="#0EA5E9" style={{marginRight: 4}} />
-                 <Text className="text-sky-600 font-bold text-sm">Edit</Text>
+                 {isApproving ? <ActivityIndicator size="small" color="#fff" /> : (
+                   <>
+                     <Ionicons name="checkmark-circle-outline" size={14} color="#fff" style={{marginRight: 4}} />
+                     <Text className="text-white font-bold text-sm">Approve</Text>
+                   </>
+                 )}
                </TouchableOpacity>
             </View>
           )}
@@ -143,6 +137,7 @@ const RefuelCard = ({ exp, onApprove, onEdit, driverName }: { exp: Refuel, onApp
 };
 
 export default function RefuelsScreen() {
+  const { startAction, stopAction } = useActionStore();
   const { user } = useAuthStore();
   const { refuels: cachedRefuels, setRefuels: setCachedRefuels } = useCacheStore();
   const [displayedRefuels, setDisplayedRefuels] = useState<Refuel[]>(cachedRefuels);
@@ -150,7 +145,15 @@ export default function RefuelsScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-  const [driverMap, setDriverMap] = useState<Record<string, string>>({});
+  const { memoryCache } = require("@/src/hooks/useCachedFetch");
+  const getInitialDriverMap = () => {
+    const map: Record<string, string> = {};
+    const cached = memoryCache["DRIVERS"]?.drivers || [];
+    cached.forEach((d: any) => { map[d.id || d._id] = d.name; });
+    return map;
+  };
+
+  const [driverMap, setDriverMap] = useState<Record<string, string>>(getInitialDriverMap());
 
   // Date Filter State
   const [filterPreset, setFilterPreset] = useState<DateFilterPreset>("all");
@@ -158,7 +161,11 @@ export default function RefuelsScreen() {
   const [customTo, setCustomTo] = useState<Date | null>(null);
 
   // Truck Filter State
-  const [trucks, setTrucks] = useState<{id: string, plateNumber: string}[]>([]);
+  const cachedTrucks = (user?.profile?.trucks || []).map((t: any) => ({
+    id: t.id || t._id,
+    plateNumber: t.plateNumber,
+  }));
+  const [trucks, setTrucks] = useState<{id: string, plateNumber: string}[]>(cachedTrucks);
   const [selectedTruckId, setSelectedTruckId] = useState<string>("");
   const [showTruckMenu, setShowTruckMenu] = useState(false);
   const [refreshingTrucks, setRefreshingTrucks] = useState(false);
@@ -243,11 +250,17 @@ export default function RefuelsScreen() {
   };
 
   const handleApprove = async (id: string) => {
+    const actionKey = `approve_refuel_${id}`;
+    if (useActionStore.getState().isActionPending(actionKey)) return;
+
+    startAction(actionKey);
     try {
       await refuelService.approveRefuel(id);
       setDisplayedRefuels(prev => prev.map(r => (r._id || (r as any).id) === id ? { ...r, approved: "APPROVED" } : r));
     } catch (error: any) {
       Alert.alert("Error", error.message || "Failed to approve refuel");
+    } finally {
+      stopAction(actionKey);
     }
   };
 

@@ -5,10 +5,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { reminderService, driverService } from "@/src/api/services";
 import { Reminder } from "@/src/types/reminder.types";
+import { useActionStore } from "@/src/store";
 
 const ReminderCard = ({ item, onDelete, driverMap }: { item: Reminder, onDelete: (id: string) => void, driverMap: Record<string, string> }) => {
   const [expanded, setExpanded] = useState(false);
+  const { isActionPending } = useActionStore();
   const isOneTime = item.reminderType === "ONE_TIME";
+  const isDeleting = isActionPending(`delete_reminder_${item._id || item.id}`);
 
   return (
     <TouchableOpacity
@@ -71,12 +74,17 @@ const ReminderCard = ({ item, onDelete, driverMap }: { item: Reminder, onDelete:
             </View>
             <View className="flex-row justify-end mt-2">
               <TouchableOpacity
-                className="px-4 py-2 bg-danger-50 border border-danger-200 rounded-lg items-center"
-                activeOpacity={0.8}
-                onPress={(e) => { e.stopPropagation(); onDelete(item._id || item.id || ""); }}
-              >
+              className={`px-4 py-2 rounded-lg items-center ${isDeleting ? "bg-danger-100 border-danger-300" : "bg-danger-50 border border-danger-200"}`}
+              activeOpacity={0.8}
+              disabled={isDeleting}
+              onPress={(e) => { e.stopPropagation(); onDelete(item._id || item.id || ""); }}
+            >
+              {isDeleting ? (
+                <ActivityIndicator size="small" color="#DC2626" />
+              ) : (
                 <Text className="text-danger-600 font-semibold text-xs">Delete Reminder</Text>
-              </TouchableOpacity>
+              )}
+            </TouchableOpacity>
             </View>
           </View>
         )}
@@ -120,15 +128,20 @@ export default function AdminRemindersScreen() {
     loadData();
   }, []);
 
+  const { startAction, stopAction } = useActionStore();
+
   const handleDelete = (id: string) => {
     Alert.alert("Delete Reminder", "Are you sure you want to completely delete this routine?", [
       { text: "Cancel", style: "cancel" },
       { text: "Delete", style: "destructive", onPress: async () => {
+        startAction(`delete_reminder_${id}`);
         try {
           await reminderService.deleteReminder(id);
           setReminders(prev => prev.filter(r => (r._id || r.id) !== id));
         } catch (e: any) {
           Alert.alert("Error", e.message || "Failed to delete");
+        } finally {
+          stopAction(`delete_reminder_${id}`);
         }
       }}
     ]);

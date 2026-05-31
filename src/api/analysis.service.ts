@@ -6,27 +6,27 @@
  * Requires ADMIN role authentication.
  */
 
-import { apiFetch } from "./config";
 import {
+  ComparePayload,
+  CompareResponse,
   DashboardPayload,
   DashboardResponse,
-  TripsSummaryPayload,
-  TripsSummaryResponse,
-  RoutesPayload,
-  RoutesResponse,
+  ExpensesPayload,
+  ExpensesResponse,
   FuelListPayload,
   FuelListResponse,
   FuelUsagePayload,
   FuelUsageResponse,
-  ExpensesPayload,
-  ExpensesResponse,
-  ProfitPayload,
-  ProfitResponse,
   PerformancePayload,
   PerformanceResponse,
-  ComparePayload,
-  CompareResponse,
+  ProfitPayload,
+  ProfitResponse,
+  RoutesPayload,
+  RoutesResponse,
+  TripsSummaryPayload,
+  TripsSummaryResponse,
 } from "@/src/types/analysis.types";
+import { apiFetch } from "./config";
 
 const handleError = async (res: Response, fallbackMsg: string) => {
   const err = await res.json().catch(() => ({}));

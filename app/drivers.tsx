@@ -6,9 +6,10 @@ import { router, useFocusEffect } from "expo-router";
 import { Driver, Truck } from "@/src/types";
 import { driverService, truckService } from "@/src/api/services";
 import { useCachedFetch } from "@/src/hooks/useCachedFetch";
+import { useActionStore } from "@/src/store";
 
 export default function DriversListScreen() {
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const { isActionPending, startAction, stopAction } = useActionStore();
 
   // Filter & Search states
   const [searchQuery, setSearchQuery] = useState("");
@@ -60,7 +61,7 @@ export default function DriversListScreen() {
   );
 
   const handleToggleStatus = async (driver: Driver) => {
-    setActionLoading(driver.id);
+    startAction(`toggle_driver_${driver.id}`);
     try {
       if (driver.accountActive) {
         await driverService.deactivateDriver(driver.id);
@@ -71,7 +72,7 @@ export default function DriversListScreen() {
     } catch (error: any) {
       Alert.alert("Error", error.message || "Failed to change status");
     } finally {
-      setActionLoading(null);
+      stopAction(`toggle_driver_${driver.id}`);
     }
   };
 
@@ -85,14 +86,14 @@ export default function DriversListScreen() {
           text: "Delete",
           style: "destructive",
           onPress: async () => {
-            setActionLoading(driver.id);
+            startAction(`delete_driver_${driver.id}`);
             try {
               await driverService.deleteDriver(driver.id);
               await fetchData(true);
             } catch (error: any) {
               Alert.alert("Error", error.message || "Failed to delete driver");
             } finally {
-              setActionLoading(null);
+              stopAction(`delete_driver_${driver.id}`);
             }
           },
         },
@@ -248,14 +249,14 @@ export default function DriversListScreen() {
                     <View className="flex-row gap-2">
                       <TouchableOpacity
                         onPress={() => handleToggleStatus(driver)}
-                        disabled={actionLoading === driver.id}
+                        disabled={isActionPending(`toggle_driver_${driver.id}`) || isActionPending(`delete_driver_${driver.id}`)}
                         className={`px-4 py-2 flex-row items-center gap-1.5 rounded-lg border ${
                           driver.accountActive
                             ? "bg-surface border-border"
                             : "bg-success-50 border-success-100"
                         }`}
                       >
-                        {actionLoading === driver.id ? (
+                        {isActionPending(`toggle_driver_${driver.id}`) ? (
                           <ActivityIndicator size="small" color={driver.accountActive ? "#64748B" : "#16A34A"} />
                         ) : (
                           <>
@@ -277,7 +278,7 @@ export default function DriversListScreen() {
 
                       <TouchableOpacity
                         onPress={() => handleDelete(driver)}
-                        disabled={actionLoading === driver.id}
+                        disabled={isActionPending(`toggle_driver_${driver.id}`) || isActionPending(`delete_driver_${driver.id}`)}
                         className="px-4 py-2 flex-row items-center gap-1.5 rounded-lg bg-danger-50 border border-danger-100"
                       >
                         <Ionicons name="trash-outline" size={14} color="#DC2626" />
@@ -288,7 +289,8 @@ export default function DriversListScreen() {
                     {/* Edit Button */}
                     <TouchableOpacity
                       onPress={() => {
-                        const qs = `?mode=edit&id=${driver.id}&name=${encodeURIComponent(driver.name)}&truckId=${encodeURIComponent(driver.truckId)}&username=${encodeURIComponent(driver.username || "")}&password=${encodeURIComponent(driver.password || "")}&licenseRenewalDate=${encodeURIComponent(driver.licenseRenewalDate || "")}&oilChangeDate=${encodeURIComponent(driver.oilChangeDate || "")}`;
+                        const licenseVal = driver.licenceExpiryDate || driver.licenseRenewalDate || "";
+                        const qs = `?mode=edit&id=${driver.id}&name=${encodeURIComponent(driver.name)}&truckId=${encodeURIComponent(driver.truckId)}&username=${encodeURIComponent(driver.username || "")}&password=${encodeURIComponent(driver.password || "")}&licenseRenewalDate=${encodeURIComponent(licenseVal)}&oilChangeDate=${encodeURIComponent(driver.oilChangeDate || "")}`;
                         router.push(`/manage-driver${qs}` as any);
                       }}
                       className="w-10 h-10 items-center justify-center bg-primary-50 rounded-full border border-primary-100"

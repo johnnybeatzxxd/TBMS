@@ -41,8 +41,9 @@ export function getRequestDisplayName(req: {
   templateName?: string;
   tag?: string;
 }): string {
-  const name = req.templateName?.trim() || "";
-  if (name && name !== "Unknown") return name;
+  // Tag takes priority over the generic "Other" / "Unknown" fallback names
   if (req.tag?.trim()) return req.tag.trim();
+  const name = req.templateName?.trim() || "";
+  if (name && name !== "Unknown" && name !== "Other") return name;
   return "Other";
 }

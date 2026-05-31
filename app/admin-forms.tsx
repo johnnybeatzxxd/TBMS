@@ -5,6 +5,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { formService } from "@/src/api/services";
 import { FormTemplate } from "@/src/types/form.types";
+import { useActionStore } from "@/src/store";
 
 const FIELD_TYPE_LABELS: Record<string, string> = {
   text: "Text",
@@ -20,6 +21,11 @@ const TemplateCard = ({ template, onEdit, onDelete, onToggleActive }: {
   onDelete: (id: string) => void;
   onToggleActive: (t: FormTemplate, isActive: boolean) => void;
 }) => {
+  const { isActionPending } = useActionStore();
+  const isTemplateActive = template.isActive === true || (template.isActive as any) === "true";
+  const isToggling = isActionPending(`toggle_form_${template.id}`);
+  const isDeleting = isActionPending(`delete_form_${template.id}`);
+
   return (
     <View className="bg-white rounded-2xl border border-border shadow-sm mb-3 p-4 flex-row items-center justify-between">
       <View className="flex-row items-center flex-1 pr-3">
@@ -38,10 +44,11 @@ const TemplateCard = ({ template, onEdit, onDelete, onToggleActive }: {
       {/* Actions */}
       <View className="flex-row items-center gap-2">
         <Switch
-          value={template.isActive ?? true}
+          value={isTemplateActive}
           onValueChange={(val) => onToggleActive(template, val)}
+          disabled={isToggling}
           trackColor={{ false: "#E2E8F0", true: "#C7D2FE" }}
-          thumbColor={template.isActive !== false ? "#6366F1" : "#94A3B8"}
+          thumbColor={isTemplateActive ? "#6366F1" : "#94A3B8"}
           style={{ transform: [{ scale: 0.8 }] }}
         />
         <TouchableOpacity
@@ -52,8 +59,9 @@ const TemplateCard = ({ template, onEdit, onDelete, onToggleActive }: {
           <Ionicons name="pencil" size={16} color="#6366F1" />
         </TouchableOpacity>
         <TouchableOpacity
-          className="w-10 h-10 items-center justify-center bg-rose-50 rounded-lg border border-rose-100"
+          className={`w-10 h-10 items-center justify-center rounded-lg border ${isDeleting ? "bg-rose-100 border-rose-200" : "bg-rose-50 border-rose-100"}`}
           activeOpacity={0.8}
+          disabled={isDeleting}
           onPress={() => {
             Alert.alert("Delete Template", `Are you sure you want to delete "${template.name}"?`, [
               { text: "Cancel", style: "cancel" },
@@ -61,7 +69,11 @@ const TemplateCard = ({ template, onEdit, onDelete, onToggleActive }: {
             ]);
           }}
         >
-          <Ionicons name="trash-outline" size={16} color="#EF4444" />
+          {isDeleting ? (
+            <ActivityIndicator size="small" color="#EF4444" />
+          ) : (
+            <Ionicons name="trash-outline" size={16} color="#EF4444" />
+          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -96,12 +108,17 @@ export default function AdminFormsScreen() {
     setRefreshing(false);
   };
 
+  const { startAction, stopAction } = useActionStore();
+
   const handleDelete = async (id: string) => {
+    startAction(`delete_form_${id}`);
     try {
       await formService.deleteFormTemplate(id);
       setTemplates(prev => prev.filter(t => t.id !== id));
     } catch (e: any) {
       Alert.alert("Error", e.message || "Failed to delete template");
+    } finally {
+      stopAction(`delete_form_${id}`);
     }
   };
 
@@ -110,14 +127,15 @@ export default function AdminFormsScreen() {
   };
 
   const handleToggleActive = async (template: FormTemplate, isActive: boolean) => {
-    // Optimistic update
+    startAction(`toggle_form_${template.id}`);
     setTemplates(prev => prev.map(t => t.id === template.id ? { ...t, isActive } : t));
     try {
       await formService.updateFormTemplate(template.id, { isActive });
     } catch (e: any) {
-      // Revert on failure
       setTemplates(prev => prev.map(t => t.id === template.id ? { ...t, isActive: template.isActive } : t));
       Alert.alert("Error", e.message || "Failed to update form status");
+    } finally {
+      stopAction(`toggle_form_${template.id}`);
     }
   };
 

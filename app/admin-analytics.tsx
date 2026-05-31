@@ -43,16 +43,14 @@ export default function AnalyticsHubScreen() {
 
   // Loading / Dropdown UI States
   const [exporting, setExporting] = useState(false);
+  const [showExportFromPicker, setShowExportFromPicker] = useState(false);
+  const [showExportToPicker, setShowExportToPicker] = useState(false);
 
+  // Stable reference for the date picker fallback to prevent Android UI reset on re-renders
+  const [fallbackDate] = useState(new Date());
 
   useEffect(() => {
     if (showExportModal) {
-      // Reset inputs
-      setExportStartDateStr("");
-      setExportEndDateStr("");
-      setExportStartDate(null);
-      setExportEndDate(null);
-
       // Fetch Trucks
       truckService.getMyTrucks().then(res => {
         if ("trucks" in res) {
@@ -121,28 +119,31 @@ export default function AnalyticsHubScreen() {
     }
   };
 
+  const fetchAnalytics = useCallback(async () => {
+    const dashboardPayload = buildDashboardPayload(
+      filters.preset,
+      filters.truckIds,
+      filters.customFrom,
+      filters.customTo
+    );
+    const profitPayload = buildPayloadFromFilters(filters);
+
+    const [dashboardData, profitData] = await Promise.all([
+      analysisService.getDashboard(dashboardPayload),
+      analysisService.getProfit({ ...profitPayload, limit: 1 }),
+    ]);
+
+    return {
+      dashboard: dashboardData,
+      profitSummary: profitData.summary,
+    };
+  }, [filters]);
+
   const { data: cachedData, isLoading, refetch } = useCachedFetch<{ dashboard: DashboardResponse; profitSummary: ProfitSummary | null } | null>(
     `ADMIN_ANALYTICS_${JSON.stringify(filters)}`,
-    async () => {
-      const dashboardPayload = buildDashboardPayload(
-        filters.preset,
-        filters.truckIds,
-        filters.customFrom,
-        filters.customTo
-      );
-      const profitPayload = buildPayloadFromFilters(filters);
-
-      const [dashboardData, profitData] = await Promise.all([
-        analysisService.getDashboard(dashboardPayload),
-        analysisService.getProfit({ ...profitPayload, limit: 1 }),
-      ]);
-
-      return {
-        dashboard: dashboardData,
-        profitSummary: profitData.summary,
-      };
-    },
-    null
+    fetchAnalytics,
+    null,
+    { alwaysFetch: true }
   );
 
   const dashboard = cachedData?.dashboard;
@@ -385,7 +386,17 @@ export default function AnalyticsHubScreen() {
           <TouchableOpacity
             activeOpacity={0.85}
             className="bg-white rounded-2xl border border-border overflow-hidden shadow-sm"
-            onPress={() => setShowExportModal(true)}
+            onPress={() => {
+              setExportStartDateStr("");
+              setExportEndDateStr("");
+              setExportStartDate(null);
+              setExportEndDate(null);
+              setExportSelectedDriverId("");
+              setExportSelectedTruckId("");
+              setExportCompanyId("");
+              setExportTags("");
+              setShowExportModal(true);
+            }}
           >
             <View className="flex-row items-center p-5 gap-4">
               <View className="w-14 h-14 rounded-2xl items-center justify-center bg-success-50">
@@ -495,66 +506,34 @@ export default function AnalyticsHubScreen() {
                 </View>
               </View>
 
+
+
               {/* Date Filters */}
               <View className="gap-2">
                 <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase">
                   2. Date Range (Optional)
                 </Text>
-                <View className="flex-row gap-3">
-                  {/* Start Date */}
-                  <View className="flex-1 flex-row items-center bg-surface border border-border rounded-xl px-4 py-1">
-                    <Ionicons name="calendar-outline" size={16} color="#64748B" />
-                    <TextInput
-                      className="flex-1 text-sm font-medium text-text-primary ml-2.5 py-3"
-                      placeholder="Start: YYYY-MM-DD"
-                      placeholderTextColor="#94A3B8"
-                      value={exportStartDateStr}
-                      onChangeText={(val) => {
-                        setExportStartDateStr(val);
-                        if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
-                          const d = new Date(val);
-                          if (!isNaN(d.getTime())) setExportStartDate(d);
-                        } else if (!val) {
-                          setExportStartDate(null);
-                        }
-                      }}
-                    />
-                  </View>
-
-                  {/* End Date */}
-                  <View className="flex-1 flex-row items-center bg-surface border border-border rounded-xl px-4 py-1">
-                    <Ionicons name="calendar-outline" size={16} color="#64748B" />
-                    <TextInput
-                      className="flex-1 text-sm font-medium text-text-primary ml-2.5 py-3"
-                      placeholder="End: YYYY-MM-DD"
-                      placeholderTextColor="#94A3B8"
-                      value={exportEndDateStr}
-                      onChangeText={(val) => {
-                        setExportEndDateStr(val);
-                        if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
-                          const d = new Date(val);
-                          if (!isNaN(d.getTime())) setExportEndDate(d);
-                        } else if (!val) {
-                          setExportEndDate(null);
-                        }
-                      }}
-                    />
-                  </View>
-                </View>
-
-                {(exportStartDateStr || exportEndDateStr || exportStartDate || exportEndDate) && (
-                  <TouchableOpacity 
-                    onPress={() => {
-                      setExportStartDateStr("");
-                      setExportEndDateStr("");
-                      setExportStartDate(null);
-                      setExportEndDate(null);
-                    }}
-                    className="self-start mt-1.5"
+                <View className="flex-row items-center gap-2">
+                  <TouchableOpacity
+                    onPress={() => setShowExportFromPicker(true)}
+                    className="flex-1 flex-row items-center bg-white rounded-xl px-3 py-2.5 border border-border"
                   >
-                    <Text className="text-danger-600 text-xs font-semibold">Clear date range</Text>
+                    <Ionicons name="calendar-outline" size={14} color="#64748B" />
+                    <Text className="ml-2 text-sm text-text-primary flex-1" numberOfLines={1}>
+                      {exportStartDate ? exportStartDate.toLocaleDateString() : "Start"}
+                    </Text>
                   </TouchableOpacity>
-                )}
+                  <Ionicons name="arrow-forward" size={14} color="#94A3B8" />
+                  <TouchableOpacity
+                    onPress={() => setShowExportToPicker(true)}
+                    className="flex-1 flex-row items-center bg-white rounded-xl px-3 py-2.5 border border-border"
+                  >
+                    <Ionicons name="calendar-outline" size={14} color="#64748B" />
+                    <Text className="ml-2 text-sm text-text-primary flex-1" numberOfLines={1}>
+                      {exportEndDate ? exportEndDate.toLocaleDateString() : "End"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               {/* Truck Selector */}
@@ -768,6 +747,33 @@ export default function AnalyticsHubScreen() {
             </ScrollView>
           </View>
         </View>
+      )}
+      {showExportFromPicker && (
+        <DateTimePicker
+          value={exportStartDate || fallbackDate}
+          mode="date"
+          display="default"
+          onChange={(event, d) => {
+            setShowExportFromPicker(false);
+            if (event.type !== "dismissed" && d) {
+              setExportStartDate(d);
+            }
+          }}
+        />
+      )}
+
+      {showExportToPicker && (
+        <DateTimePicker
+          value={exportEndDate || fallbackDate}
+          mode="date"
+          display="default"
+          onChange={(event, d) => {
+            setShowExportToPicker(false);
+            if (event.type !== "dismissed" && d) {
+              setExportEndDate(d);
+            }
+          }}
+        />
       )}
     </SafeAreaView>
   );

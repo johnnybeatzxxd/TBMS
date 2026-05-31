@@ -16,6 +16,7 @@ import { useLocalSearchParams, router } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { driverService, truckService } from "@/src/api/services";
 import { clearCacheKey } from "@/src/hooks/useCachedFetch";
+import { useActionStore } from "@/src/store";
 
 export default function ManageDriverModal() {
   const { mode, id, name: initialName, truckId: initialTruckId, username: initialUsername, password: initialPassword, licenseRenewalDate: initialLicense } = useLocalSearchParams();
@@ -32,8 +33,9 @@ export default function ManageDriverModal() {
   
   const [showLicensePicker, setShowLicensePicker] = useState(false);
 
-  const [loading, setLoading] = useState(false);
-  const [credsLoading, setCredsLoading] = useState(false);
+  const { isActionPending, startAction, stopAction } = useActionStore();
+  const loading = isActionPending("submit_driver_profile");
+  const credsLoading = isActionPending("submit_driver_credentials");
   const [showCredsSection, setShowCredsSection] = useState(false);
 
   // Credential reset fields (edit mode only)
@@ -75,7 +77,7 @@ export default function ManageDriverModal() {
       return;
     }
 
-    setLoading(true);
+    startAction("submit_driver_profile");
     try {
       if (isEdit) {
         if (!id) throw new Error("Missing driver ID for update");
@@ -116,6 +118,7 @@ export default function ManageDriverModal() {
           password,
           truckId: truckId.trim(),
           licenseRenewalDate: licenseDate ? licenseDate.toISOString().split("T")[0] : undefined,
+          licenceExpiryDate: licenseDate ? licenseDate.toISOString() : undefined,
         });
         clearCacheKey("DRIVERS");
         Alert.alert("Success", "Driver account created!", [{ text: "OK", onPress: () => router.back() }]);
@@ -124,7 +127,7 @@ export default function ManageDriverModal() {
       console.log("[ManageDriver] Profile submit error:", error.message, error);
       Alert.alert("Error", error.message || "Something went wrong");
     } finally {
-      setLoading(false);
+      stopAction("submit_driver_profile");
     }
   };
 
@@ -139,7 +142,7 @@ export default function ManageDriverModal() {
       return;
     }
 
-    setCredsLoading(true);
+    startAction("submit_driver_credentials");
     try {
       if (!id) throw new Error("Missing driver ID");
       const payload: { username?: string; password?: string } = {};
@@ -158,7 +161,7 @@ export default function ManageDriverModal() {
       console.log("[ManageDriver] Credentials reset error:", error.message, error);
       Alert.alert("Error", error.message || "Failed to reset credentials");
     } finally {
-      setCredsLoading(false);
+      stopAction("submit_driver_credentials");
     }
   };
 

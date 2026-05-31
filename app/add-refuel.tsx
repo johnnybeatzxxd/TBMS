@@ -5,6 +5,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { refuelService } from "@/src/api/services";
+import { useActionStore } from "@/src/store";
 import { ReceiptImageUploader } from "@/src/components/ReceiptImageUploader";
 import { uploadRefuelReceipt } from "@/src/utils/firebaseUpload";
 
@@ -21,7 +22,10 @@ export default function AddRefuelScreen() {
 
   const isEditMode = !!params.id;
 
-  const [loading, setLoading] = useState(false);
+  const { isActionPending, startAction, stopAction } = useActionStore();
+  const actionKey = isEditMode ? `update_refuel_${params.id}` : "submit_new_refuel";
+  const loading = isActionPending(actionKey);
+
   const [receiptPicUrls, setReceiptPicUrls] = useState<string[]>([]);
   const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
   const [hasIncompleteReceipt, setHasIncompleteReceipt] = useState(false);
@@ -51,7 +55,7 @@ export default function AddRefuelScreen() {
       return;
     }
 
-    setLoading(true);
+    startAction(actionKey);
     try {
       if (isEditMode) {
         await refuelService.updateRefuel(params.id!, {
@@ -83,7 +87,7 @@ export default function AddRefuelScreen() {
     } catch (error: any) {
       Alert.alert("Error", error.message || `Failed to ${isEditMode ? "update" : "submit"} refuel log.`);
     } finally {
-      setLoading(false);
+      stopAction(actionKey);
     }
   };
 

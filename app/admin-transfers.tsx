@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Sec
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { useAuthStore, useCacheStore } from "@/src/store";
+import { useAuthStore, useCacheStore, useActionStore } from "@/src/store";
 import { transferService, driverService } from "@/src/api/services";
 import { Transfer } from "@/src/types/transfer.types";
 import { DateFilterBar, DateFilterPreset, passesDateFilter } from "@/src/components/DateFilterBar";
@@ -28,6 +28,9 @@ const getRelativeDateLabel = (dateStr: string) => {
 
 const TransferCard = ({ tx, isManager, onApprove, onDelete, driverName }: { tx: Transfer, isManager: boolean, onApprove: (id: string)=>void, onDelete: (id: string)=>void, driverName?: string }) => {
   const [expanded, setExpanded] = useState(false);
+  const txId = tx._id || (tx as any).id;
+  const isApproving = useActionStore((state) => !!state.pendingActions[`approve_transfer_${txId}`]);
+  const isDeleting = useActionStore((state) => !!state.pendingActions[`delete_transfer_${txId}`]);
   
   const isIncrement = tx.sender === "ADMIN" || tx.sender === "manager" as any;
 
@@ -118,16 +121,18 @@ const TransferCard = ({ tx, isManager, onApprove, onDelete, driverName }: { tx: 
               <TouchableOpacity
                 className="flex-1 bg-success-500 py-2.5 rounded-xl items-center"
                 activeOpacity={0.8}
-                onPress={(e) => { e.stopPropagation(); onApprove(tx._id || (tx as any).id); }}
+                disabled={isApproving || isDeleting}
+                onPress={(e) => { e.stopPropagation(); onApprove(txId); }}
               >
-                <Text className="text-white font-bold text-sm">Approve</Text>
+                {isApproving ? <ActivityIndicator size="small" color="#fff" /> : <Text className="text-white font-bold text-sm">Approve</Text>}
               </TouchableOpacity>
               <TouchableOpacity
                 className="flex-[0.7] bg-white border border-danger-500 py-2.5 rounded-xl items-center"
                 activeOpacity={0.8}
-                onPress={(e) => { e.stopPropagation(); onDelete(tx._id || (tx as any).id); }}
+                disabled={isApproving || isDeleting}
+                onPress={(e) => { e.stopPropagation(); onDelete(txId); }}
               >
-                <Text className="text-danger-600 font-bold text-sm">Delete</Text>
+                {isDeleting ? <ActivityIndicator size="small" color="#DC2626" /> : <Text className="text-danger-600 font-bold text-sm">Delete</Text>}
               </TouchableOpacity>
             </View>
           )}
@@ -137,9 +142,10 @@ const TransferCard = ({ tx, isManager, onApprove, onDelete, driverName }: { tx: 
                <TouchableOpacity
                 className="px-4 py-2 bg-danger-50 border border-danger-200 rounded-lg items-center"
                 activeOpacity={0.8}
-                onPress={(e) => { e.stopPropagation(); onDelete(tx._id || (tx as any).id); }}
+                disabled={isDeleting}
+                onPress={(e) => { e.stopPropagation(); onDelete(txId); }}
               >
-                <Text className="text-danger-600 font-semibold text-xs">Delete Record</Text>
+                {isDeleting ? <ActivityIndicator size="small" color="#DC2626" /> : <Text className="text-danger-600 font-semibold text-xs">Delete Record</Text>}
               </TouchableOpacity>
             </View>
           )}
@@ -150,6 +156,7 @@ const TransferCard = ({ tx, isManager, onApprove, onDelete, driverName }: { tx: 
 };
 
 export default function TransfersScreen() {
+  const { startAction, stopAction } = useActionStore();
   const { user } = useAuthStore();
   const { transfers: cachedTransfers, setTransfers: setCachedTransfers } = useCacheStore();
   const [allTransfers, setAllTransfers] = useState<Transfer[]>([]);
@@ -158,7 +165,15 @@ export default function TransfersScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-  const [driverMap, setDriverMap] = useState<Record<string, string>>({});
+  const { memoryCache } = require("@/src/hooks/useCachedFetch");
+  const getInitialDriverMap = () => {
+    const map: Record<string, string> = {};
+    const cached = memoryCache["DRIVERS"]?.drivers || [];
+    cached.forEach((d: any) => { map[d.id || d._id] = d.name; });
+    return map;
+  };
+
+  const [driverMap, setDriverMap] = useState<Record<string, string>>(getInitialDriverMap());
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = async () => {
@@ -238,6 +253,10 @@ export default function TransfersScreen() {
   };
 
   const handleApprove = async (id: string) => {
+    const actionKey = `approve_transfer_${id}`;
+    if (useActionStore.getState().isActionPending(actionKey)) return;
+
+    startAction(actionKey);
     try {
       const res = await transferService.approveTransfer(id);
       if (res.updatedTransfer) {
@@ -247,6 +266,8 @@ export default function TransfersScreen() {
       }
     } catch (error: any) {
       Alert.alert("Error", error.message || "Failed to approve transfer.");
+    } finally {
+      stopAction(actionKey);
     }
   };
 
@@ -254,11 +275,17 @@ export default function TransfersScreen() {
     Alert.alert("Confirm Delete", "Are you sure you want to delete this transfer? This action is irreversible.", [
       { text: "Cancel", style: "cancel" },
       { text: "Delete", style: "destructive", onPress: async () => {
+         const actionKey = `delete_transfer_${id}`;
+         if (useActionStore.getState().isActionPending(actionKey)) return;
+
+         startAction(actionKey);
          try {
            await transferService.deleteTransfer(id);
            setDisplayedTransfers(prev => prev.filter(t => (t._id || (t as any).id) !== id));
          } catch (error: any) {
            Alert.alert("Error", error.message || "Failed to delete transfer.");
+         } finally {
+           stopAction(actionKey);
          }
       }}
     ]);

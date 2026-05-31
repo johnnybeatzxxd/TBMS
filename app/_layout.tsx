@@ -78,6 +78,7 @@ export default function RootLayout() {
         <Stack.Screen name="admin-displays" options={{ headerShown: false }} />
         <Stack.Screen name="admin-manage" options={{ headerShown: false }} />
         <Stack.Screen name="admin-forms" options={{ headerShown: false }} />
+        <Stack.Screen name="admin-commitments" options={{ headerShown: false }} />
         <Stack.Screen name="drivers" options={{ headerShown: false }} />
         <Stack.Screen name="driver-detail" options={{ headerShown: false }} />
         <Stack.Screen name="trucks" options={{ headerShown: false }} />

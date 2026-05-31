@@ -12,8 +12,8 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { useAuthStore } from "@/src/store";
 import { formService, expenseService } from "@/src/api/services";
 import { ReceiptImageUploader } from "@/src/components/ReceiptImageUploader";
-import { FormTemplate, SubmitFormPayload } from "@/src/types/form.types";
 import { uploadExpenseReceipt } from "@/src/utils/firebaseUpload";
+import { useActionStore } from "@/src/store";
 
 /** Built-in frontend form — submits to POST /expences/expence (not service-request). */
 export const OTHER_SERVICE_ID = "__other__";
@@ -79,7 +79,8 @@ export default function AddRequestScreen() {
   const isEditMode = !!params.id;
 
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const { isActionPending, startAction, stopAction } = useActionStore();
+  const submitting = isActionPending("submit_request");
 
   // List of service types (id + name only)
   const [serviceTypes, setServiceTypes] = useState<{ id: string; name: string }[]>([]);
@@ -228,7 +229,7 @@ export default function AddRequestScreen() {
         );
       }
 
-      setSubmitting(true);
+      startAction("submit_request");
       try {
         await expenseService.addOtherExpense({
           amount: numAmount,
@@ -241,7 +242,7 @@ export default function AddRequestScreen() {
       } catch (e: any) {
         Alert.alert("Error", e.message || "Failed to submit expense.");
       } finally {
-        setSubmitting(false);
+        stopAction("submit_request");
       }
       return;
     }
@@ -265,7 +266,7 @@ export default function AddRequestScreen() {
       }
     }
 
-    setSubmitting(true);
+    startAction("submit_request");
     try {
       if (isEditMode && params.id) {
         await formService.updateSubmission(params.id, {
@@ -300,7 +301,7 @@ export default function AddRequestScreen() {
     } catch (e: any) {
       Alert.alert("Error", e.message || "Failed to submit request.");
     } finally {
-      setSubmitting(false);
+      stopAction("submit_request");
     }
   };
 

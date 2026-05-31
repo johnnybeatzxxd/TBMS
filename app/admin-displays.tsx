@@ -5,15 +5,17 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { displayService, driverService } from "@/src/api/services";
 import { RollingDisplay } from "@/src/types/display.types";
+import { useActionStore } from "@/src/store";
 
 const DisplayCard = ({ item, onDelete, onToggle, driverMap }: { item: RollingDisplay, onDelete: (id: string) => void, onToggle: (id: string) => void, driverMap: Record<string, string> }) => {
-  const [expanded, setExpanded] = useState(false);
-  const [isToggling, setIsToggling] = useState(false);
+  const { isActionPending, startAction, stopAction } = useActionStore();
+  const isToggling = isActionPending(`toggle_display_${item._id || item.id}`);
+  const isDeleting = isActionPending(`delete_display_${item._id || item.id}`);
 
   const handleToggle = async () => {
-    setIsToggling(true);
+    startAction(`toggle_display_${item._id || item.id}`);
     await onToggle(item._id || item.id || "");
-    setIsToggling(false);
+    stopAction(`toggle_display_${item._id || item.id}`);
   };
 
   return (
@@ -70,11 +72,16 @@ const DisplayCard = ({ item, onDelete, onToggle, driverMap }: { item: RollingDis
           </View>
           <View className="flex-row justify-end mt-2">
             <TouchableOpacity
-              className="px-4 py-2 bg-danger-50 border border-danger-200 rounded-lg items-center"
+              className={`px-4 py-2 rounded-lg items-center ${isDeleting ? "bg-danger-100 border-danger-300" : "bg-danger-50 border border-danger-200"}`}
               activeOpacity={0.8}
+              disabled={isDeleting}
               onPress={(e) => { e.stopPropagation(); onDelete(item._id || item.id || ""); }}
             >
-              <Text className="text-danger-600 font-semibold text-xs">Delete Banner</Text>
+              {isDeleting ? (
+                <ActivityIndicator size="small" color="#DC2626" />
+              ) : (
+                <Text className="text-danger-600 font-semibold text-xs">Delete Banner</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -126,15 +133,20 @@ export default function AdminDisplaysScreen() {
     }
   };
 
+  const { startAction, stopAction } = useActionStore();
+
   const handleDelete = (id: string) => {
     Alert.alert("Delete Banner", "Are you sure you want to permanently delete this display message?", [
       { text: "Cancel", style: "cancel" },
       { text: "Delete", style: "destructive", onPress: async () => {
+        startAction(`delete_display_${id}`);
         try {
           await displayService.deleteDisplay(id);
           setDisplays(prev => prev.filter(d => (d._id || d.id) !== id));
         } catch (e: any) {
           Alert.alert("Error", e.message || "Failed to delete");
+        } finally {
+          stopAction(`delete_display_${id}`);
         }
       }}
     ]);

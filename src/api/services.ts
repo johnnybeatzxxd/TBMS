@@ -22,3 +22,4 @@ export { refuelService } from "./refuel.service";
 export { reminderService } from "./reminder.service";
 export { displayService } from "./display.service";
 export { formService } from "./form.service";
+export { financialCommitmentService } from "./financialCommitment.service";

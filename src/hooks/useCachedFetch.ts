@@ -21,32 +21,46 @@ export function clearCachePrefix(prefix: string) {
   });
 }
 
-export function useCachedFetch<T>(key: string, fetcher: () => Promise<T>, fallbackData: T) {
+export function useCachedFetch<T>(
+  key: string,
+  fetcher: () => Promise<T>,
+  fallbackData: T,
+  options?: { alwaysFetch?: boolean }
+) {
   // 1. Initialize immediately with memory cache if available, protecting layout shifts.
   const [data, setData] = useState<T>(() => {
+    if (options?.alwaysFetch) return fallbackData;
     if (memoryCache[key]) return memoryCache[key];
     return fallbackData;
   });
   
   // Only officially "load" if we have absolutely no memory cache
-  const [isLoading, setIsLoading] = useState(!memoryCache[key]);
+  const [isLoading, setIsLoading] = useState(() => {
+    if (options?.alwaysFetch) return true;
+    return !memoryCache[key];
+  });
   const [error, setError] = useState<Error | null>(null);
 
   // If the key changes, we must sync the state immediately to prevent stale data leaking from a different key
   const [prevKey, setPrevKey] = useState(key);
   if (key !== prevKey) {
     setPrevKey(key);
-    setData(memoryCache[key] !== undefined ? memoryCache[key] : fallbackData);
-    setIsLoading(!memoryCache[key]);
+    if (options?.alwaysFetch) {
+      setData(fallbackData);
+      setIsLoading(true);
+    } else {
+      setData(memoryCache[key] !== undefined ? memoryCache[key] : fallbackData);
+      setIsLoading(!memoryCache[key]);
+    }
   }
 
   const fetchData = useCallback(async (silent = true, force = false) => {
-    if (!silent && !memoryCache[key]) {
+    if (!silent && (!memoryCache[key] || options?.alwaysFetch)) {
        setIsLoading(true);
     }
     
     // 2. Hydrate from SecureStore immediately if memory is empty
-    if (!memoryCache[key]) {
+    if (!options?.alwaysFetch && !memoryCache[key]) {
       try {
         const stored = await SecureStore.getItemAsync(`cache_${key}`);
         if (stored) {
@@ -60,9 +74,9 @@ export function useCachedFetch<T>(key: string, fetcher: () => Promise<T>, fallba
       }
     }
 
-    // Optimization: Skip network fetch if it was fetched in the last 15 seconds (unless forced)
+    // Optimization: Skip network fetch if it was fetched in the last 15 seconds (unless forced or alwaysFetch)
     const lastFetch = cacheTimestamps[key] || 0;
-    if (!force && memoryCache[key] && (Date.now() - lastFetch < 15000)) {
+    if (!options?.alwaysFetch && !force && memoryCache[key] && (Date.now() - lastFetch < 15000)) {
       setIsLoading(false);
       return;
     }
@@ -70,15 +84,21 @@ export function useCachedFetch<T>(key: string, fetcher: () => Promise<T>, fallba
     // 3. Stale-While-Revalidate network fetch
     try {
       const result = await fetcher();
-      cacheTimestamps[key] = Date.now();
+      if (!options?.alwaysFetch) {
+        cacheTimestamps[key] = Date.now();
+      }
       
       // Prevent useless UI rerenders if data is literally equal (simple serialization check for simplicity)
-      if (JSON.stringify(memoryCache[key]) !== JSON.stringify(result)) {
-        memoryCache[key] = result;
+      if (options?.alwaysFetch || JSON.stringify(memoryCache[key]) !== JSON.stringify(result)) {
+        if (!options?.alwaysFetch) {
+          memoryCache[key] = result;
+        }
         setData(result);
         
         // Background write 
-        SecureStore.setItemAsync(`cache_${key}`, JSON.stringify(result)).catch(() => {});
+        if (!options?.alwaysFetch) {
+          SecureStore.setItemAsync(`cache_${key}`, JSON.stringify(result)).catch(() => {});
+        }
       }
       
       setError(null);

@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { useAuthStore } from "@/src/store";
+import { useAuthStore, useActionStore } from "@/src/store";
 import { truckService, companyService } from "@/src/api/services";
 import { TripReceiptViewer } from "@/src/components/TripReceiptViewer";
 import { Trip, Truck } from "@/src/types";
@@ -355,6 +355,7 @@ export default function CompanyTripsScreen() {
   const companyId = paramFirst(params.companyId);
   const name = paramFirst(params.name);
   const { user } = useAuthStore();
+  const { isActionPending, startAction, stopAction } = useActionStore();
   const isManager = user?.role === "admin" || (user?.role as string) === "manager";
 
   const companyAssignedTrucks = useMemo(
@@ -674,12 +675,15 @@ export default function CompanyTripsScreen() {
           text: "Claim",
           onPress: () => {
             void (async () => {
+              startAction("claim_company_trips");
               try {
                 await companyService.claimCompanyTrips(companyId, tripsPayload);
                 await fetchFirstPage();
                 Alert.alert("Success", `${tripsPayload.length} trip(s) claimed.`);
               } catch (err: any) {
                 Alert.alert("Error", err?.message || "Claim failed");
+              } finally {
+                stopAction("claim_company_trips");
               }
             })();
           },
@@ -939,11 +943,16 @@ export default function CompanyTripsScreen() {
       {!loadingInitial && !loadError && (
         <TouchableOpacity
           onPress={handleClaimSelected}
+          disabled={isActionPending("claim_company_trips")}
           activeOpacity={0.88}
-          className="absolute bottom-6 right-5 flex-row items-center gap-2 px-5 py-3.5 rounded-full bg-success-600 shadow-lg border border-success-700"
+          className={`absolute bottom-6 right-5 flex-row items-center gap-2 px-5 py-3.5 rounded-full shadow-lg border ${isActionPending("claim_company_trips") ? "bg-success-400 border-success-500" : "bg-success-600 border-success-700"}`}
           style={{ elevation: 10 }}
         >
-          <Ionicons name="checkmark-circle" size={22} color="#fff" />
+          {isActionPending("claim_company_trips") ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Ionicons name="checkmark-circle" size={22} color="#fff" />
+          )}
           <Text className="text-white font-bold text-base">Claim</Text>
         </TouchableOpacity>
       )}

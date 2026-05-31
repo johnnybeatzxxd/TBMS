@@ -8,6 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { formService, truckService } from "@/src/api/services";
 import { FormField, FieldType, CreateFormTemplatePayload } from "@/src/types/form.types";
+import { useActionStore } from "@/src/store";
 
 const FIELD_TYPES: { value: FieldType; label: string; icon: string }[] = [
   { value: "text", label: "Text", icon: "text-outline" },
@@ -347,13 +348,15 @@ export default function AddFormTemplateScreen() {
   const isEditMode = !!params.id;
 
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const { isActionPending, startAction, stopAction } = useActionStore();
+  const saving = isActionPending("submit_form_template");
 
   // Form metadata
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [requiresApproval, setRequiresApproval] = useState(true);
+  const [isActive, setIsActive] = useState(true);
   const [showCategoryMenu, setShowCategoryMenu] = useState(false);
 
   // Custom fields
@@ -383,6 +386,7 @@ export default function AddFormTemplateScreen() {
             setDescription(template.description || "");
             setRequiresApproval(template.requiresApproval);
             setFields(template.fields);
+            setIsActive(template.isActive === true || (template.isActive as any) === "true");
             if (template.allowedTruckIds) {
               setSelectedTruckIds(template.allowedTruckIds);
             }
@@ -431,7 +435,7 @@ export default function AddFormTemplateScreen() {
       }
     }
 
-    setSaving(true);
+    startAction("submit_form_template");
     try {
       const payload: CreateFormTemplatePayload = {
         name: name.trim(),
@@ -440,6 +444,7 @@ export default function AddFormTemplateScreen() {
         requiresApproval,
         fields,
         allowedTruckIds: selectedTruckIds,
+        isActive,
       };
 
       if (isEditMode && params.id) {
@@ -453,7 +458,7 @@ export default function AddFormTemplateScreen() {
     } catch (e: any) {
       Alert.alert("Error", e.message || "Failed to save template.");
     } finally {
-      setSaving(false);
+      stopAction("submit_form_template");
     }
   };
 
@@ -587,6 +592,27 @@ export default function AddFormTemplateScreen() {
                   onValueChange={setRequiresApproval}
                   trackColor={{ false: "#DCFCE7", true: "#FEF3C7" }}
                   thumbColor={requiresApproval ? "#F59E0B" : "#16A34A"}
+                />
+              </View>
+
+              {/* Form Active Toggle */}
+              <View className="flex-row items-center justify-between bg-white border border-border rounded-xl p-4 shadow-sm">
+                <View className="flex-row items-center gap-2 flex-1 pr-3">
+                  <Ionicons name="eye-outline" size={20} color={isActive ? "#6366F1" : "#94A3B8"} />
+                  <View className="flex-1">
+                    <Text className="text-text-primary font-bold text-sm">Form Status</Text>
+                    <Text className="text-text-secondary text-xs mt-0.5">
+                      {isActive
+                        ? "Enabled - drivers can fill and submit this form"
+                        : "Disabled - drivers will not see this form"}
+                    </Text>
+                  </View>
+                </View>
+                <Switch
+                  value={isActive}
+                  onValueChange={setIsActive}
+                  trackColor={{ false: "#E2E8F0", true: "#C7D2FE" }}
+                  thumbColor={isActive ? "#6366F1" : "#94A3B8"}
                 />
               </View>
 

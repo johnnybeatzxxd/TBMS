@@ -13,11 +13,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { companyService } from "@/src/api/services";
+import { useActionStore } from "@/src/store";
 
 export default function AddCompanyModal() {
   const [name, setName] = useState("");
   const [balance, setBalance] = useState("");
-  const [loading, setLoading] = useState(false);
+  const { isActionPending, startAction, stopAction } = useActionStore();
+  const loading = isActionPending("submit_company");
 
   const handleSubmit = async () => {
     if (!name.trim()) {
@@ -32,7 +34,7 @@ export default function AddCompanyModal() {
       return;
     }
 
-    setLoading(true);
+    startAction("submit_company");
     try {
       await companyService.addCompany({
         name: name.trim(),
@@ -42,7 +44,7 @@ export default function AddCompanyModal() {
     } catch (error: any) {
       Alert.alert("Error", error.message || "Failed to add company");
     } finally {
-      setLoading(false);
+      stopAction("submit_company");
     }
   };
 

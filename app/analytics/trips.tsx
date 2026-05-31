@@ -35,17 +35,20 @@ export default function TripsAnalysisScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [filters, setFilters] = useState<AnalysisFilterState>(() => getInitialFiltersFromParams(params, "day"));
 
+  const fetchTrips = useCallback(async () => {
+    const payload = buildPayloadFromFilters(filters, { page: 1, limit: ANALYSIS_PAGE_SIZE });
+    const [tripData, routeData] = await Promise.all([
+      analysisService.getTripsSummary(payload),
+      analysisService.getRoutes(buildPayloadFromFilters(filters)),
+    ]);
+    return { tripData, routeData };
+  }, [filters]);
+
   const { data: cachedData, isLoading, refetch } = useCachedFetch<{ tripData: TripsSummaryResponse; routeData: any } | null>(
     `TRIP_ANALYSIS_${JSON.stringify(filters)}`,
-    async () => {
-      const payload = buildPayloadFromFilters(filters, { page: 1, limit: ANALYSIS_PAGE_SIZE });
-      const [tripData, routeData] = await Promise.all([
-        analysisService.getTripsSummary(payload),
-        analysisService.getRoutes(buildPayloadFromFilters(filters)),
-      ]);
-      return { tripData, routeData };
-    },
-    null
+    fetchTrips,
+    null,
+    { alwaysFetch: true }
   );
 
   useEffect(() => {

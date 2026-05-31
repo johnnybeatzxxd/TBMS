@@ -13,7 +13,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { Company, Truck, TruckCompanyBalance } from "@/src/types";
 import { companyService, truckService } from "@/src/api/services";
-import { useAuthStore } from "@/src/store";
+import { useAuthStore, useActionStore } from "@/src/store";
 
 export default function CompanyDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string; name?: string }>();
@@ -21,7 +21,7 @@ export default function CompanyDetailsScreen() {
   const [company, setCompany] = useState<Company | null>(null);
   const [allTrucks, setAllTrucks] = useState<Truck[]>([]);
   const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const { isActionPending, startAction, stopAction } = useActionStore();
   const [showTruckPicker, setShowTruckPicker] = useState(false);
   const [financialTruckId, setFinancialTruckId] = useState<string>("");
   const [showFinancialTruckMenu, setShowFinancialTruckMenu] = useState(false);
@@ -129,7 +129,7 @@ export default function CompanyDetailsScreen() {
 
   const handleAddTruck = async (truckId: string) => {
     if (!id) return;
-    setActionLoading(truckId);
+    startAction(`assign_truck_${truckId}`);
     try {
       await companyService.addTruckToCompany(id, truckId);
       await fetchData();
@@ -137,7 +137,7 @@ export default function CompanyDetailsScreen() {
     } catch (error: any) {
       Alert.alert("Error", error.message || "Failed to assign truck");
     } finally {
-      setActionLoading(null);
+      stopAction(`assign_truck_${truckId}`);
     }
   };
 
@@ -152,14 +152,14 @@ export default function CompanyDetailsScreen() {
           text: "Remove",
           style: "destructive",
           onPress: async () => {
-            setActionLoading(truck.id);
+            startAction(`remove_truck_${truck.id}`);
             try {
               await companyService.removeTruckFromCompany(id, truck.id);
               await fetchData();
             } catch (error: any) {
               Alert.alert("Error", error.message || "Failed to remove truck");
             } finally {
-              setActionLoading(null);
+              stopAction(`remove_truck_${truck.id}`);
             }
           },
         },
@@ -416,7 +416,7 @@ export default function CompanyDetailsScreen() {
                     <TouchableOpacity
                       key={truck.id}
                       onPress={() => handleAddTruck(truck.id)}
-                      disabled={actionLoading === truck.id}
+                      disabled={isActionPending(`assign_truck_${truck.id}`)}
                       className="flex-row items-center bg-white rounded-xl px-4 py-3 border border-border"
                       activeOpacity={0.8}
                     >
@@ -425,7 +425,7 @@ export default function CompanyDetailsScreen() {
                         {truck.plateNumber}
                         {truck.vinNumber ? ` — ${truck.vinNumber}` : ""}
                       </Text>
-                      {actionLoading === truck.id ? (
+                      {isActionPending(`assign_truck_${truck.id}`) ? (
                         <ActivityIndicator size="small" color="#0EA5E9" />
                       ) : (
                         <Ionicons name="add-circle" size={22} color="#0EA5E9" />
@@ -463,10 +463,10 @@ export default function CompanyDetailsScreen() {
                   </View>
                   <TouchableOpacity
                     onPress={() => handleRemoveTruck(truck)}
-                    disabled={actionLoading === truck.id}
+                    disabled={isActionPending(`remove_truck_${truck.id}`)}
                     className="w-9 h-9 items-center justify-center rounded-full bg-red-50 border border-red-100"
                   >
-                    {actionLoading === truck.id ? (
+                    {isActionPending(`remove_truck_${truck.id}`) ? (
                       <ActivityIndicator size="small" color="#DC2626" />
                     ) : (
                       <Ionicons name="remove-circle-outline" size={18} color="#DC2626" />

@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { useAuthStore, useCacheStore } from "@/src/store";
+import { useAuthStore, useCacheStore, useActionStore } from "@/src/store";
 import { useCachedFetch } from "@/src/hooks/useCachedFetch";
 import { DateFilterBar, DateFilterPreset } from "@/src/components/DateFilterBar";
 import { tripService, truckService } from "@/src/api/services";
@@ -51,15 +51,16 @@ const getGroupedTrips = (trips: Trip[]) => {
 };
 
 const TripCard = ({ trip, isManager, onRefresh, onUpdateTrip, onDelete, activePaymentFilter }: { trip: Trip, isManager: boolean, onRefresh: () => void, onUpdateTrip?: (updatedTrip: Trip) => void, onDelete?: (tripId: string) => void, activePaymentFilter: "CASH" | "CREDIT" }) => {
+  const { startAction, stopAction, isActionPending } = useActionStore();
   const [expanded, setExpanded] = useState(false);
-  const [approving, setApproving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const approving = isActionPending(`approve_trip_${trip.id}`);
+  const deleting = isActionPending(`delete_trip_${trip.id}`);
 
   // Determine the trip type: use companyId presence or fall back to the active filter
   const tripPaymentType = trip.companyId ? "CREDIT" : (trip.paymentMethod || activePaymentFilter);
 
   const handleApprove = async () => {
-    setApproving(true);
+    startAction(`approve_trip_${trip.id}`);
     try {
       const res = await tripService.approveTrip(trip.id, tripPaymentType as "CASH" | "CREDIT");
       Alert.alert("Success", res.message || "Trip approved successfully!");
@@ -71,12 +72,12 @@ const TripCard = ({ trip, isManager, onRefresh, onUpdateTrip, onDelete, activePa
     } catch (err: any) {
       Alert.alert("Error", err.message || "Approval failed.");
     } finally {
-      setApproving(false);
+      stopAction(`approve_trip_${trip.id}`);
     }
   };
 
   const handleDelete = async () => {
-    setDeleting(true);
+    startAction(`delete_trip_${trip.id}`);
     try {
       const res = await tripService.deleteTrip(trip.id, tripPaymentType as "CASH" | "CREDIT");
       Alert.alert("Deleted", res.message || "Trip deleted successfully.");
@@ -84,7 +85,7 @@ const TripCard = ({ trip, isManager, onRefresh, onUpdateTrip, onDelete, activePa
     } catch (err: any) {
       Alert.alert("Error", err.message || "Failed to delete trip.");
     } finally {
-      setDeleting(false);
+      stopAction(`delete_trip_${trip.id}`);
     }
   };
 

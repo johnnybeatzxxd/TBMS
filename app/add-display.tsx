@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { displayService, driverService } from "@/src/api/services";
+import { useActionStore } from "@/src/store";
 
 export default function AddDisplayModal() {
   const [displayMessage, setDisplayMessage] = useState("");
@@ -30,7 +31,8 @@ export default function AddDisplayModal() {
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
 
-  const [loading, setLoading] = useState(false);
+  const { isActionPending, startAction, stopAction } = useActionStore();
+  const loading = isActionPending("submit_display");
 
   // Driver Association
   const [drivers, setDrivers] = useState<{ id: string; name: string }[]>([]);
@@ -55,7 +57,7 @@ export default function AddDisplayModal() {
     if (!displayMessage.trim()) return Alert.alert("Validation", "Display message required.");
     if (displayMessage.length > 256) return Alert.alert("Validation", "Message cannot exceed 256 characters.");
 
-    setLoading(true);
+    startAction("submit_display");
     try {
       await displayService.addDisplay({
         displayMessage: displayMessage.trim(),
@@ -68,7 +70,7 @@ export default function AddDisplayModal() {
     } catch (e: any) {
       Alert.alert("Error", e.message || "Failed to create display");
     } finally {
-      setLoading(false);
+      stopAction("submit_display");
     }
   };
 

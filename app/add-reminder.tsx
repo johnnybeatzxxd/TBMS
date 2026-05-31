@@ -15,6 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { reminderService, driverService } from "@/src/api/services";
+import { useActionStore } from "@/src/store";
 
 export default function AddReminderModal() {
   const [reminderName, setReminderName] = useState("");
@@ -29,7 +30,8 @@ export default function AddReminderModal() {
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showDeadlinePicker, setShowDeadlinePicker] = useState(false);
 
-  const [loading, setLoading] = useState(false);
+  const { isActionPending, startAction, stopAction } = useActionStore();
+  const loading = isActionPending("submit_reminder");
 
   const [drivers, setDrivers] = useState<{ id: string; name: string }[]>([]);
   const [showDriverMenu, setShowDriverMenu] = useState(false);
@@ -53,7 +55,7 @@ export default function AddReminderModal() {
     if (!reminderName.trim()) return Alert.alert("Validation", "Reminder title required.");
     if (!reminderMessage.trim()) return Alert.alert("Validation", "Reminder message required.");
 
-    setLoading(true);
+    startAction("submit_reminder");
     try {
       await reminderService.addReminder({
         reminderName,
@@ -68,7 +70,7 @@ export default function AddReminderModal() {
     } catch (e: any) {
       Alert.alert("Error", e.message || "Failed to create reminder");
     } finally {
-      setLoading(false);
+      stopAction("submit_reminder");
     }
   };
 

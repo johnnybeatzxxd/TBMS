@@ -1,6 +1,6 @@
 import { expenseService, formService, truckService } from "@/src/api/services";
 import { DateFilterPreset } from "@/src/components/DateFilterBar";
-import { useAuthStore, useCacheStore } from "@/src/store";
+import { useAuthStore, useCacheStore, useActionStore } from "@/src/store";
 import { ReceiptPhotosRow } from "@/src/components/TripReceiptViewer";
 import { FormSubmission } from "@/src/types/form.types";
 import {
@@ -81,6 +81,7 @@ const RequestCard = ({ req, isManager, isDriver, onStatusUpdate }: { req: FormSu
   const [expanded, setExpanded] = useState(false);
   const displayName = getRequestDisplayName(req);
   const imageUrls = getRequestImageUrls(req);
+  const isUpdating = useActionStore((state) => !!state.pendingActions[`update_request_${req.id}`]);
 
   // Filter out empty values and render dynamic fields (skip raw image URLs — shown via viewer)
   const filledValues = Object.entries(req.values || {}).filter(
@@ -183,22 +184,24 @@ const RequestCard = ({ req, isManager, isDriver, onStatusUpdate }: { req: FormSu
                   <TouchableOpacity
                     className="flex-1 bg-primary py-2.5 rounded-xl items-center"
                     activeOpacity={0.8}
+                    disabled={isUpdating}
                     onPress={(e) => {
                       e.stopPropagation();
                       onStatusUpdate(req.id, "PROCEED");
                     }}
                   >
-                    <Text className="text-white font-bold text-sm">Proceed</Text>
+                    {isUpdating ? <ActivityIndicator size="small" color="#fff" /> : <Text className="text-white font-bold text-sm">Proceed</Text>}
                   </TouchableOpacity>
                   <TouchableOpacity
                     className="flex-[0.7] bg-white border border-danger-500 py-2.5 rounded-xl items-center"
                     activeOpacity={0.8}
+                    disabled={isUpdating}
                     onPress={(e) => {
                       e.stopPropagation();
                       onStatusUpdate(req.id, "DECLINED");
                     }}
                   >
-                    <Text className="text-danger-600 font-bold text-sm">Decline</Text>
+                    {isUpdating ? <ActivityIndicator size="small" color="#DC2626" /> : <Text className="text-danger-600 font-bold text-sm">Decline</Text>}
                   </TouchableOpacity>
                 </>
               ) : (
@@ -207,22 +210,24 @@ const RequestCard = ({ req, isManager, isDriver, onStatusUpdate }: { req: FormSu
                   <TouchableOpacity
                     className="flex-1 bg-success-500 py-2.5 rounded-xl items-center"
                     activeOpacity={0.8}
+                    disabled={isUpdating}
                     onPress={(e) => {
                       e.stopPropagation();
                       onStatusUpdate(req.id, "APPROVED");
                     }}
                   >
-                    <Text className="text-white font-bold text-sm">Approve</Text>
+                    {isUpdating ? <ActivityIndicator size="small" color="#fff" /> : <Text className="text-white font-bold text-sm">Approve</Text>}
                   </TouchableOpacity>
                   <TouchableOpacity
                     className="flex-[0.7] bg-white border border-danger-500 py-2.5 rounded-xl items-center"
                     activeOpacity={0.8}
+                    disabled={isUpdating}
                     onPress={(e) => {
                       e.stopPropagation();
                       onStatusUpdate(req.id, "DECLINED");
                     }}
                   >
-                    <Text className="text-danger-600 font-bold text-sm">Decline</Text>
+                    {isUpdating ? <ActivityIndicator size="small" color="#DC2626" /> : <Text className="text-danger-600 font-bold text-sm">Decline</Text>}
                   </TouchableOpacity>
                 </>
               )}
@@ -247,12 +252,13 @@ const RequestCard = ({ req, isManager, isDriver, onStatusUpdate }: { req: FormSu
                 <TouchableOpacity
                   className="flex-1 bg-indigo-500 py-2.5 rounded-xl items-center"
                   activeOpacity={0.8}
+                  disabled={isUpdating}
                   onPress={(e) => {
                     e.stopPropagation();
                     onStatusUpdate(req.id, "COMPLETED");
                   }}
                 >
-                  <Text className="text-white font-bold text-sm">Mark Completed</Text>
+                  {isUpdating ? <ActivityIndicator size="small" color="#fff" /> : <Text className="text-white font-bold text-sm">Mark Completed</Text>}
                 </TouchableOpacity>
               )}
             </View>
@@ -264,12 +270,13 @@ const RequestCard = ({ req, isManager, isDriver, onStatusUpdate }: { req: FormSu
               <TouchableOpacity
                 className="bg-success-500 py-2.5 rounded-xl items-center"
                 activeOpacity={0.8}
+                disabled={isUpdating}
                 onPress={(e) => {
                   e.stopPropagation();
                   onStatusUpdate(req.id, "APPROVED");
                 }}
               >
-                <Text className="text-white font-bold text-sm">Approve</Text>
+                {isUpdating ? <ActivityIndicator size="small" color="#fff" /> : <Text className="text-white font-bold text-sm">Approve</Text>}
               </TouchableOpacity>
             </View>
           )}
@@ -285,6 +292,7 @@ const RequestCard = ({ req, isManager, isDriver, onStatusUpdate }: { req: FormSu
 };
 
 export default function RequestsScreen() {
+  const { startAction, stopAction } = useActionStore();
   const { user } = useAuthStore();
   const isManager = user?.role === "manager" || user?.role === "admin";
   const { requests: cachedRequests, setRequests: setCachedRequests } = useCacheStore();
@@ -292,7 +300,11 @@ export default function RequestsScreen() {
   const [loading, setLoading] = useState(cachedRequests.length === 0);
   const [refreshing, setRefreshing] = useState(false);
   const [requests, setRequests] = useState<FormSubmission[]>(cachedRequests);
-  const [trucks, setTrucks] = useState<any[]>([{ id: "all", plateNumber: "All Trucks" }]);
+  const cachedTrucks = (user?.profile?.trucks || []).map((t: any) => ({
+    id: t.id || t._id,
+    plateNumber: t.plateNumber,
+  }));
+  const [trucks, setTrucks] = useState<any[]>([{ id: "all", plateNumber: "All Trucks" }, ...cachedTrucks]);
   const [selectedTruck, setSelectedTruck] = useState<any>({ id: "all", plateNumber: "All Trucks" });
   const [showTruckMenu, setShowTruckMenu] = useState(false);
 
@@ -416,7 +428,7 @@ export default function RequestsScreen() {
         return s;
       });
 
-      const seenIds = new Set(processed.map((s) => s.id));
+      const seenIds = new Set(processed.map((s: FormSubmission) => s.id));
       const expenseRows: FormSubmission[] = (expensesRes?.expenses || [])
         .filter((e: { serviceRequestId?: string | null; id: string }) => {
           const srId = e.serviceRequestId;
@@ -485,7 +497,10 @@ export default function RequestsScreen() {
   const isDriver = user?.role === "driver";
 
   const handleStatusUpdate = async (id: string, action: string) => {
-    setRequests(prev => prev.map(r => r.id === id ? { ...r, status: action as any } : r));
+    const actionKey = `update_request_${id}`;
+    if (useActionStore.getState().isActionPending(actionKey)) return;
+
+    startAction(actionKey);
     try {
       switch (action) {
         case "PROCEED":
@@ -502,9 +517,12 @@ export default function RequestsScreen() {
           await formService.markDeclined(id);
           break;
       }
+      setRequests(prev => prev.map(r => r.id === id ? { ...r, status: action as any } : r));
     } catch (e: any) {
       console.error("Failed to update status", e);
       loadRequests();
+    } finally {
+      stopAction(actionKey);
     }
   };
 

@@ -8,6 +8,7 @@ export interface Driver {
   password?: string;
   accountActive: boolean;
   licenseRenewalDate?: string;
+  licenceExpiryDate?: string;
   oilChangeDate?: string;
   balance?: number;
   approvedBalance?: number;

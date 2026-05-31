@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Company } from "@/src/types";
 import { companyService } from "@/src/api/services";
+import { useActionStore } from "@/src/store";
 
 type CompanyPayment = {
   id: string;
@@ -44,7 +45,8 @@ export default function CompanyPaymentsScreen() {
   const { companyId, name } = useLocalSearchParams<{ companyId: string; name?: string }>();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const { isActionPending, startAction, stopAction } = useActionStore();
+  const saving = isActionPending("save_payment");
   const [company, setCompany] = useState<Company | null>(null);
   const [payments, setPayments] = useState<CompanyPayment[]>([]);
   const [showFormModal, setShowFormModal] = useState(false);
@@ -115,7 +117,7 @@ export default function CompanyPaymentsScreen() {
       return;
     }
 
-    setSaving(true);
+    startAction("save_payment");
     try {
       const result: any = await companyService.registerPayment({
         companyId,
@@ -153,7 +155,7 @@ export default function CompanyPaymentsScreen() {
     } catch (error: any) {
       Alert.alert("Error", error.message || "Failed to register payment.");
     } finally {
-      setSaving(false);
+      stopAction("save_payment");
     }
   };
 

@@ -8,6 +8,7 @@ export * from "./company.types";
 export * from "./refuel.types";
 export * from "./reminder.types";
 export * from "./display.types";
+export * from "./financialCommitment.types";
 
 // Generic API response wrapper
 export interface ApiResponse<T> {

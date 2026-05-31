@@ -15,7 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { transferService, driverService } from "@/src/api/services";
-import { useAuthStore } from "@/src/store";
+import { useAuthStore, useActionStore } from "@/src/store";
 
 export default function AddTransferModal() {
   const [driverId, setDriverId] = useState("");
@@ -27,7 +27,8 @@ export default function AddTransferModal() {
   const [date, setDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const [loading, setLoading] = useState(false);
+  const { isActionPending, startAction, stopAction } = useActionStore();
+  const loading = isActionPending("submit_transfer");
 
   // State for Drivers dropdown
   const [drivers, setDrivers] = useState<{ id: string; name: string }[]>([]);
@@ -71,7 +72,7 @@ export default function AddTransferModal() {
       return;
     }
 
-    setLoading(true);
+    startAction("submit_transfer");
     try {
       await transferService.addTransfer({
         driverId: isDriver ? undefined : driverId, // driverId undefined if it's the driver doing it
@@ -86,7 +87,7 @@ export default function AddTransferModal() {
     } catch (error: any) {
       Alert.alert("Error", error.message || "Failed to log transfer");
     } finally {
-      setLoading(false);
+      stopAction("submit_transfer");
     }
   };
 

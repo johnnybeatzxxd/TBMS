@@ -15,6 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { expenseService } from "@/src/api/services";
+import { useActionStore } from "@/src/store";
 
 type ExpenseType = "Refuel" | "Maintenance" | "Others";
 type MaintenanceType = "Oil" | "Tires" | "Brakes" | "Engine" | "Other";
@@ -38,7 +39,8 @@ export default function AddExpenseModal() {
   const [description, setDescription] = useState("");
   const [kilometers, setKilometers] = useState("");
 
-  const [loading, setLoading] = useState(false);
+  const { isActionPending, startAction, stopAction } = useActionStore();
+  const loading = isActionPending("submit_expense");
 
   const handleSubmit = async () => {
     const parsedPrice = parseFloat(price);
@@ -82,7 +84,7 @@ export default function AddExpenseModal() {
     }
     finalRemark = `${finalRemark} | Desc: ${description.trim()}`;
 
-    setLoading(true);
+    startAction("submit_expense");
     try {
       await expenseService.addExpense("", {
         remark: finalRemark,
@@ -96,7 +98,7 @@ export default function AddExpenseModal() {
     } catch (error: any) {
       Alert.alert("Error", error.message || "Failed to add expense");
     } finally {
-      setLoading(false);
+      stopAction("submit_expense");
     }
   };
 

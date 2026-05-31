@@ -37,7 +37,7 @@ export const formService = {
       requiresApproval: st.requiresApproval ?? true,
       fields: st.formData || [],
       adminId: st.adminId,
-      isActive: st.isActive ?? true,
+      isActive: st.isActive === true || st.isActive === "true",
       createdAt: st.createdAt || new Date().toISOString(),
       updatedAt: st.updatedAt || new Date().toISOString(),
     }));
@@ -66,7 +66,7 @@ export const formService = {
       fields: st.formData || [],
       allowedTruckIds: st.allowedTrucks?.map((t: any) => t.id) || [],
       adminId: st.adminId,
-      isActive: st.isActive ?? true,
+      isActive: st.isActive === true || st.isActive === "true",
       createdAt: st.createdAt || new Date().toISOString(),
       updatedAt: st.updatedAt || new Date().toISOString(),
     };
@@ -101,7 +101,7 @@ export const formService = {
       requiresApproval: st.requiresApproval ?? payload.requiresApproval,
       fields: st.formData || payload.fields,
       adminId: st.adminId,
-      isActive: st.isActive ?? payload.isActive ?? true,
+      isActive: st.isActive !== undefined ? (st.isActive === true || st.isActive === "true") : (payload.isActive === true),
       createdAt: st.createdAt || new Date().toISOString(),
       updatedAt: st.updatedAt || new Date().toISOString(),
     };
@@ -136,7 +136,7 @@ export const formService = {
       description: payload.description || "",
       requiresApproval: st.requiresApproval ?? true,
       fields: st.formData || [],
-      isActive: st.isActive ?? true,
+      isActive: st.isActive === true || st.isActive === "true",
       createdAt: st.createdAt || new Date().toISOString(),
       updatedAt: st.updatedAt || new Date().toISOString(),
     };

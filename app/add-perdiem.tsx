@@ -16,13 +16,15 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, Stack } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { expenseService } from "@/src/api/services";
+import { useActionStore } from "@/src/store";
 
 export default function AddPerdiemModal() {
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [remark, setRemark] = useState("");
-  const [loading, setLoading] = useState(false);
+  const { isActionPending, startAction, stopAction } = useActionStore();
+  const loading = isActionPending("submit_perdiem");
   const [type, setType] = useState<"PERDIME" | "SALARY">("PERDIME");
 
   const handleSubmit = async () => {
@@ -34,7 +36,7 @@ export default function AddPerdiemModal() {
 
     const formattedDate = date.toISOString().split("T")[0];
 
-    setLoading(true);
+    startAction("submit_perdiem");
     try {
       await expenseService.addExpense("", {
         remark: remark.trim() || (type === "PERDIME" ? "Daily Perdiem" : "Salary Payment"),
@@ -47,7 +49,7 @@ export default function AddPerdiemModal() {
     } catch (error: any) {
       Alert.alert("Error", error.message || "Failed to log perdiem");
     } finally {
-      setLoading(false);
+      stopAction("submit_perdiem");
     }
   };
 
