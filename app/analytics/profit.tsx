@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Dimensions } from "react-native";
+import { View, Text, ScrollView, ActivityIndicator, Dimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { BarChart } from "react-native-chart-kit";
 import { analysisService } from "@/src/api/analysis.service";
 import { buildPayloadFromFilters, getInitialFiltersFromParams } from "@/src/utils/analysisFilters";
@@ -10,6 +10,8 @@ import { ProfitResponse, ProfitDataItem } from "@/src/types/analysis.types";
 import { AnalysisHeader, AnalysisFilterState } from "@/src/components/AnalysisHeader";
 import { ANALYSIS_PAGE_SIZE, AnalysisLoadMore, hasMoreAnalysisPages } from "@/src/components/AnalysisLoadMore";
 import { formatAnalysisChartLabel, formatAnalysisPeriodLabel } from "@/src/utils/analysisChartLabels";
+import { AnalyticsExportButton } from "@/src/components/AnalyticsExportButton";
+import { AnalyticsValueText } from "@/src/components/AnalyticsValueText";
 
 const screenWidth = Dimensions.get("window").width;
 const fmt = (n?: number | null) => (n ?? 0).toLocaleString("en-US");
@@ -78,6 +80,26 @@ export default function ProfitAnalysisScreen() {
   // Bar chart: profit per period
   const chartLabels = profitItems.map((item) => formatAnalysisChartLabel(item.key || "", filters.groupBy));
   const chartData = profitItems.map((item) => item.profit ?? 0);
+  const buildProfitExportRows = () => [
+    { section: "Summary", metric: "Revenue", value: summary?.revenue ?? 0 },
+    { section: "Summary", metric: "Costs", value: summary?.costs ?? 0 },
+    { section: "Summary", metric: "Profit", value: summary?.profit ?? 0 },
+    { section: "Summary", metric: "Margin", value: summary?.margin ?? 0 },
+    ...profitItems.map((item) => ({
+      section: "Breakdown",
+      key: item.key,
+      label: formatAnalysisPeriodLabel(item.key || "", filters.groupBy),
+      revenue: item.revenue ?? 0,
+      costs: item.costs ?? 0,
+      profit: item.profit ?? 0,
+      margin: item.margin ?? 0,
+      cashRevenue: item.breakdown?.revenue?.cash ?? 0,
+      creditRevenue: item.breakdown?.revenue?.credit ?? 0,
+      fuelCost: item.breakdown?.costs?.fuel ?? 0,
+      expensesCost: item.breakdown?.costs?.expenses ?? 0,
+      roadExpensesCost: item.breakdown?.costs?.roadExpenses ?? 0,
+    })),
+  ];
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
@@ -98,14 +120,20 @@ export default function ProfitAnalysisScreen() {
         </View>
       ) : (
         <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+          <AnalyticsExportButton
+            buildRows={buildProfitExportRows}
+            fileName="profit_analysis"
+            color="#16A34A"
+          />
+
           {/* Margin Banner */}
           <View className={`rounded-2xl p-5 mb-4 items-center ${(summary?.profit ?? 0) >= 0 ? "bg-green-50 border border-green-200" : "bg-red-50 border border-red-200"}`}>
             <Text className={`text-xs font-bold tracking-widest uppercase mb-1 ${(summary?.profit ?? 0) >= 0 ? "text-green-800" : "text-red-800"}`}>
               Profit Margin
             </Text>
-            <Text className={`font-bold text-4xl ${(summary?.profit ?? 0) >= 0 ? "text-green-700" : "text-red-700"}`}>
+            <AnalyticsValueText className={`font-bold text-4xl ${(summary?.profit ?? 0) >= 0 ? "text-green-700" : "text-red-700"}`}>
               {Math.round(summary?.margin ?? 0)}%
-            </Text>
+            </AnalyticsValueText>
             <Text className={`text-sm mt-1 ${(summary?.profit ?? 0) >= 0 ? "text-green-600" : "text-red-600"}`}>
               ${fmt(summary?.profit)} net profit
             </Text>
@@ -117,14 +145,14 @@ export default function ProfitAnalysisScreen() {
               <View className="w-10 h-10 rounded-full bg-green-50 items-center justify-center mb-2">
                 <MaterialCommunityIcons name="trending-up" size={20} color="#16A34A" />
               </View>
-              <Text className="text-success-600 font-bold text-xl">${fmt(summary?.revenue)}</Text>
+              <AnalyticsValueText className="text-success-600 font-bold text-xl">${fmt(summary?.revenue)}</AnalyticsValueText>
               <Text className="text-text-secondary text-xs mt-1">Revenue</Text>
             </View>
             <View className="flex-1 bg-white rounded-2xl border border-border p-4 items-center shadow-sm">
               <View className="w-10 h-10 rounded-full bg-red-50 items-center justify-center mb-2">
                 <MaterialCommunityIcons name="trending-down" size={20} color="#DC2626" />
               </View>
-              <Text className="text-danger-600 font-bold text-xl">${fmt(summary?.costs)}</Text>
+              <AnalyticsValueText className="text-danger-600 font-bold text-xl">${fmt(summary?.costs)}</AnalyticsValueText>
               <Text className="text-text-secondary text-xs mt-1">Costs</Text>
             </View>
           </View>
@@ -169,9 +197,9 @@ export default function ProfitAnalysisScreen() {
                       </Text>
                     </View>
                     <View className={`px-2.5 py-1 rounded-full ${(item.profit ?? 0) >= 0 ? "bg-green-50" : "bg-red-50"}`}>
-                      <Text className={`font-bold text-xs ${(item.profit ?? 0) >= 0 ? "text-green-700" : "text-red-700"}`}>
+                      <AnalyticsValueText className={`font-bold text-xs ${(item.profit ?? 0) >= 0 ? "text-green-700" : "text-red-700"}`}>
                         {Math.round(item.margin ?? 0)}% margin
-                      </Text>
+                      </AnalyticsValueText>
                     </View>
                   </View>
 
@@ -179,15 +207,15 @@ export default function ProfitAnalysisScreen() {
                   <View className="flex-row gap-2 mb-2">
                     <View className="flex-1 bg-green-50 rounded-xl px-3 py-2 border border-green-100">
                       <Text className="text-green-800 text-xs font-bold">Revenue</Text>
-                      <Text className="text-green-700 font-bold text-sm">${fmt(item.revenue)}</Text>
+                      <AnalyticsValueText className="text-green-700 font-bold text-sm">${fmt(item.revenue)}</AnalyticsValueText>
                     </View>
                     <View className="flex-1 bg-red-50 rounded-xl px-3 py-2 border border-red-100">
                       <Text className="text-red-800 text-xs font-bold">Costs</Text>
-                      <Text className="text-red-700 font-bold text-sm">${fmt(item.costs)}</Text>
+                      <AnalyticsValueText className="text-red-700 font-bold text-sm">${fmt(item.costs)}</AnalyticsValueText>
                     </View>
                     <View className={`flex-1 rounded-xl px-3 py-2 border ${(item.profit ?? 0) >= 0 ? "bg-emerald-50 border-emerald-100" : "bg-red-50 border-red-100"}`}>
                       <Text className={`text-xs font-bold ${(item.profit ?? 0) >= 0 ? "text-emerald-800" : "text-red-800"}`}>Profit</Text>
-                      <Text className={`font-bold text-sm ${(item.profit ?? 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>${fmt(item.profit)}</Text>
+                      <AnalyticsValueText className={`font-bold text-sm ${(item.profit ?? 0) >= 0 ? "text-emerald-700" : "text-red-700"}`}>${fmt(item.profit)}</AnalyticsValueText>
                     </View>
                   </View>
 

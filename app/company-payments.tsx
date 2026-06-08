@@ -50,6 +50,7 @@ export default function CompanyPaymentsScreen() {
   const [company, setCompany] = useState<Company | null>(null);
   const [payments, setPayments] = useState<CompanyPayment[]>([]);
   const [showFormModal, setShowFormModal] = useState(false);
+  const [editingPayment, setEditingPayment] = useState<CompanyPayment | null>(null);
   const [amount, setAmount] = useState("");
   const [paymentDate, setPaymentDate] = useState(() => new Date());
   const [showPaymentDatePicker, setShowPaymentDatePicker] = useState(false);
@@ -105,7 +106,34 @@ export default function CompanyPaymentsScreen() {
     if (date) setPaymentDate(date);
   };
 
-  const handleRegisterPayment = async () => {
+  const resetPaymentForm = () => {
+    setEditingPayment(null);
+    setAmount("");
+    setPaymentDate(new Date());
+    setShowPaymentDatePicker(false);
+  };
+
+  const normalizePayment = (item: any, fallback: CompanyPayment): CompanyPayment => ({
+    id: String(item?.id || item?._id || fallback.id),
+    amount: Number(item?.amount ?? fallback.amount),
+    date: String(item?.date || item?.createdAt || fallback.date),
+    createdAt: item?.createdAt ? String(item.createdAt) : fallback.createdAt,
+    remark: item?.remark ? String(item.remark) : fallback.remark,
+  });
+
+  const sortPaymentsByDate = (items: CompanyPayment[]) =>
+    [...items].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  const openEditPayment = (payment: CompanyPayment) => {
+    const date = new Date(payment.date);
+    setEditingPayment(payment);
+    setAmount(String(payment.amount));
+    setPaymentDate(isNaN(date.getTime()) ? new Date() : date);
+    setShowPaymentDatePicker(false);
+    setShowFormModal(true);
+  };
+
+  const handleSavePayment = async () => {
     const parsedAmount = Number(amount);
     if (!companyId) return;
     if (!parsedAmount || parsedAmount <= 0) {
@@ -119,41 +147,57 @@ export default function CompanyPaymentsScreen() {
 
     startAction("save_payment");
     try {
-      const result: any = await companyService.registerPayment({
-        companyId,
-        amount: parsedAmount,
-        date: paymentDate.toISOString(),
-      });
-      setAmount("");
-      setPaymentDate(new Date());
-      setShowFormModal(false);
-
-      const newPaymentRaw = result?.payment || result?.newPayment || result?.record || null;
-      if (newPaymentRaw) {
-        const newPayment: CompanyPayment = {
-          id: String(newPaymentRaw?.id || newPaymentRaw?._id || `${Date.now()}`),
-          amount: Number(newPaymentRaw?.amount || parsedAmount),
-          date: String(newPaymentRaw?.date || newPaymentRaw?.createdAt || new Date().toISOString()),
-          createdAt: newPaymentRaw?.createdAt ? String(newPaymentRaw.createdAt) : undefined,
-          remark: newPaymentRaw?.remark ? String(newPaymentRaw.remark) : undefined,
-        };
-        setPayments((prev) => [newPayment, ...prev]);
+      if (editingPayment) {
+        const result: any = await companyService.updateCompanyPayment(editingPayment.id, {
+          amount: parsedAmount,
+          date: paymentDate.toISOString(),
+        });
+        const updatedRaw = result?.payment || result?.updatedPayment || result?.record || result;
+        const updatedPayment = normalizePayment(updatedRaw, {
+          ...editingPayment,
+          amount: parsedAmount,
+          date: paymentDate.toISOString(),
+        });
+        setPayments((prev) =>
+          sortPaymentsByDate(prev.map((payment) => (payment.id === editingPayment.id ? updatedPayment : payment)))
+        );
+        Alert.alert("Success", "Payment updated successfully.");
       } else {
-        // If backend does not return payment item, still add optimistic item.
-        setPayments((prev) => [
-          {
+        const result: any = await companyService.registerPayment({
+          companyId,
+          amount: parsedAmount,
+          date: paymentDate.toISOString(),
+        });
+
+        const newPaymentRaw = result?.payment || result?.newPayment || result?.record || null;
+        if (newPaymentRaw) {
+          const newPayment = normalizePayment(newPaymentRaw, {
             id: `${Date.now()}`,
             amount: parsedAmount,
             date: paymentDate.toISOString(),
-          },
-          ...prev,
-        ]);
-      }
+          });
+          setPayments((prev) => sortPaymentsByDate([newPayment, ...prev]));
+        } else {
+          // If backend does not return payment item, still add optimistic item.
+          setPayments((prev) =>
+            sortPaymentsByDate([
+              {
+                id: `${Date.now()}`,
+                amount: parsedAmount,
+                date: paymentDate.toISOString(),
+              },
+              ...prev,
+            ])
+          );
+        }
 
-      Alert.alert("Success", "Payment registered successfully.");
+        Alert.alert("Success", "Payment registered successfully.");
+      }
+      resetPaymentForm();
+      setShowFormModal(false);
       await loadCompany();
     } catch (error: any) {
-      Alert.alert("Error", error.message || "Failed to register payment.");
+      Alert.alert("Error", error.message || (editingPayment ? "Failed to update payment." : "Failed to register payment."));
     } finally {
       stopAction("save_payment");
     }
@@ -187,7 +231,7 @@ export default function CompanyPaymentsScreen() {
           <Text className="text-text-primary font-bold text-xl" numberOfLines={1}>
             {name || "Company"} Payments
           </Text>
-          <Text className="text-text-secondary text-xs">Register received payments</Text>
+          <Text className="text-text-secondary text-xs">Register and edit received payments</Text>
         </View>
       </View>
 
@@ -216,18 +260,30 @@ export default function CompanyPaymentsScreen() {
           renderItem={({ item }) => (
             <View className="bg-white rounded-2xl border border-border p-4 mb-3">
               <View className="flex-row items-center justify-between">
-                <View className="flex-row items-center">
+                <View className="flex-row items-center flex-1 mr-3">
                   <View className="w-10 h-10 rounded-full bg-success-50 border border-success-100 items-center justify-center mr-3">
                     <Ionicons name="cash-outline" size={18} color="#16A34A" />
                   </View>
-                  <View>
+                  <View className="flex-1">
                     <Text className="text-text-primary font-bold text-base">Payment Received</Text>
                     <Text className="text-text-secondary text-xs mt-0.5">
                       {new Date(item.date).toLocaleDateString("en-US")}
                     </Text>
                   </View>
                 </View>
-                <Text className="text-success-700 font-bold text-lg">+ ${item.amount.toLocaleString()}</Text>
+                <View className="flex-row items-center gap-2">
+                  <Text className="text-success-700 font-bold text-lg max-w-[120px]" numberOfLines={1}>
+                    + ${item.amount.toLocaleString()}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => openEditPayment(item)}
+                    disabled={saving}
+                    className="w-9 h-9 rounded-full bg-surface items-center justify-center border border-border"
+                    activeOpacity={0.75}
+                  >
+                    <Ionicons name="create-outline" size={17} color="#2563EB" />
+                  </TouchableOpacity>
+                </View>
               </View>
               {!!item.remark && (
                 <View className="mt-3 pt-3 border-t border-border/40">
@@ -251,11 +307,13 @@ export default function CompanyPaymentsScreen() {
         <View className="flex-1 bg-black/50 justify-center px-5">
           <View className="bg-white rounded-2xl border border-border p-5">
             <View className="flex-row items-center justify-between mb-4">
-              <Text className="text-text-primary font-bold text-lg">Register Payment</Text>
+              <Text className="text-text-primary font-bold text-lg">
+                {editingPayment ? "Edit Payment" : "Register Payment"}
+              </Text>
               <TouchableOpacity
                 onPress={() => {
                   if (!saving) {
-                    setShowPaymentDatePicker(false);
+                    resetPaymentForm();
                     setShowFormModal(false);
                   }
                 }}
@@ -304,7 +362,7 @@ export default function CompanyPaymentsScreen() {
             )}
 
             <TouchableOpacity
-              onPress={handleRegisterPayment}
+              onPress={handleSavePayment}
               disabled={saving}
               className="mt-3 bg-success py-3 rounded-xl items-center justify-center"
               activeOpacity={0.8}
@@ -312,7 +370,7 @@ export default function CompanyPaymentsScreen() {
               {saving ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <Text className="text-white font-bold">Save Payment</Text>
+                <Text className="text-white font-bold">{editingPayment ? "Update Payment" : "Save Payment"}</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -321,9 +379,7 @@ export default function CompanyPaymentsScreen() {
 
       <TouchableOpacity
         onPress={() => {
-          setPaymentDate(new Date());
-          setAmount("");
-          setShowPaymentDatePicker(false);
+          resetPaymentForm();
           setShowFormModal(true);
         }}
         activeOpacity={0.8}

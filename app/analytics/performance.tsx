@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useLocalSearchParams } from "expo-router";
 import { analysisService } from "@/src/api/analysis.service";
 import { buildPayloadFromFilters, getInitialFiltersFromParams } from "@/src/utils/analysisFilters";
 import { PerformanceItem } from "@/src/types/analysis.types";
 import { AnalysisHeader, AnalysisFilterState } from "@/src/components/AnalysisHeader";
+import { AnalyticsExportButton } from "@/src/components/AnalyticsExportButton";
+import { AnalyticsValueText } from "@/src/components/AnalyticsValueText";
 
 const fmt = (n?: number | null) => (n ?? 0).toLocaleString("en-US");
 
@@ -42,6 +44,19 @@ export default function PerformanceScreen() {
   // Sort by revenue descending for ranking
   const ranked = [...items].sort((a, b) => (b.revenue ?? 0) - (a.revenue ?? 0));
   const maxRevenue = ranked.length > 0 ? (ranked[0].revenue ?? 1) : 1;
+  const buildPerformanceExportRows = () =>
+    ranked.map((item, index) => ({
+      rank: index + 1,
+      groupBy: entityGroupBy,
+      entity: item.entity,
+      totalTrips: item.totalTrips ?? 0,
+      approvalRate: item.approvalRate ?? 0,
+      revenue: item.revenue ?? 0,
+      roadExpenseToRevenueRatio: item.roadExpenseToRevnueRatio ?? 0,
+      liters: item.liters ?? 0,
+      litersPerTrip: item.litersPerTrip ?? 0,
+      fuelEfficiency: item.fuelEfficiency ?? "",
+    }));
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
@@ -83,6 +98,12 @@ export default function PerformanceScreen() {
         </View>
       ) : (
         <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+          <AnalyticsExportButton
+            buildRows={buildPerformanceExportRows}
+            fileName={`performance_${entityGroupBy}`}
+            color="#7C3AED"
+          />
+
           {ranked.length === 0 && (
             <View className="bg-white rounded-2xl border border-border p-8 shadow-sm items-center">
               <MaterialCommunityIcons name="chart-bar" size={48} color="#CBD5E1" />
@@ -113,7 +134,7 @@ export default function PerformanceScreen() {
                     <Text className="text-text-secondary text-xs">{fmt(item.totalTrips)} trips · {fmt(item.approvalRate)}% approved</Text>
                   </View>
                   <View className="items-end">
-                    <Text className="text-success-600 font-bold text-lg">${fmt(item.revenue)}</Text>
+                    <AnalyticsValueText className="text-success-600 font-bold text-lg">${fmt(item.revenue)}</AnalyticsValueText>
                     <Text className="text-text-secondary text-xs">revenue</Text>
                   </View>
                 </View>
@@ -127,25 +148,25 @@ export default function PerformanceScreen() {
                 <View className="flex-row flex-wrap gap-2">
                   <View className="flex-1 min-w-[45%] bg-surface rounded-xl px-3 py-2">
                     <Text className="text-text-secondary text-xs">Approval</Text>
-                    <Text className="text-text-primary font-bold text-sm">{fmt(item.approvalRate)}%</Text>
+                    <AnalyticsValueText className="text-text-primary font-bold text-sm">{fmt(item.approvalRate)}%</AnalyticsValueText>
                   </View>
                   <View className="flex-1 min-w-[45%] bg-surface rounded-xl px-3 py-2">
                     <Text className="text-text-secondary text-xs">Road Exp Ratio</Text>
-                    <Text className="text-text-primary font-bold text-sm">{(item.roadExpenseToRevnueRatio ?? 0).toFixed(1)}%</Text>
+                    <AnalyticsValueText className="text-text-primary font-bold text-sm">{(item.roadExpenseToRevnueRatio ?? 0).toFixed(1)}%</AnalyticsValueText>
                   </View>
                   <View className="flex-1 min-w-[45%] bg-surface rounded-xl px-3 py-2">
                     <Text className="text-text-secondary text-xs">L/Trip</Text>
-                    <Text className="text-text-primary font-bold text-sm">{(item.litersPerTrip ?? 0).toFixed(1)}</Text>
+                    <AnalyticsValueText className="text-text-primary font-bold text-sm">{(item.litersPerTrip ?? 0).toFixed(1)}</AnalyticsValueText>
                   </View>
                   <View className="flex-1 min-w-[45%] bg-surface rounded-xl px-3 py-2">
                     <Text className="text-text-secondary text-xs">Total Fuel</Text>
-                    <Text className="text-text-primary font-bold text-sm">{fmt(item.liters)}L</Text>
+                    <AnalyticsValueText className="text-text-primary font-bold text-sm">{fmt(item.liters)}L</AnalyticsValueText>
                   </View>
                   <View className="flex-1 min-w-[45%] bg-surface rounded-xl px-3 py-2">
                     <Text className="text-text-secondary text-xs">Fuel Efficiency</Text>
-                    <Text className="text-text-primary font-bold text-sm">
+                    <AnalyticsValueText className="text-text-primary font-bold text-sm">
                       {item.fuelEfficiency != null ? `${item.fuelEfficiency.toFixed(1)} km/L` : "N/A"}
-                    </Text>
+                    </AnalyticsValueText>
                   </View>
                 </View>
               </View>

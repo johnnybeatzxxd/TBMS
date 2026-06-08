@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Dimensions, RefreshControl } from "react-native";
+import { View, Text, ScrollView, ActivityIndicator, Dimensions, RefreshControl } from "react-native";
 import { useCachedFetch } from "@/src/hooks/useCachedFetch";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams } from "expo-router";
 import { BarChart } from "react-native-chart-kit";
 import { analysisService } from "@/src/api/analysis.service";
 import { buildPayloadFromFilters, getInitialFiltersFromParams } from "@/src/utils/analysisFilters";
@@ -11,6 +11,8 @@ import { TripsSummaryResponse, RouteItem, TripBreakdownItem } from "@/src/types/
 import { AnalysisHeader, AnalysisFilterState } from "@/src/components/AnalysisHeader";
 import { ANALYSIS_PAGE_SIZE, AnalysisLoadMore, hasMoreAnalysisPages } from "@/src/components/AnalysisLoadMore";
 import { formatAnalysisChartLabel, formatAnalysisPeriodLabel } from "@/src/utils/analysisChartLabels";
+import { AnalyticsExportButton } from "@/src/components/AnalyticsExportButton";
+import { AnalyticsValueText } from "@/src/components/AnalyticsValueText";
 
 const screenWidth = Dimensions.get("window").width;
 const fmt = (n?: number | null) => (n ?? 0).toLocaleString("en-US");
@@ -89,6 +91,37 @@ export default function TripsAnalysisScreen() {
 
   const chartLabels = breakdownItems.map((item) => formatAnalysisChartLabel(item.key || "", filters.groupBy));
   const chartData = breakdownItems.map((item) => item.totalTripsCount ?? 0);
+  const buildTripExportRows = () => [
+    { section: "Summary", metric: "Total Trips", value: summary?.totalTripsCount ?? 0 },
+    { section: "Summary", metric: "Total Revenue", value: (summary?.cashTrips?.totalAmount ?? 0) + (summary?.creditTrips?.totalAmount ?? 0) },
+    { section: "Summary", metric: "Road Expense", value: totalRoadExpenses },
+    { section: "Summary", metric: "Total Profit", value: summary?.totalProfit ?? 0 },
+    { section: "Summary", metric: "Average Profit Per Trip", value: summary?.averageProfitPerTrip ?? 0 },
+    { section: "Payment", metric: "Cash Trips", value: summary?.cashTrips?.count ?? 0, amount: summary?.cashTrips?.totalAmount ?? 0 },
+    { section: "Payment", metric: "Credit Trips", value: summary?.creditTrips?.count ?? 0, amount: summary?.creditTrips?.totalAmount ?? 0 },
+    { section: "Expenses", metric: "Driver Expense", value: summary?.totalDriverExpense ?? 0, averagePerTrip: summary?.averageDriverExpensePerTrip ?? 0 },
+    { section: "Expenses", metric: "Truck Expense", value: summary?.totalTruckExpence ?? 0, averagePerTrip: averageTruckExpensePerTrip },
+    { section: "Expenses", metric: "Fuel Cost", value: summary?.totalFuelCost ?? 0, averagePerTrip: averageFuelCostPerTrip, litersPerTrip: summary?.averageFuelUsagePerTrip ?? 0 },
+    ...breakdownItems.map((item) => ({
+      section: "Breakdown",
+      key: item.key,
+      label: formatAnalysisPeriodLabel(item.key || "", filters.groupBy),
+      totalTrips: item.totalTripsCount ?? 0,
+      approvedTrips: item.approvedTripsCount ?? 0,
+      profit: item.totalProfit ?? 0,
+      fuelCost: item.totalFuelCost ?? 0,
+      driverExpense: item.totalDriverExpense ?? 0,
+      truckExpense: item.totalTruckExpence ?? 0,
+    })),
+    ...routes.map((route) => ({
+      section: "Routes",
+      loadingSite: route.loadingSite,
+      destinationSite: route.destinationSite,
+      totalTrips: route.totalTripsCount,
+      cashTrips: route.cashTripsCount,
+      creditTrips: route.creditTripsCount,
+    })),
+  ];
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
@@ -120,18 +153,24 @@ export default function TripsAnalysisScreen() {
             />
           }
         >
+          <AnalyticsExportButton
+            buildRows={buildTripExportRows}
+            fileName="trip_analysis"
+            color="#2563EB"
+          />
+
           {/* KPI Row */}
           <View className="flex-row gap-3 mb-4">
             <View className="flex-1 bg-white rounded-2xl border border-border p-4 items-center shadow-sm">
-              <Text className="text-primary font-bold text-3xl">{fmt(summary?.totalTripsCount)}</Text>
+              <AnalyticsValueText className="text-primary font-bold text-3xl">{fmt(summary?.totalTripsCount)}</AnalyticsValueText>
               <Text className="text-text-secondary text-xs mt-1">Total Trips</Text>
             </View>
             <View className="flex-1 bg-white rounded-2xl border border-border p-4 items-center shadow-sm">
-              <Text className="text-success-600 font-bold text-lg">${fmt((summary?.cashTrips?.totalAmount ?? 0) + (summary?.creditTrips?.totalAmount ?? 0))}</Text>
+              <AnalyticsValueText className="text-success-600 font-bold text-lg">${fmt((summary?.cashTrips?.totalAmount ?? 0) + (summary?.creditTrips?.totalAmount ?? 0))}</AnalyticsValueText>
               <Text className="text-text-secondary text-xs mt-1">Total Revenue</Text>
             </View>
             <View className="flex-1 bg-white rounded-2xl border border-border p-4 items-center shadow-sm">
-              <Text className="text-danger-600 font-bold text-lg">${fmt(totalRoadExpenses)}</Text>
+              <AnalyticsValueText className="text-danger-600 font-bold text-lg">${fmt(totalRoadExpenses)}</AnalyticsValueText>
               <Text className="text-text-secondary text-xs mt-1">Road Expense</Text>
             </View>
           </View>
@@ -139,13 +178,13 @@ export default function TripsAnalysisScreen() {
           {/* Profit & Averages */}
           <View className="flex-row gap-3 mb-4">
             <View className="flex-1 bg-white rounded-2xl border border-border p-4 items-center shadow-sm">
-              <Text className={`font-bold text-xl ${(summary?.totalProfit ?? 0) >= 0 ? "text-success-600" : "text-danger-600"}`}>
+              <AnalyticsValueText className={`font-bold text-xl ${(summary?.totalProfit ?? 0) >= 0 ? "text-success-600" : "text-danger-600"}`}>
                 ${fmt(summary?.totalProfit)}
-              </Text>
+              </AnalyticsValueText>
               <Text className="text-text-secondary text-xs mt-1">Total Profit</Text>
             </View>
             <View className="flex-1 bg-white rounded-2xl border border-border p-4 items-center shadow-sm">
-              <Text className="text-text-primary font-bold text-xl">${fmt(Math.round(summary?.averageProfitPerTrip ?? 0))}</Text>
+              <AnalyticsValueText className="text-text-primary font-bold text-xl">${fmt(Math.round(summary?.averageProfitPerTrip ?? 0))}</AnalyticsValueText>
               <Text className="text-text-secondary text-xs mt-1">Avg Profit/Trip</Text>
             </View>
           </View>
@@ -156,12 +195,12 @@ export default function TripsAnalysisScreen() {
             <View className="flex-row gap-3">
               <View className="flex-1 bg-green-50 rounded-xl p-3 border border-green-100">
                 <Text className="text-green-800 text-xs font-bold uppercase tracking-widest mb-1">Cash</Text>
-                <Text className="text-green-700 font-bold text-lg">{fmt(summary?.cashTrips?.count)} trips</Text>
+                <AnalyticsValueText className="text-green-700 font-bold text-lg">{fmt(summary?.cashTrips?.count)} trips</AnalyticsValueText>
                 <Text className="text-green-600 text-sm">${fmt(summary?.cashTrips?.totalAmount)}</Text>
               </View>
               <View className="flex-1 bg-blue-50 rounded-xl p-3 border border-blue-100">
                 <Text className="text-blue-800 text-xs font-bold uppercase tracking-widest mb-1">Credit</Text>
-                <Text className="text-blue-700 font-bold text-lg">{fmt(summary?.creditTrips?.count)} trips</Text>
+                <AnalyticsValueText className="text-blue-700 font-bold text-lg">{fmt(summary?.creditTrips?.count)} trips</AnalyticsValueText>
                 <Text className="text-blue-600 text-sm">${fmt(summary?.creditTrips?.totalAmount)}</Text>
               </View>
             </View>
@@ -173,17 +212,17 @@ export default function TripsAnalysisScreen() {
             <View className="flex-row gap-3">
               <View className="flex-1 bg-red-50 rounded-xl p-3 border border-red-100">
                 <Text className="text-red-800 text-xs font-bold uppercase tracking-widest mb-1">Driver</Text>
-                <Text className="text-red-700 font-bold text-lg">${fmt(summary?.totalDriverExpense)}</Text>
+                <AnalyticsValueText className="text-red-700 font-bold text-lg">${fmt(summary?.totalDriverExpense)}</AnalyticsValueText>
                 <Text className="text-red-500 text-xs">Avg ${fmt(Math.round(summary?.averageDriverExpensePerTrip ?? 0))}/trip</Text>
               </View>
               <View className="flex-1 bg-orange-50 rounded-xl p-3 border border-orange-100">
                 <Text className="text-orange-800 text-xs font-bold uppercase tracking-widest mb-1">Truck</Text>
-                <Text className="text-orange-700 font-bold text-lg">${fmt(summary?.totalTruckExpence)}</Text>
+                <AnalyticsValueText className="text-orange-700 font-bold text-lg">${fmt(summary?.totalTruckExpence)}</AnalyticsValueText>
                 <Text className="text-orange-500 text-xs">Avg ${fmt(Math.round(averageTruckExpensePerTrip))}/trip</Text>
               </View>
               <View className="flex-1 bg-amber-50 rounded-xl p-3 border border-amber-100">
                 <Text className="text-amber-800 text-xs font-bold uppercase tracking-widest mb-1">Fuel</Text>
-                <Text className="text-amber-700 font-bold text-lg">${fmt(summary?.totalFuelCost)}</Text>
+                <AnalyticsValueText className="text-amber-700 font-bold text-lg">${fmt(summary?.totalFuelCost)}</AnalyticsValueText>
                 <Text className="text-amber-500 text-xs">
                   Avg ${fmt(Math.round(averageFuelCostPerTrip))}/trip · {fmt(Math.round(summary?.averageFuelUsagePerTrip ?? 0))}L
                 </Text>
@@ -232,9 +271,9 @@ export default function TripsAnalysisScreen() {
                     </View>
                   </View>
                   <View className="items-end">
-                    <Text className={`font-bold text-sm ${(item.totalProfit ?? 0) >= 0 ? "text-success-600" : "text-danger-600"}`}>
+                    <AnalyticsValueText className={`font-bold text-sm ${(item.totalProfit ?? 0) >= 0 ? "text-success-600" : "text-danger-600"}`}>
                       ${fmt(item.totalProfit)}
-                    </Text>
+                    </AnalyticsValueText>
                     <Text className="text-text-secondary text-xs">profit</Text>
                   </View>
                 </View>

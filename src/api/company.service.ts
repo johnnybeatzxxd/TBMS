@@ -9,6 +9,7 @@ import {
   Company,
   AddCompanyPayload,
   RegisterPaymentPayload,
+  UpdateCompanyPaymentPayload,
   TruckCompanyBalance,
 } from "@/src/types/company.types";
 import type { Trip } from "@/src/types/trip.types";
@@ -270,6 +271,21 @@ export const companyService = {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.message || "Failed to register payment");
+    }
+    return res.json();
+  },
+
+  /**
+   * Update a received company payment (Admin only)
+   */
+  async updateCompanyPayment(paymentId: string, payload: UpdateCompanyPaymentPayload): Promise<any> {
+    const res = await apiFetch(`/company/update-company-payment?paymentId=${encodeURIComponent(paymentId)}`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || "Failed to update payment");
     }
     return res.json();
   },

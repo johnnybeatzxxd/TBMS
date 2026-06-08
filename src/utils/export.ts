@@ -54,3 +54,38 @@ export const shareCSV = async (csvContent: string, fileName: string): Promise<vo
     UTI: 'public.comma-separated-values-text',
   });
 };
+
+type CsvPrimitive = string | number | boolean | null | undefined;
+export type CsvRow = Record<string, CsvPrimitive>;
+
+const escapeCsvCell = (value: CsvPrimitive): string => {
+  if (value === null || value === undefined) return "";
+  const text = String(value);
+  if (/[",\n\r]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
+};
+
+export const rowsToCSV = (rows: CsvRow[]): string => {
+  if (rows.length === 0) return "";
+
+  const headers = Array.from(
+    rows.reduce((set, row) => {
+      Object.keys(row).forEach((key) => set.add(key));
+      return set;
+    }, new Set<string>())
+  );
+
+  return [
+    headers.map(escapeCsvCell).join(","),
+    ...rows.map((row) => headers.map((header) => escapeCsvCell(row[header])).join(",")),
+  ].join("\n");
+};
+
+export const shareRowsAsCSV = async (rows: CsvRow[], fileName: string): Promise<void> => {
+  if (rows.length === 0) {
+    throw new Error("No data available to export.");
+  }
+  await shareCSV(rowsToCSV(rows), fileName);
+};

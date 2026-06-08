@@ -156,7 +156,7 @@ export const analysisService = {
    * Generates and downloads a CSV report for various analytical data types.
    */
   async exportData(payload: {
-    report: "refules" | "trips" | "expenses" | "moneyTransfer" | "fuel";
+    report: "refules" | "trips" | "expenses" | "moneyTransfer";
     truckIds?: string[];
     driverId?: string;
     startDate?: string;

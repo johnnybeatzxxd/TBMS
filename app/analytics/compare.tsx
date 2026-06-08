@@ -11,6 +11,8 @@ import { CompareEntity, CompareMetrics } from "@/src/types/analysis.types";
 import { AnalysisHeader, AnalysisFilterState, GroupByOption } from "@/src/components/AnalysisHeader";
 import { formatAnalysisPeriodLabel } from "@/src/utils/analysisChartLabels";
 import { Driver } from "@/src/types/driver.types";
+import { AnalyticsExportButton } from "@/src/components/AnalyticsExportButton";
+import { AnalyticsValueText } from "@/src/components/AnalyticsValueText";
 
 const fmt = (n?: number | null) => (n ?? 0).toLocaleString("en-US");
 
@@ -21,29 +23,29 @@ function SummaryGrid({ metrics, accent }: { metrics: CompareMetrics; accent: str
     <View className="flex-row flex-wrap gap-2 mt-3">
       <View className="flex-1 min-w-[45%] bg-surface rounded-xl px-3 py-2">
         <Text className="text-text-secondary text-xs">Revenue</Text>
-        <Text className="font-bold text-sm" style={{ color: accent }}>${fmt(metrics.revenue)}</Text>
+        <AnalyticsValueText className="font-bold text-sm" style={{ color: accent }}>${fmt(metrics.revenue)}</AnalyticsValueText>
       </View>
       <View className="flex-1 min-w-[45%] bg-surface rounded-xl px-3 py-2">
         <Text className="text-text-secondary text-xs">Profit</Text>
-        <Text className={`font-bold text-sm ${metrics.profit >= 0 ? "text-success-600" : "text-danger-600"}`}>
+        <AnalyticsValueText className={`font-bold text-sm ${metrics.profit >= 0 ? "text-success-600" : "text-danger-600"}`}>
           ${fmt(metrics.profit)}
-        </Text>
+        </AnalyticsValueText>
       </View>
       <View className="flex-1 min-w-[45%] bg-surface rounded-xl px-3 py-2">
         <Text className="text-text-secondary text-xs">Trips</Text>
-        <Text className="text-text-primary font-bold text-sm">{fmt(metrics.trip_count)}</Text>
+        <AnalyticsValueText className="text-text-primary font-bold text-sm">{fmt(metrics.trip_count)}</AnalyticsValueText>
       </View>
       <View className="flex-1 min-w-[45%] bg-surface rounded-xl px-3 py-2">
         <Text className="text-text-secondary text-xs">Expense</Text>
-        <Text className="text-text-primary font-bold text-sm">${fmt(metrics.expense)}</Text>
+        <AnalyticsValueText className="text-text-primary font-bold text-sm">${fmt(metrics.expense)}</AnalyticsValueText>
       </View>
       <View className="flex-1 min-w-[45%] bg-surface rounded-xl px-3 py-2">
         <Text className="text-text-secondary text-xs">Fuel</Text>
-        <Text className="text-text-primary font-bold text-sm">{fmt(metrics.fuel_usage)}L</Text>
+        <AnalyticsValueText className="text-text-primary font-bold text-sm">{fmt(metrics.fuel_usage)}L</AnalyticsValueText>
       </View>
       <View className="flex-1 min-w-[45%] bg-surface rounded-xl px-3 py-2">
         <Text className="text-text-secondary text-xs">Fuel / Trip</Text>
-        <Text className="text-text-primary font-bold text-sm">{fmt(Math.round(metrics.fuel_usage_per_trip))}L</Text>
+        <AnalyticsValueText className="text-text-primary font-bold text-sm">{fmt(Math.round(metrics.fuel_usage_per_trip))}L</AnalyticsValueText>
       </View>
     </View>
   );
@@ -116,6 +118,33 @@ export default function CompareAnalysisScreen() {
   }, [filters, entityType, selectedEntityIds]);
 
   const entityColors = useMemo(() => ["#2563EB", "#7C3AED", "#16A34A", "#F59E0B"], []);
+  const buildCompareExportRows = () =>
+    comparison.flatMap((entity) => [
+      {
+        section: "Summary",
+        entityType,
+        entity: entity.name,
+        revenue: entity.summary.revenue,
+        profit: entity.summary.profit,
+        fuelUsage: entity.summary.fuel_usage,
+        fuelUsagePerTrip: entity.summary.fuel_usage_per_trip,
+        expense: entity.summary.expense,
+        tripCount: entity.summary.trip_count,
+      },
+      ...(entity.breakdown || []).map((row) => ({
+        section: "Breakdown",
+        entityType,
+        entity: entity.name,
+        key: row.key,
+        label: formatAnalysisPeriodLabel(row.key, filters.groupBy),
+        revenue: row.metrics.revenue,
+        profit: row.metrics.profit,
+        fuelUsage: row.metrics.fuel_usage,
+        fuelUsagePerTrip: row.metrics.fuel_usage_per_trip,
+        expense: row.metrics.expense,
+        tripCount: row.metrics.trip_count,
+      })),
+    ]);
 
   const toggleEntity = (id: string) => {
     setSelectedEntityIds((prev) => {
@@ -195,6 +224,12 @@ export default function CompareAnalysisScreen() {
         </View>
       ) : (
         <ScrollView className="flex-1" contentContainerStyle={{ padding: 16, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+          <AnalyticsExportButton
+            buildRows={buildCompareExportRows}
+            fileName={`compare_${entityType}`}
+            color="#0EA5E9"
+          />
+
           {comparison.length === 0 && (
             <View className="bg-white rounded-2xl border border-border p-8 items-center shadow-sm">
               <MaterialCommunityIcons name="compare" size={48} color="#CBD5E1" />
@@ -230,9 +265,9 @@ export default function CompareAnalysisScreen() {
                               {formatAnalysisPeriodLabel(row.key, filters.groupBy)}
                             </Text>
                           </View>
-                          <Text className={`font-bold text-sm ${row.metrics.profit >= 0 ? "text-success-600" : "text-danger-600"}`}>
+                          <AnalyticsValueText className={`font-bold text-sm ${row.metrics.profit >= 0 ? "text-success-600" : "text-danger-600"}`}>
                             ${fmt(row.metrics.profit)}
-                          </Text>
+                          </AnalyticsValueText>
                         </View>
                         <Text className="text-text-secondary text-xs">
                           Rev ${fmt(row.metrics.revenue)} · {fmt(row.metrics.trip_count)} trips · Exp ${fmt(row.metrics.expense)}

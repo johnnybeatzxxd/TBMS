@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Dimensions, RefreshControl } from "react-native";
+import { View, Text, ScrollView, ActivityIndicator, Dimensions, RefreshControl } from "react-native";
 import { useCachedFetch } from "@/src/hooks/useCachedFetch";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { BarChart } from "react-native-chart-kit";
 import { analysisService } from "@/src/api/analysis.service";
 import { buildPayloadFromFilters, getInitialFiltersFromParams } from "@/src/utils/analysisFilters";
@@ -11,6 +11,8 @@ import { ExpensesResponse, ExpensesBreakdownItem } from "@/src/types/analysis.ty
 import { AnalysisHeader, AnalysisFilterState } from "@/src/components/AnalysisHeader";
 import { ANALYSIS_PAGE_SIZE, AnalysisLoadMore, hasMoreAnalysisPages } from "@/src/components/AnalysisLoadMore";
 import { formatAnalysisChartLabel, formatAnalysisPeriodLabel } from "@/src/utils/analysisChartLabels";
+import { AnalyticsExportButton } from "@/src/components/AnalyticsExportButton";
+import { AnalyticsValueText } from "@/src/components/AnalyticsValueText";
 
 const screenWidth = Dimensions.get("window").width;
 const fmt = (n?: number | null) => (n ?? 0).toLocaleString("en-US");
@@ -98,6 +100,28 @@ export default function ExpensesAnalysisScreen() {
           ...(CATEGORY_COLORS[key] || CATEGORY_COLORS.other),
         }))
     : [];
+  const topCategory = categories[0];
+  const buildExpensesExportRows = () => [
+    { section: "Summary", metric: "Total", value: summary?.total ?? 0 },
+    { section: "Summary", metric: "Perdiem", value: summary?.perdime ?? 0 },
+    { section: "Summary", metric: "Salary", value: summary?.salary ?? 0 },
+    { section: "Summary", metric: "Maintenance", value: summary?.maintenance ?? 0 },
+    { section: "Summary", metric: "Refuel", value: summary?.refuel ?? 0 },
+    { section: "Summary", metric: "Road Expenses", value: summary?.roadExpenses ?? 0 },
+    { section: "Summary", metric: "Other", value: summary?.other ?? 0 },
+    ...breakdownItems.map((item) => ({
+      section: "Breakdown",
+      key: item.key,
+      label: formatAnalysisPeriodLabel(item.key || "", filters.groupBy),
+      total: item.total ?? 0,
+      perdime: item.perdime ?? 0,
+      salary: item.salary ?? 0,
+      maintenance: item.maintenance ?? 0,
+      refuel: item.refuel ?? 0,
+      roadExpenses: item.roadExpenses ?? 0,
+      other: item.other ?? 0,
+    })),
+  ];
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
@@ -129,21 +153,29 @@ export default function ExpensesAnalysisScreen() {
             />
           }
         >
+          <AnalyticsExportButton
+            buildRows={buildExpensesExportRows}
+            fileName="expense_analysis"
+            color="#DC2626"
+          />
+
           {/* KPI Row */}
           <View className="flex-row gap-3 mb-4">
             <View className="flex-1 bg-white rounded-2xl border border-border p-4 items-center shadow-sm">
-              <Text className="text-danger-600 font-bold text-2xl">${fmt(summary?.total)}</Text>
+              <AnalyticsValueText className="text-danger-600 font-bold text-2xl">${fmt(summary?.total)}</AnalyticsValueText>
               <Text className="text-text-secondary text-xs mt-1">Total Spent</Text>
             </View>
             <View className="flex-1 bg-white rounded-2xl border border-border p-4 items-center shadow-sm">
-              <Text className="text-text-primary font-bold text-2xl">
-                ${breakdownTotal > 0 ? fmt(Math.round((summary?.total ?? 0) / breakdownTotal)) : "0"}
+              <AnalyticsValueText className="text-text-primary font-bold text-lg">
+                {topCategory ? topCategory.name : "None"}
+              </AnalyticsValueText>
+              <Text className="text-text-secondary text-xs mt-1">
+                {topCategory ? `$${fmt(topCategory.amount)} (${topCategory.pct}%)` : "Top Category"}
               </Text>
-              <Text className="text-text-secondary text-xs mt-1">Avg / Period</Text>
             </View>
             <View className="flex-1 bg-white rounded-2xl border border-border p-4 items-center shadow-sm">
-              <Text className="text-amber-600 font-bold text-2xl">{fmt(breakdownTotal)}</Text>
-              <Text className="text-text-secondary text-xs mt-1">Periods</Text>
+              <AnalyticsValueText className="text-amber-600 font-bold text-2xl">{fmt(breakdownTotal)}</AnalyticsValueText>
+              <Text className="text-text-secondary text-xs mt-1">Breakdown Rows</Text>
             </View>
           </View>
 
@@ -170,7 +202,7 @@ export default function ExpensesAnalysisScreen() {
               </View>
             ))}
             {categories.length === 0 && (
-              <Text className="text-text-secondary text-center py-4">No expenses in this period</Text>
+              <Text className="text-text-secondary text-center py-4">No expenses for this filter</Text>
             )}
           </View>
 
@@ -223,7 +255,7 @@ export default function ExpensesAnalysisScreen() {
                         </Text>
                       </View>
                     </View>
-                    <Text className="text-danger-600 font-bold text-sm">${fmt(item.total)}</Text>
+                    <AnalyticsValueText className="text-danger-600 font-bold text-sm">${fmt(item.total)}</AnalyticsValueText>
                   </View>
                 );
               })}

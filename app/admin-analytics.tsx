@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Dimensions, Modal, TextInput, Alert, Platform, RefreshControl } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Dimensions, TextInput, Alert, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -12,6 +12,8 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { shareCSV } from "@/src/utils/export";
 import { companyService, driverService, truckService } from "@/src/api/services";
 import { useCachedFetch } from "@/src/hooks/useCachedFetch";
+import { AnalyticsExportButton } from "@/src/components/AnalyticsExportButton";
+import { AnalyticsValueText } from "@/src/components/AnalyticsValueText";
 
 const formatCurrency = (n: number) => n.toLocaleString("en-US");
 
@@ -33,7 +35,7 @@ export default function AnalyticsHubScreen() {
 
   // Export Modal State
   const [showExportModal, setShowExportModal] = useState(false);
-  const [exportReport, setExportReport] = useState<"refules" | "trips" | "expenses" | "moneyTransfer" | "fuel">("trips");
+  const [exportReport, setExportReport] = useState<"refules" | "trips" | "expenses" | "moneyTransfer">("trips");
   
   // Dynamic Data Lists
   const [exportTrucks, setExportTrucks] = useState<{ id: string; plateNumber: string }[]>([]);
@@ -45,8 +47,6 @@ export default function AnalyticsHubScreen() {
   const [exportSelectedDriverId, setExportSelectedDriverId] = useState<string>("");
   const [exportStartDate, setExportStartDate] = useState<Date | null>(null);
   const [exportEndDate, setExportEndDate] = useState<Date | null>(null);
-  const [exportStartDateStr, setExportStartDateStr] = useState("");
-  const [exportEndDateStr, setExportEndDateStr] = useState("");
   
   // Specific Filters
   const [exportTripType, setExportTripType] = useState<"CASH" | "CREDIT">("CASH");
@@ -267,6 +267,29 @@ export default function AnalyticsHubScreen() {
     { label: "Transfers", count: pending.transfers, icon: "bank-transfer", color: "#7C3AED" },
   ];
 
+  const buildDashboardExportRows = () => [
+    { section: "Summary", metric: "Cash Trips", value: summary.cashTripsCount },
+    { section: "Summary", metric: "Credit Trips", value: summary.creditTripsCount },
+    { section: "Summary", metric: "Total Trips", value: summary.totalTripsCount },
+    { section: "Summary", metric: "Refuel Count", value: summary.refuelCount },
+    { section: "Summary", metric: "Total Fuel Cost", value: summary.totalFuelCost },
+    { section: "Summary", metric: "Total Driver Expense", value: summary.totalDriverExpense },
+    { section: "Summary", metric: "Expense Count", value: summary.expenseCount },
+    { section: "Summary", metric: "Total Expenses Cost", value: summary.totalExpensesCost },
+    ...(profitSummary
+      ? [
+          { section: "Profit", metric: "Revenue", value: profitSummary.revenue },
+          { section: "Profit", metric: "Costs", value: profitSummary.costs },
+          { section: "Profit", metric: "Profit", value: profitSummary.profit },
+          { section: "Profit", metric: "Margin", value: profitSummary.margin },
+        ]
+      : []),
+    { section: "Pending", metric: "Trips", value: pending.trips },
+    { section: "Pending", metric: "Refuels", value: pending.refuels },
+    { section: "Pending", metric: "Expenses", value: pending.expenses },
+    { section: "Pending", metric: "Transfers", value: pending.transfers },
+  ];
+
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
       <AnalysisHeader
@@ -320,11 +343,19 @@ export default function AnalyticsHubScreen() {
                 >
                   <MaterialCommunityIcons name={kpi.icon as any} size={24} color={kpi.color} />
                 </View>
-                <Text className="text-text-primary font-bold text-xl">{kpi.value}</Text>
+                <AnalyticsValueText className="text-text-primary font-bold text-xl">{kpi.value}</AnalyticsValueText>
                 <Text className="text-text-secondary text-xs mt-0.5">{kpi.label}</Text>
               </View>
             ))}
           </View>
+        </View>
+
+        <View className="px-4 mt-3">
+          <AnalyticsExportButton
+            buildRows={buildDashboardExportRows}
+            fileName="analytics_dashboard"
+            color="#2563EB"
+          />
         </View>
 
         {financialKpis.length > 0 && (
@@ -341,9 +372,9 @@ export default function AnalyticsHubScreen() {
                   >
                     <MaterialCommunityIcons name={kpi.icon as any} size={18} color={kpi.color} />
                   </View>
-                  <Text className="text-text-primary font-bold text-sm" numberOfLines={1}>
+                  <AnalyticsValueText className="text-text-primary font-bold text-sm">
                     {kpi.value}
-                  </Text>
+                  </AnalyticsValueText>
                   <Text className="text-text-secondary text-[10px] mt-0.5 text-center">{kpi.label}</Text>
                 </View>
               ))}
@@ -358,14 +389,14 @@ export default function AnalyticsHubScreen() {
                 <MaterialCommunityIcons name="cash" size={18} color="#16A34A" />
                 <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase">Cash Trips</Text>
               </View>
-              <Text className="text-text-primary font-bold text-xl">{summary.cashTripsCount}</Text>
+              <AnalyticsValueText className="text-text-primary font-bold text-xl">{summary.cashTripsCount}</AnalyticsValueText>
             </View>
             <View className="flex-1 bg-white rounded-2xl border border-border p-4 shadow-sm">
               <View className="flex-row items-center gap-2 mb-2">
                 <MaterialCommunityIcons name="credit-card" size={18} color="#0EA5E9" />
                 <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase">Credit Trips</Text>
               </View>
-              <Text className="text-text-primary font-bold text-xl">{summary.creditTripsCount}</Text>
+              <AnalyticsValueText className="text-text-primary font-bold text-xl">{summary.creditTripsCount}</AnalyticsValueText>
             </View>
           </View>
         </View>
@@ -399,8 +430,6 @@ export default function AnalyticsHubScreen() {
             activeOpacity={0.85}
             className="bg-white rounded-2xl border border-border overflow-hidden shadow-sm"
             onPress={() => {
-              setExportStartDateStr("");
-              setExportEndDateStr("");
               setExportStartDate(null);
               setExportEndDate(null);
               setExportSelectedDriverId("");
@@ -416,7 +445,7 @@ export default function AnalyticsHubScreen() {
               </View>
               <View className="flex-1">
                 <Text className="text-text-primary font-bold text-lg">Export CSV Reports</Text>
-                <Text className="text-text-secondary text-sm mt-0.5">Download trips, fuel, expenses or transfers</Text>
+                <Text className="text-text-secondary text-sm mt-0.5">Download trips, refuel logs, expenses or transfers</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
             </View>
@@ -483,7 +512,6 @@ export default function AnalyticsHubScreen() {
                 <View className="flex-row flex-wrap gap-2.5">
                   {[
                     { id: "trips", label: "Trips", icon: "truck", color: "#2563EB", bg: "#EFF6FF" },
-                    { id: "fuel", label: "Fuel Usage", icon: "gas-station", color: "#16A34A", bg: "#F0FDF4" },
                     { id: "refules", label: "Refuel Logs", icon: "gas-station-outline", color: "#F59E0B", bg: "#FFFBEB" },
                     { id: "expenses", label: "Expenses", icon: "receipt", color: "#DC2626", bg: "#FEF2F2" },
                     { id: "moneyTransfer", label: "Transfers", icon: "bank-transfer", color: "#7C3AED", bg: "#F5F3FF" }
