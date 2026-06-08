@@ -120,7 +120,9 @@ export default function AdminTripFiltersScreen() {
   });
 
   const handleApply = async () => {
-    await writeAppliedFilters(toSnapshot());
+    const snapshot = toSnapshot();
+    console.log("[AdminTripFilters] apply", snapshot);
+    await writeAppliedFilters(snapshot);
     await clearOpenFiltersDraft();
     router.back();
   };

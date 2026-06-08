@@ -242,7 +242,17 @@ const RequestCard = ({ req, isManager, isDriver, onStatusUpdate }: { req: FormSu
                 activeOpacity={0.8}
                 onPress={(e) => {
                   e.stopPropagation();
-                  router.push(`/add-request?id=${req.id}`);
+                  const qs = new URLSearchParams({
+                    id: req.id,
+                    serviceRequestId: req.serviceRequestId || req.id,
+                    tag: req.tag || "",
+                    templateName: displayName,
+                    amount: String(req.amount ?? ""),
+                    date: req.date || "",
+                    description: req.description || "",
+                    values: JSON.stringify(req.values || {}),
+                  }).toString();
+                  router.push(`/add-request?${qs}` as any);
                 }}
               >
                 <Text className="text-primary font-bold text-sm">Edit Request</Text>

@@ -50,7 +50,27 @@ const getGroupedTrips = (trips: Trip[]) => {
   }));
 };
 
-const TripCard = ({ trip, isManager, onRefresh, onUpdateTrip, onDelete, activePaymentFilter }: { trip: Trip, isManager: boolean, onRefresh: () => void, onUpdateTrip?: (updatedTrip: Trip) => void, onDelete?: (tripId: string) => void, activePaymentFilter: "CASH" | "CREDIT" }) => {
+const toStartOfDayIso = (date: Date) => {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+};
+
+const toEndOfDayIso = (date: Date) => {
+  const d = new Date(date);
+  d.setHours(23, 59, 59, 999);
+  return d.toISOString();
+};
+
+const getTripTruckLabel = (trip: Trip, trucks: Truck[]) => {
+  const driverName = trip.driver?.name?.trim();
+  if (driverName) return driverName;
+
+  const truckPlate = trip.truck?.plateNumber?.trim() || trucks.find((truck) => truck.id === trip.truckId)?.plateNumber?.trim();
+  return truckPlate || trip.truckId || "";
+};
+
+const TripCard = ({ trip, trucks, isManager, onRefresh, onUpdateTrip, onDelete, activePaymentFilter }: { trip: Trip, trucks: Truck[], isManager: boolean, onRefresh: () => void, onUpdateTrip?: (updatedTrip: Trip) => void, onDelete?: (tripId: string) => void, activePaymentFilter: "CASH" | "CREDIT" }) => {
   const { startAction, stopAction, isActionPending } = useActionStore();
   const [expanded, setExpanded] = useState(false);
   const approving = isActionPending(`approve_trip_${trip.id}`);
@@ -101,6 +121,7 @@ const TripCard = ({ trip, isManager, onRefresh, onUpdateTrip, onDelete, activePa
     trip.destinationSite ||
     trip.loadingSite ||
     "Trip";
+  const truckLabel = getTripTruckLabel(trip, trucks);
   const isPending = tripPaymentType === "CASH" && trip.approved !== "APPROVED";
   const showEditTrip = trip.approved !== "APPROVED";
   const showApproveOrDelete = trip.approved !== "APPROVED";
@@ -122,6 +143,15 @@ const TripCard = ({ trip, isManager, onRefresh, onUpdateTrip, onDelete, activePa
               {routeTitle}
             </Text>
             <View className="flex-row items-center gap-2 mt-0.5">
+              {truckLabel ? (
+                <>
+                  <MaterialCommunityIcons name="truck-outline" size={13} color="#64748B" />
+                  <Text className="text-text-primary text-xs font-semibold max-w-[110px]" numberOfLines={1}>
+                    {truckLabel}
+                  </Text>
+                  <View className="w-1 h-1 rounded-full bg-border" />
+                </>
+              ) : null}
               <Text className="text-text-secondary text-xs">{formattedDate}</Text>
               <View className="w-1 h-1 rounded-full bg-border" />
               <Text className="text-text-secondary text-xs">{volumeLabel}</Text>
@@ -267,7 +297,7 @@ const TripCard = ({ trip, isManager, onRefresh, onUpdateTrip, onDelete, activePa
               </View>
             )}
 
-            {tripPaymentType === "CREDIT" && hasValidTripReceiptPic(trip.receiptPic) && (
+            {hasValidTripReceiptPic(trip.receiptPic) && (
               <View className="bg-white rounded-xl p-3 border border-border flex-row items-center justify-between">
                 <View>
                   <Text className="text-text-secondary text-[10px] font-bold tracking-widest uppercase mb-1">
@@ -522,10 +552,10 @@ export default function TripsListScreen() {
     }
 
     if (tf.customFrom) {
-      query.startDate = tf.customFrom.toISOString();
+      query.startDate = toStartOfDayIso(tf.customFrom);
     }
     if (tf.customTo) {
-      query.endDate = tf.customTo.toISOString();
+      query.endDate = toEndOfDayIso(tf.customTo);
     }
 
     const ls = tf.advLoadingSite.trim();
@@ -546,6 +576,14 @@ export default function TripsListScreen() {
     if (tf.paymentFilter === "CASH" && tf.advApproved) {
       query.approved = tf.advApproved;
     }
+
+    console.log("[AdminTrips] buildQuery", {
+      pageNumber,
+      selectedTruckId: selectedTruck.id || "ALL",
+      rawCustomFrom: tf.customFrom?.toISOString() ?? null,
+      rawCustomTo: tf.customTo?.toISOString() ?? null,
+      query,
+    });
 
     return query;
   };
@@ -885,7 +923,7 @@ export default function TripsListScreen() {
           </Text>
         )}
         renderItem={({ item }) => (
-          <TripCard trip={item} isManager={isManager} onRefresh={() => loadTrips(1)} onUpdateTrip={handleUpdateTripInList} onDelete={handleDeleteTripInList} activePaymentFilter={paymentFilter} />
+          <TripCard trip={item} trucks={trucks} isManager={isManager} onRefresh={() => loadTrips(1)} onUpdateTrip={handleUpdateTripInList} onDelete={handleDeleteTripInList} activePaymentFilter={paymentFilter} />
         )}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}

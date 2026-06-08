@@ -8,6 +8,12 @@ import { router } from "expo-router";
 import { useAuthStore, useCacheStore } from "@/src/store";
 import { tripService, transferService, reminderService, expenseService, refuelService, formService } from "@/src/api/services";
 
+const isPendingStatus = (value: unknown) =>
+  typeof value === "string" && value.trim().toUpperCase() === "PENDING";
+
+const isPendingItem = (item: any) =>
+  isPendingStatus(item?.status) || isPendingStatus(item?.approved);
+
 export default function AdminDashboardScreen() {
   const { user, logout } = useAuthStore();
 
@@ -70,34 +76,34 @@ export default function AdminDashboardScreen() {
             creditTrips = creditTripsRes.value.data || [];
           }
           const allTrips = [...cashTrips, ...creditTrips];
-          setPendingTripsCount(allTrips.filter((t: any) => t.approved !== "APPROVED").length);
+          setPendingTripsCount(allTrips.filter(isPendingItem).length);
 
           // Transfers
           if (transfersRes.status === "fulfilled") {
             const fetchedTransfers = transfersRes.value.transfers || [];
             setTransfers(fetchedTransfers);
-            setPendingTransfersCount(fetchedTransfers.filter((t: any) => t.status === "PENDING" || t.approved === "PENDING").length);
+            setPendingTransfersCount(fetchedTransfers.filter(isPendingItem).length);
           }
 
           // Expenses
           if (expensesRes.status === "fulfilled") {
             const fetchedExpenses = expensesRes.value.expenses || [];
             setExpenses(fetchedExpenses);
-            setPendingExpensesCount(fetchedExpenses.filter((e: any) => e.approved !== "APPROVED").length);
+            setPendingExpensesCount(fetchedExpenses.filter(isPendingItem).length);
           }
 
           // Refuels
           if (refuelsRes.status === "fulfilled") {
             const fetchedRefuels = refuelsRes.value.refuels || [];
             setRefuels(fetchedRefuels);
-            setPendingRefuelsCount(fetchedRefuels.filter((r: any) => r.approved !== "APPROVED").length);
+            setPendingRefuelsCount(fetchedRefuels.filter(isPendingItem).length);
           }
 
           // Service Requests
           if (requestsRes.status === "fulfilled") {
             const fetchedRequests = requestsRes.value.submissions || [];
             setRequests(fetchedRequests);
-            setPendingRequestsCount(fetchedRequests.filter((r: any) => r.status === "PENDING" || r.approved === "PENDING").length);
+            setPendingRequestsCount(fetchedRequests.filter(isPendingItem).length);
           }
 
           // Reminders
@@ -175,7 +181,7 @@ export default function AdminDashboardScreen() {
         
         {/* KPI Quick Stats - Gives an analytical "Advanced" feel instantly */}
         <View className="px-5 pt-6 pb-2">
-          <Text className="text-slate-400 text-[10px] font-bold tracking-widest uppercase mb-3">Today's Overview</Text>
+          <Text className="text-slate-400 text-[10px] font-bold tracking-widest uppercase mb-3">Today Overview</Text>
           <View className="flex-row gap-3">
             <View className="flex-1 bg-white p-3 rounded-2xl border border-slate-200/50 shadow-sm">
                <View className="flex-row items-center justify-between mb-2">

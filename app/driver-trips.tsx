@@ -39,7 +39,7 @@ const TripCard = ({ trip, companiesMap }: { trip: Trip, companiesMap: Record<str
   const paymentMethodDisplay = trip.paymentMethod || (trip.companyId ? "CREDIT" : "CASH");
   const isCredit = paymentMethodDisplay === "CREDIT";
   const companyName = trip.contractedCompany?.name || trip.company?.name || companiesMap[trip.companyId || ""];
-  const showReceipt = isCredit && hasValidTripReceiptPic(trip.receiptPic);
+  const showReceipt = hasValidTripReceiptPic(trip.receiptPic);
 
   let paymentBgClass = "bg-primary-50";
   let paymentTextClass = "text-primary-600";

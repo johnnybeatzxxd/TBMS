@@ -140,6 +140,7 @@ export default function AddTripModal() {
   
   const actionKey = isEditMode ? `update_trip_${params.id}` : "submit_new_trip";
   const isSubmitting = isActionPending(actionKey);
+  const submitDisabled = isSubmitting || isUploadingReceipt;
 
   const onDateChange = (_: DateTimePickerEvent, selected?: Date) => {
     setShowDatePicker(false);
@@ -172,11 +173,11 @@ export default function AddTripModal() {
       Alert.alert("Validation Error", "Please enter a valid road expense amount.");
       return;
     }
-    if (tripType === "credit" && !isEditMode && isUploadingReceipt) {
+    if (!isEditMode && isUploadingReceipt) {
       Alert.alert("Please wait", "Receipt is still uploading. Try again in a moment.");
       return;
     }
-    if (tripType === "credit" && !isEditMode && hasIncompleteReceipt) {
+    if (!isEditMode && hasIncompleteReceipt) {
       Alert.alert(
         "Receipt not uploaded",
         "The receipt image did not finish uploading. Please pick the image again."
@@ -522,8 +523,8 @@ export default function AddTripModal() {
           </View>
         </View>
 
-        {/* Receipt Photo (Credit trips only) */}
-        {tripType === "credit" && !isEditMode && (
+        {/* Receipt Photo */}
+        {!isEditMode && (
           <ReceiptImageUploader
             maxImages={1}
             uploadImage={uploadCreditTripReceipt}
@@ -538,12 +539,19 @@ export default function AddTripModal() {
         {/* Submit Button */}
         <TouchableOpacity
           onPress={handleSubmit}
-          disabled={isSubmitting || isUploadingReceipt}
-          className="bg-primary rounded-2xl py-4 items-center flex-row justify-center gap-3 shadow-sm z-0"
+          disabled={submitDisabled}
+          className={`${submitDisabled ? "bg-primary/60" : "bg-primary"} rounded-2xl py-4 items-center flex-row justify-center gap-3 shadow-sm z-0`}
           activeOpacity={0.85}
           style={{ marginTop: 4, marginBottom: 32 }}
         >
-          {isSubmitting ? (
+          {isUploadingReceipt ? (
+            <>
+              <ActivityIndicator color="#fff" size="small" />
+              <Text className="text-white font-bold text-base tracking-wider uppercase ml-2">
+                Uploading Receipt...
+              </Text>
+            </>
+          ) : isSubmitting ? (
             <>
               <ActivityIndicator color="#fff" size="small" />
               <Text className="text-white font-bold text-base tracking-wider uppercase ml-2">

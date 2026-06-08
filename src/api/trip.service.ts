@@ -101,6 +101,12 @@ export const tripService = {
     const queryString = params.toString();
     const endpoint = `/trip/get-trips${queryString ? `?${queryString}` : ""}`;
 
+    console.log("[TripService] getTrips request", {
+      query,
+      queryString,
+      endpoint,
+    });
+
     const res = await apiFetch(endpoint);
     
     if (!res.ok) {
@@ -109,12 +115,29 @@ export const tripService = {
     }
     
     const json = await res.json();
+    const trips = json.data || json.allTrips || [];
+
+    console.log("[TripService] getTrips response", {
+      endpoint,
+      status: res.status,
+      totalItems: json.meta?.totalItems,
+      currentPage: json.meta?.currentPage,
+      totalPages: json.meta?.totalPages,
+      returnedCount: trips.length,
+      returnedTripDates: trips.map((trip: Trip) => ({
+        id: trip.id,
+        date: trip.date,
+        truckId: trip.truckId,
+        paymentMethod: trip.paymentMethod,
+        approved: trip.approved,
+      })),
+    });
 
     // Standardize the response wrapper
     // The doc says "allTrips" for one endpoint and "data" for the exact filtered query.
     // The `/trip/get-trips` doc explicitly returns `{ data: [], meta: {} }` string format.
     return {
-      data: json.data || json.allTrips || [],
+      data: trips,
       meta: json.meta || {
         totalItems: 0,
         currentPage: 1,

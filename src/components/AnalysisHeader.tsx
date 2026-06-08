@@ -276,8 +276,8 @@ export function AnalysisHeader({
           onPresetChange={(preset) => update({ preset })}
           customFrom={filters.customFrom}
           customTo={filters.customTo}
-          onCustomFromChange={(d) => update({ customFrom: d })}
-          onCustomToChange={(d) => update({ customTo: d })}
+          onCustomFromChange={(d) => update({ preset: "custom", customFrom: d })}
+          onCustomToChange={(d) => update({ preset: "custom", customTo: d })}
         />
         {showInlineGroupBy && (
           <View className="px-4 pb-3">

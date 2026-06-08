@@ -7,6 +7,7 @@
 
 // ─── Common Filter Payload ──────────────────────────────────────────
 export interface AnalysisFilters {
+  period?: "today" | "week" | "month" | "year" | "custom";
   truckIds?: string[];
   driverId?: string;
   startDate?: string; // ISO date string
@@ -143,12 +144,16 @@ export interface FuelUsageSummary {
 
 export interface FuelUsageBreakdownItem {
   key: string;
-  totalLiters: number;
-  totalCost: number;
-  totalTrips: number;
-  fuelUsagePerTrip: number;
-  fuleCostPerTrip: number;
-  averageFuelPrice: number;
+  totalLiters?: number;
+  totalCost?: number;
+  totalTrips?: number;
+  fuelUsagePerTrip?: number;
+  fuleCostPerTrip?: number;
+  averageFuelPrice?: number;
+  liters?: number;
+  cost?: number;
+  count?: number;
+  avgPricePerLiter?: number;
 }
 
 export interface FuelUsageResponse {

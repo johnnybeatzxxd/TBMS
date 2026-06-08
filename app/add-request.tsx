@@ -9,15 +9,47 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { useAuthStore } from "@/src/store";
+import { useAuthStore, useActionStore } from "@/src/store";
 import { formService, expenseService } from "@/src/api/services";
 import { ReceiptImageUploader } from "@/src/components/ReceiptImageUploader";
 import { uploadExpenseReceipt } from "@/src/utils/firebaseUpload";
-import { useActionStore } from "@/src/store";
+import { FormTemplate, SubmitFormPayload } from "@/src/types/form.types";
 
 /** Built-in frontend form — submits to POST /expences/expence (not service-request). */
 export const OTHER_SERVICE_ID = "__other__";
 const OTHER_SERVICE_NAME = "Other";
+const PERDIME_SERVICE_ID = "__perdime__";
+const SALARY_SERVICE_ID = "__salary__";
+
+type BuiltInRequestKind = "OTHER" | "PERDIME" | "SALARY";
+
+function normalizeBuiltInKind(tag?: string, templateName?: string, templateId?: string): BuiltInRequestKind | null {
+  const cleanedTag = tag?.trim().toUpperCase();
+  if (cleanedTag === "PERDIEM") return "PERDIME";
+  if (cleanedTag === "PERDIME") return "PERDIME";
+  if (cleanedTag === "SALARY") return "SALARY";
+  if (cleanedTag === "OTHER") return "OTHER";
+
+  const cleanedName = templateName?.trim().toUpperCase();
+  if (cleanedName === "PERDIEM") return "PERDIME";
+  if (cleanedName === "PERDIME") return "PERDIME";
+  if (cleanedName === "SALARY") return "SALARY";
+  if (cleanedName === "OTHER" || cleanedName === "UNKNOWN") return "OTHER";
+  if (!cleanedTag && !cleanedName && !templateId) return "OTHER";
+  return null;
+}
+
+function getBuiltInServiceId(kind: BuiltInRequestKind) {
+  if (kind === "PERDIME") return PERDIME_SERVICE_ID;
+  if (kind === "SALARY") return SALARY_SERVICE_ID;
+  return OTHER_SERVICE_ID;
+}
+
+function getBuiltInServiceName(kind: BuiltInRequestKind) {
+  if (kind === "PERDIME") return "Perdiem";
+  if (kind === "SALARY") return "Salary";
+  return OTHER_SERVICE_NAME;
+}
 
 function startOfDay(d: Date) {
   const x = new Date(d);
@@ -75,8 +107,20 @@ const imageFieldStyles = StyleSheet.create({
 
 export default function AddRequestScreen() {
   const { user } = useAuthStore();
-  const params = useLocalSearchParams<{ id?: string }>();
+  const params = useLocalSearchParams<{
+    id?: string;
+    serviceRequestId?: string;
+    tag?: string;
+    templateName?: string;
+    amount?: string;
+    date?: string;
+    description?: string;
+    values?: string;
+  }>();
   const isEditMode = !!params.id;
+  const initialBuiltInKind = isEditMode
+    ? normalizeBuiltInKind(params.tag, params.templateName)
+    : null;
 
   const [loading, setLoading] = useState(true);
   const { isActionPending, startAction, stopAction } = useActionStore();
@@ -110,7 +154,16 @@ export default function AddRequestScreen() {
   // Dynamic Template Fields
   const [values, setValues] = useState<Record<string, any>>({});
 
-  const isOtherService = !isEditMode && selectedServiceId === OTHER_SERVICE_ID;
+  const builtInKind =
+    selectedServiceId === PERDIME_SERVICE_ID
+      ? "PERDIME"
+      : selectedServiceId === SALARY_SERVICE_ID
+        ? "SALARY"
+        : selectedServiceId === OTHER_SERVICE_ID
+          ? "OTHER"
+          : null;
+  const isOtherService = builtInKind === "OTHER";
+  const isBuiltInService = !!builtInKind;
 
   // ── Load service type names on mount ──────────────────────────────
   useEffect(() => {
@@ -121,14 +174,44 @@ export default function AddRequestScreen() {
           setSelectedServiceId(OTHER_SERVICE_ID);
         }
         if (isEditMode && params.id) {
-          const sub = await formService.getSubmission(params.id);
+          const sub = await formService.getSubmission(params.serviceRequestId || params.id);
+          const kind = normalizeBuiltInKind(sub.tag, sub.templateName, sub.templateId);
           setSelectedServiceId(sub.templateId);
           setAmount(sub.amount.toString());
           setDescription(sub.description || "");
           setValues(sub.values || {});
+          if (kind && (!sub.templateId || sub.templateName === "Other" || sub.tag)) {
+            setSelectedServiceId(getBuiltInServiceId(kind));
+            setOtherDate(sub.date ? new Date(sub.date) : new Date());
+            setOtherRemark(
+              String(
+                sub.values?.Remark ??
+                sub.values?.remark ??
+                sub.description ??
+                ""
+              )
+            );
+          }
         }
       })
       .catch((e: any) => {
+        if (isEditMode && initialBuiltInKind) {
+          setSelectedServiceId(getBuiltInServiceId(initialBuiltInKind));
+          setAmount(params.amount || "");
+          setDescription(params.description || "");
+          setOtherDate(params.date ? new Date(params.date) : new Date());
+          setOtherRemark(params.description || "");
+          try {
+            const parsedValues = params.values ? JSON.parse(params.values) : {};
+            setValues(parsedValues);
+            setOtherRemark(
+              String(parsedValues.Remark ?? parsedValues.remark ?? params.description ?? "")
+            );
+          } catch {
+            setValues({});
+          }
+          return;
+        }
         Alert.alert("Error", e.message || "Failed to load data.");
       })
       .finally(() => setLoading(false));
@@ -142,7 +225,7 @@ export default function AddRequestScreen() {
       return;
     }
 
-    if (selectedServiceId === OTHER_SERVICE_ID) {
+    if (isBuiltInService) {
       setActiveTemplate(null);
       setValues({});
       setLoadingTemplate(false);
@@ -180,7 +263,7 @@ export default function AddRequestScreen() {
     };
 
     fetchTemplate();
-  }, [selectedServiceId]);
+  }, [selectedServiceId, isBuiltInService]);
 
   // ── Helpers ───────────────────────────────────────────────────────
   const updateValue = (fieldId: string, val: any) => {
@@ -215,14 +298,14 @@ export default function AddRequestScreen() {
       return Alert.alert("Validation", "Please enter a valid amount.");
     }
 
-    if (isOtherService) {
+    if (isBuiltInService && builtInKind) {
       if (isFutureDate(otherDate)) {
         return Alert.alert("Validation", "Date cannot be in the future.");
       }
-      if (isUploadingReceipt) {
+      if (!isEditMode && isUploadingReceipt) {
         return Alert.alert("Please wait", "Receipt is still uploading. Try again in a moment.");
       }
-      if (hasIncompleteReceipt) {
+      if (!isEditMode && hasIncompleteReceipt) {
         return Alert.alert(
           "Receipt not uploaded",
           "The receipt image did not finish uploading. Please retry or remove it."
@@ -231,16 +314,29 @@ export default function AddRequestScreen() {
 
       startAction("submit_request");
       try {
-        await expenseService.addOtherExpense({
-          amount: numAmount,
-          date: otherDate.toISOString(),
-          remark: otherRemark.trim() || undefined,
-          receiptPic: receiptPicUrls[0],
-        });
-        Alert.alert("Success", "Expense submitted successfully.");
+        if (isEditMode && params.id) {
+          const dynamicData: Record<string, any> = {
+            Type: getBuiltInServiceName(builtInKind),
+          };
+          if (otherRemark.trim()) dynamicData.Remark = otherRemark.trim();
+          await formService.updateSubmission(params.serviceRequestId || params.id, {
+            date: otherDate.toISOString(),
+            cost: numAmount,
+            dynamicData,
+          });
+          Alert.alert("Success", "Your request has been updated successfully.");
+        } else {
+          await expenseService.addOtherExpense({
+            amount: numAmount,
+            date: otherDate.toISOString(),
+            remark: otherRemark.trim() || undefined,
+            receiptPic: receiptPicUrls[0],
+          });
+          Alert.alert("Success", "Expense submitted successfully.");
+        }
         router.back();
       } catch (e: any) {
-        Alert.alert("Error", e.message || "Failed to submit expense.");
+        Alert.alert("Error", e.message || "Failed to submit request.");
       } finally {
         stopAction("submit_request");
       }
@@ -329,11 +425,11 @@ export default function AddRequestScreen() {
   }
 
   const selectedName =
-    selectedServiceId === OTHER_SERVICE_ID
-      ? OTHER_SERVICE_NAME
+    builtInKind
+      ? getBuiltInServiceName(builtInKind)
       : serviceTypes.find((s) => s.id === selectedServiceId)?.name;
 
-  const formReady = isOtherService || (!!activeTemplate && !loadingTemplate);
+  const formReady = isBuiltInService || (!!activeTemplate && !loadingTemplate);
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
@@ -437,12 +533,12 @@ export default function AddRequestScreen() {
             </View>
 
             {/* ─── Other (built-in expense form) ─── */}
-            {isOtherService ? (
+            {isBuiltInService && builtInKind ? (
               <View className="gap-5">
                 <View className="flex-row items-center gap-3 mt-1">
                   <View className="flex-1 h-px bg-border" />
                   <Text className="text-text-secondary text-[10px] font-bold tracking-widest uppercase">
-                    Expense details
+                    {getBuiltInServiceName(builtInKind)} details
                   </Text>
                   <View className="flex-1 h-px bg-border" />
                 </View>
@@ -518,7 +614,13 @@ export default function AddRequestScreen() {
                   <TextInput
                     value={otherRemark}
                     onChangeText={setOtherRemark}
-                    placeholder="What was this expense for?"
+                    placeholder={
+                      builtInKind === "PERDIME"
+                        ? "Optional perdiem remark..."
+                        : builtInKind === "SALARY"
+                          ? "Optional salary remark..."
+                          : "What was this expense for?"
+                    }
                     placeholderTextColor="#94A3B8"
                     multiline
                     textAlignVertical="top"
@@ -526,15 +628,17 @@ export default function AddRequestScreen() {
                   />
                 </View>
 
-                <ReceiptImageUploader
-                  maxImages={1}
-                  uploadImage={uploadExpenseReceipt}
-                  onUrlsChange={setReceiptPicUrls}
-                  onUploadingChange={setIsUploadingReceipt}
-                  onIncompleteChange={setHasIncompleteReceipt}
-                  sectionTitle="Receipt"
-                  fieldLabel="Receipt photo (optional)"
-                />
+                {builtInKind === "OTHER" && !isEditMode && (
+                  <ReceiptImageUploader
+                    maxImages={1}
+                    uploadImage={uploadExpenseReceipt}
+                    onUrlsChange={setReceiptPicUrls}
+                    onUploadingChange={setIsUploadingReceipt}
+                    onIncompleteChange={setHasIncompleteReceipt}
+                    sectionTitle="Receipt"
+                    fieldLabel="Receipt photo (optional)"
+                  />
+                )}
               </View>
             ) : selectedServiceId ? (
               loadingTemplate ? (
@@ -714,10 +818,10 @@ export default function AddRequestScreen() {
         <View className="p-5 bg-white border-t border-border shadow-lg z-0">
           <TouchableOpacity
             onPress={handleSubmit}
-            disabled={submitting || (isOtherService && isUploadingReceipt)}
+            disabled={submitting || (!isEditMode && isOtherService && isUploadingReceipt)}
             activeOpacity={0.8}
             className={`h-14 rounded-xl flex-row items-center justify-center shadow-md ${
-              submitting || (isOtherService && isUploadingReceipt) ? "bg-primary/70" : "bg-primary"
+              submitting || (!isEditMode && isOtherService && isUploadingReceipt) ? "bg-primary/70" : "bg-primary"
             }`}
           >
             {submitting ? (

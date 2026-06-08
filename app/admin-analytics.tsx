@@ -15,6 +15,18 @@ import { useCachedFetch } from "@/src/hooks/useCachedFetch";
 
 const formatCurrency = (n: number) => n.toLocaleString("en-US");
 
+const toStartOfDayIso = (date: Date) => {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+};
+
+const toEndOfDayIso = (date: Date) => {
+  const d = new Date(date);
+  d.setHours(23, 59, 59, 999);
+  return d.toISOString();
+};
+
 export default function AnalyticsHubScreen() {
   const { user } = useAuthStore();
   const [filters, setFilters] = useState<AnalysisFilterState>(DEFAULT_ANALYSIS_FILTERS);
@@ -84,10 +96,10 @@ export default function AnalyticsHubScreen() {
         payload.driverId = exportSelectedDriverId;
       }
       if (exportStartDate) {
-        payload.startDate = exportStartDate.toISOString();
+        payload.startDate = toStartOfDayIso(exportStartDate);
       }
       if (exportEndDate) {
-        payload.endDate = exportEndDate.toISOString();
+        payload.endDate = toEndOfDayIso(exportEndDate);
       }
 
       // Add report-specific parameters
@@ -290,7 +302,7 @@ export default function AnalyticsHubScreen() {
               <Ionicons name="bar-chart" size={28} color="#fff" />
             </View>
             <Text className="text-white text-2xl font-bold tracking-wide">Dashboard</Text>
-            <Text className="text-white/60 text-sm mt-1">{user?.name}'s Fleet Overview</Text>
+            <Text className="text-white/60 text-sm mt-1">{`${user?.name || "Admin"}'s Fleet Overview`}</Text>
           </View>
         </View>
 

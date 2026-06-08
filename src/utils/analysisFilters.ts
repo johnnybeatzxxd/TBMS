@@ -52,27 +52,46 @@ export function buildAnalysisQueryString(filters: AnalysisFilterState): string {
 /**
  * Convert a UI preset into an ISO date range { startDate, endDate }.
  */
+function toStartOfDayIso(date: Date): string {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+}
+
+function toEndOfDayIso(date: Date): string {
+  const d = new Date(date);
+  d.setHours(23, 59, 59, 999);
+  return d.toISOString();
+}
+
 function presetToDateRange(
   preset: DateFilterPreset,
   customFrom: Date | null,
   customTo: Date | null
 ): { startDate?: string; endDate?: string } {
+  const hasCustomDates = !!customFrom || !!customTo;
+  if (hasCustomDates) {
+    return {
+      startDate: customFrom ? toStartOfDayIso(customFrom) : undefined,
+      endDate: customTo ? toEndOfDayIso(customTo) : undefined,
+    };
+  }
+
   if (preset === "all") return {};
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   if (preset === "today") {
-    const iso = today.toISOString().split("T")[0];
-    return { startDate: iso, endDate: iso };
+    return { startDate: toStartOfDayIso(today), endDate: toEndOfDayIso(today) };
   }
 
   if (preset === "week") {
     const weekAgo = new Date(today);
     weekAgo.setDate(weekAgo.getDate() - 7);
     return {
-      startDate: weekAgo.toISOString().split("T")[0],
-      endDate: today.toISOString().split("T")[0],
+      startDate: toStartOfDayIso(weekAgo),
+      endDate: toEndOfDayIso(today),
     };
   }
 
@@ -80,15 +99,15 @@ function presetToDateRange(
     const monthAgo = new Date(today);
     monthAgo.setMonth(monthAgo.getMonth() - 1);
     return {
-      startDate: monthAgo.toISOString().split("T")[0],
-      endDate: today.toISOString().split("T")[0],
+      startDate: toStartOfDayIso(monthAgo),
+      endDate: toEndOfDayIso(today),
     };
   }
 
   if (preset === "custom") {
     return {
-      startDate: customFrom ? customFrom.toISOString().split("T")[0] : undefined,
-      endDate: customTo ? customTo.toISOString().split("T")[0] : undefined,
+      startDate: customFrom ? toStartOfDayIso(customFrom) : undefined,
+      endDate: customTo ? toEndOfDayIso(customTo) : undefined,
     };
   }
 
@@ -120,11 +139,12 @@ export function buildDashboardPayload(
     month: "month",
     custom: "custom",
   };
-  payload.period = periodMap[preset] || "month";
+  const hasCustomDates = !!customFrom || !!customTo;
+  payload.period = hasCustomDates ? "custom" : (periodMap[preset] || "month");
 
-  if (preset === "custom") {
-    if (customFrom) payload.startDate = customFrom.toISOString().split("T")[0];
-    if (customTo) payload.endDate = customTo.toISOString().split("T")[0];
+  if (payload.period === "custom") {
+    if (customFrom) payload.startDate = toStartOfDayIso(customFrom);
+    if (customTo) payload.endDate = toEndOfDayIso(customTo);
   }
 
   applyTruckIds(payload, truckIds);
@@ -146,6 +166,11 @@ export function buildAnalysisPayload(
   driverId?: string | null
 ): AnalysisFilters {
   const payload: AnalysisFilters = {};
+  const hasCustomDates = !!customFrom || !!customTo;
+
+  if (preset === "custom" || hasCustomDates) {
+    payload.period = "custom";
+  }
 
   const { startDate, endDate } = presetToDateRange(preset, customFrom, customTo);
   if (startDate) payload.startDate = startDate;

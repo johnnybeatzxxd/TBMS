@@ -79,6 +79,13 @@ export default function TripsAnalysisScreen() {
 
   const summary = data?.summary;
   const totalRoadExpenses = (summary?.cashTrips?.roadExpenses ?? 0) + (summary?.creditTrips?.roadExpenses ?? 0);
+  const totalTripsCount = summary?.totalTripsCount ?? 0;
+  const averageTruckExpensePerTrip = totalTripsCount > 0
+    ? (summary?.totalTruckExpence ?? 0) / totalTripsCount
+    : 0;
+  const averageFuelCostPerTrip = totalTripsCount > 0
+    ? (summary?.totalFuelCost ?? 0) / totalTripsCount
+    : 0;
 
   const chartLabels = breakdownItems.map((item) => formatAnalysisChartLabel(item.key || "", filters.groupBy));
   const chartData = breakdownItems.map((item) => item.totalTripsCount ?? 0);
@@ -172,10 +179,14 @@ export default function TripsAnalysisScreen() {
               <View className="flex-1 bg-orange-50 rounded-xl p-3 border border-orange-100">
                 <Text className="text-orange-800 text-xs font-bold uppercase tracking-widest mb-1">Truck</Text>
                 <Text className="text-orange-700 font-bold text-lg">${fmt(summary?.totalTruckExpence)}</Text>
+                <Text className="text-orange-500 text-xs">Avg ${fmt(Math.round(averageTruckExpensePerTrip))}/trip</Text>
               </View>
               <View className="flex-1 bg-amber-50 rounded-xl p-3 border border-amber-100">
                 <Text className="text-amber-800 text-xs font-bold uppercase tracking-widest mb-1">Fuel</Text>
                 <Text className="text-amber-700 font-bold text-lg">${fmt(summary?.totalFuelCost)}</Text>
+                <Text className="text-amber-500 text-xs">
+                  Avg ${fmt(Math.round(averageFuelCostPerTrip))}/trip · {fmt(Math.round(summary?.averageFuelUsagePerTrip ?? 0))}L
+                </Text>
               </View>
             </View>
           </View>
