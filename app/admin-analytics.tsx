@@ -35,7 +35,7 @@ export default function AnalyticsHubScreen() {
 
   // Export Modal State
   const [showExportModal, setShowExportModal] = useState(false);
-  const [exportReport, setExportReport] = useState<"refules" | "trips" | "expenses" | "moneyTransfer">("trips");
+  const [exportReport, setExportReport] = useState<"refules" | "trips" | "expenses" | "moneyTransfer" | "fuel">("trips");
   
   // Dynamic Data Lists
   const [exportTrucks, setExportTrucks] = useState<{ id: string; plateNumber: string }[]>([]);
@@ -151,7 +151,7 @@ export default function AnalyticsHubScreen() {
     };
   }, [filters]);
 
-  const { data: cachedData, isLoading, refetch } = useCachedFetch<{ dashboard: DashboardResponse; profitSummary: ProfitSummary | null } | null>(
+  const { data: cachedData, isLoading, error, refetch } = useCachedFetch<{ dashboard: DashboardResponse; profitSummary: ProfitSummary | null } | null>(
     `ADMIN_ANALYTICS_${JSON.stringify(filters)}`,
     fetchAnalytics,
     null,
@@ -161,11 +161,33 @@ export default function AnalyticsHubScreen() {
   const dashboard = cachedData?.dashboard;
   const profitSummary = cachedData?.profitSummary;
 
-  if (isLoading || !dashboard) {
+  if (isLoading && !dashboard) {
     return (
       <SafeAreaView className="flex-1 bg-surface items-center justify-center" edges={["top","bottom"]}>
         <ActivityIndicator size="large" color="#2563EB" />
         <Text className="text-text-secondary mt-3 tracking-widest text-xs uppercase font-bold">Loading Analytics...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (error || !dashboard) {
+    return (
+      <SafeAreaView className="flex-1 bg-surface items-center justify-center px-6" edges={["top","bottom"]}>
+        <View className="w-16 h-16 rounded-full bg-red-50 items-center justify-center mb-4 border border-red-100">
+          <Ionicons name="warning-outline" size={30} color="#DC2626" />
+        </View>
+        <Text className="text-text-primary text-lg font-bold text-center">Could not load analytics</Text>
+        <Text className="text-text-secondary text-sm text-center mt-2">
+          {error?.message || "The server did not return dashboard data."}
+        </Text>
+        <TouchableOpacity
+          onPress={() => refetch(true)}
+          className="mt-5 bg-primary rounded-xl px-5 py-3 flex-row items-center gap-2"
+          activeOpacity={0.85}
+        >
+          <Ionicons name="refresh" size={18} color="#fff" />
+          <Text className="text-white font-bold text-sm">Try Again</Text>
+        </TouchableOpacity>
       </SafeAreaView>
     );
   }
@@ -445,7 +467,7 @@ export default function AnalyticsHubScreen() {
               </View>
               <View className="flex-1">
                 <Text className="text-text-primary font-bold text-lg">Export CSV Reports</Text>
-                <Text className="text-text-secondary text-sm mt-0.5">Download trips, refuel logs, expenses or transfers</Text>
+                <Text className="text-text-secondary text-sm mt-0.5">Download trips, fuel, refuel logs, expenses or transfers</Text>
               </View>
               <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
             </View>
@@ -512,6 +534,7 @@ export default function AnalyticsHubScreen() {
                 <View className="flex-row flex-wrap gap-2.5">
                   {[
                     { id: "trips", label: "Trips", icon: "truck", color: "#2563EB", bg: "#EFF6FF" },
+                    { id: "fuel", label: "Fuel", icon: "fuel", color: "#0EA5E9", bg: "#F0F9FF" },
                     { id: "refules", label: "Refuel Logs", icon: "gas-station-outline", color: "#F59E0B", bg: "#FFFBEB" },
                     { id: "expenses", label: "Expenses", icon: "receipt", color: "#DC2626", bg: "#FEF2F2" },
                     { id: "moneyTransfer", label: "Transfers", icon: "bank-transfer", color: "#7C3AED", bg: "#F5F3FF" }

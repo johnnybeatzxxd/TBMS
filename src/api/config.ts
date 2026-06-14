@@ -74,14 +74,14 @@ export const apiFetch = async (
 
   // Global 401 interception — force logout on unauthorized responses
   if (response.status === 401 && !endpoint.includes("/auth/login")) {
+    // Lazy import avoids a config -> store -> services -> config cycle at module load time.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { useAuthStore } = require("@/src/store/authStore");
     const { isAuthenticated } = useAuthStore.getState();
     if (isAuthenticated) {
-      useAuthStore.getState().logout();
+      await useAuthStore.getState().logout();
     }
-    // Return a never-resolving promise so all downstream code silently stops
-    // (no error alerts will be shown to the user)
-    return new Promise<Response>(() => {});
+    throw new Error("Your session expired. Please log in again.");
   }
 
   return response;

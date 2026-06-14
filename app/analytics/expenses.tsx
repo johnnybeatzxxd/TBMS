@@ -11,6 +11,7 @@ import { ExpensesResponse, ExpensesBreakdownItem } from "@/src/types/analysis.ty
 import { AnalysisHeader, AnalysisFilterState } from "@/src/components/AnalysisHeader";
 import { ANALYSIS_PAGE_SIZE, AnalysisLoadMore, hasMoreAnalysisPages } from "@/src/components/AnalysisLoadMore";
 import { formatAnalysisChartLabel, formatAnalysisPeriodLabel } from "@/src/utils/analysisChartLabels";
+import { getScrollableChartWidth } from "@/src/utils/analysisChartLayout";
 import { AnalyticsExportButton } from "@/src/components/AnalyticsExportButton";
 import { AnalyticsValueText } from "@/src/components/AnalyticsValueText";
 
@@ -30,10 +31,45 @@ const chartConfig = {
 const CATEGORY_COLORS: Record<string, { color: string; bg: string; icon: string }> = {
   roadExpenses: { color: "#2563EB", bg: "#EFF6FF", icon: "road-variant" },
   salary: { color: "#16A34A", bg: "#F0FDF4", icon: "account-cash" },
-  maintenance: { color: "#F59E0B", bg: "#FFFBEB", icon: "wrench" },
-  perdime: { color: "#7C3AED", bg: "#F5F3FF", icon: "food" },
-  refuel: { color: "#0EA5E9", bg: "#F0F9FF", icon: "gas-station" },
-  other: { color: "#64748B", bg: "#F8FAFC", icon: "dots-horizontal" },
+  perdiem: { color: "#7C3AED", bg: "#F5F3FF", icon: "food" },
+  fuelExpense: { color: "#0EA5E9", bg: "#F0F9FF", icon: "gas-station" },
+  serviceType: { color: "#F59E0B", bg: "#FFFBEB", icon: "wrench" },
+  otherExpensesTotal: { color: "#64748B", bg: "#F8FAFC", icon: "dots-horizontal" },
+};
+
+const buildExpenseCategories = (summary?: ExpensesResponse["summary"]) => {
+  if (!summary) return [];
+  const total = summary.total ?? 0;
+  const rows = [
+    { key: "roadExpenses", name: "Road Expenses", amount: summary.driverExpense?.roadExpenses ?? 0 },
+    { key: "salary", name: "Salary", amount: summary.driverExpense?.salary ?? 0 },
+    { key: "perdiem", name: "Perdiem", amount: summary.driverExpense?.perdiem ?? 0 },
+    { key: "fuelExpense", name: "Fuel Expense", amount: summary.fuelExpense ?? 0 },
+    ...(summary.truckExpenses?.byServiceType || []).map((item) => ({
+      key: "serviceType",
+      name: item.serviceTypeName || "Service Type",
+      amount: item.total ?? 0,
+    })),
+    {
+      key: "otherExpensesTotal",
+      name: "Other Truck Expenses",
+      amount: summary.truckExpenses?.otherExpensesTotal ?? 0,
+    },
+  ];
+
+  return rows
+    .filter((row) => row.amount > 0)
+    .sort((a, b) => b.amount - a.amount)
+    .map((row) => ({
+      ...row,
+      pct: total > 0 ? Math.round((row.amount / total) * 100) : 0,
+      ...(CATEGORY_COLORS[row.key] || CATEGORY_COLORS.otherExpensesTotal),
+    }));
+};
+
+const describeExpenseBreakdown = (item: ExpensesBreakdownItem) => {
+  const labels = buildExpenseCategories(item).map((cat) => cat.name);
+  return labels.length > 0 ? labels.join(", ") : "No expenses";
 };
 
 export default function ExpensesAnalysisScreen() {
@@ -87,39 +123,37 @@ export default function ExpensesAnalysisScreen() {
 
   const chartLabels = breakdownItems.map((item) => formatAnalysisChartLabel(item.key || "", filters.groupBy));
   const chartData = breakdownItems.map((item) => item.total ?? 0);
+  const chartWidth = getScrollableChartWidth(chartLabels.length, screenWidth);
 
-  // Build category list from summary (excluding 'total' and zero values)
-  const categories = summary
-    ? Object.entries(summary)
-        .filter(([key, val]) => key !== "total" && (val ?? 0) > 0)
-        .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
-        .map(([key, val]) => ({
-          name: key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, " $1"),
-          amount: val ?? 0,
-          pct: (summary.total ?? 0) > 0 ? Math.round(((val ?? 0) / summary.total) * 100) : 0,
-          ...(CATEGORY_COLORS[key] || CATEGORY_COLORS.other),
-        }))
-    : [];
+  const categories = buildExpenseCategories(summary);
   const topCategory = categories[0];
   const buildExpensesExportRows = () => [
     { section: "Summary", metric: "Total", value: summary?.total ?? 0 },
-    { section: "Summary", metric: "Perdiem", value: summary?.perdime ?? 0 },
-    { section: "Summary", metric: "Salary", value: summary?.salary ?? 0 },
-    { section: "Summary", metric: "Maintenance", value: summary?.maintenance ?? 0 },
-    { section: "Summary", metric: "Refuel", value: summary?.refuel ?? 0 },
-    { section: "Summary", metric: "Road Expenses", value: summary?.roadExpenses ?? 0 },
-    { section: "Summary", metric: "Other", value: summary?.other ?? 0 },
+    { section: "Driver Expense", metric: "Total", value: summary?.driverExpense?.total ?? 0 },
+    { section: "Driver Expense", metric: "Road Expenses", value: summary?.driverExpense?.roadExpenses ?? 0 },
+    { section: "Driver Expense", metric: "Salary", value: summary?.driverExpense?.salary ?? 0 },
+    { section: "Driver Expense", metric: "Perdiem", value: summary?.driverExpense?.perdiem ?? 0 },
+    { section: "Fuel Expense", metric: "Fuel Expense", value: summary?.fuelExpense ?? 0 },
+    { section: "Truck Expense", metric: "Total", value: summary?.truckExpenses?.total ?? 0 },
+    { section: "Truck Expense", metric: "Other Expenses", value: summary?.truckExpenses?.otherExpensesTotal ?? 0 },
+    ...(summary?.truckExpenses?.byServiceType || []).map((item) => ({
+      section: "Truck Expense",
+      serviceTypeId: item.serviceTypeId,
+      metric: item.serviceTypeName,
+      value: item.total ?? 0,
+    })),
     ...breakdownItems.map((item) => ({
       section: "Breakdown",
       key: item.key,
       label: formatAnalysisPeriodLabel(item.key || "", filters.groupBy),
       total: item.total ?? 0,
-      perdime: item.perdime ?? 0,
-      salary: item.salary ?? 0,
-      maintenance: item.maintenance ?? 0,
-      refuel: item.refuel ?? 0,
-      roadExpenses: item.roadExpenses ?? 0,
-      other: item.other ?? 0,
+      driverExpense: item.driverExpense?.total ?? 0,
+      roadExpenses: item.driverExpense?.roadExpenses ?? 0,
+      salary: item.driverExpense?.salary ?? 0,
+      perdiem: item.driverExpense?.perdiem ?? 0,
+      fuelExpense: item.fuelExpense ?? 0,
+      truckExpenses: item.truckExpenses?.total ?? 0,
+      otherTruckExpenses: item.truckExpenses?.otherExpensesTotal ?? 0,
     })),
   ];
 
@@ -210,20 +244,22 @@ export default function ExpensesAnalysisScreen() {
           <View className="bg-white rounded-2xl border border-border p-4 shadow-sm mb-4">
             <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase mb-3 ml-1">Spending Breakdown</Text>
             {chartLabels.length > 0 ? (
-              <BarChart
-                data={{
-                  labels: chartLabels,
-                  datasets: [{ data: chartData.length > 0 ? chartData : [0] }],
-                }}
-                width={screenWidth - 64}
-                height={200}
-                chartConfig={chartConfig}
-                fromZero
-                showValuesOnTopOfBars
-                yAxisLabel="$"
-                yAxisSuffix=""
-                style={{ borderRadius: 16 }}
-              />
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <BarChart
+                  data={{
+                    labels: chartLabels,
+                    datasets: [{ data: chartData.length > 0 ? chartData : [0] }],
+                  }}
+                  width={chartWidth}
+                  height={200}
+                  chartConfig={chartConfig}
+                  fromZero
+                  showValuesOnTopOfBars
+                  yAxisLabel="$"
+                  yAxisSuffix=""
+                  style={{ borderRadius: 16 }}
+                />
+              </ScrollView>
             ) : (
               <Text className="text-text-secondary text-center py-8">No expense data available</Text>
             )}
@@ -234,10 +270,6 @@ export default function ExpensesAnalysisScreen() {
             <View className="bg-white rounded-2xl border border-border p-4 shadow-sm">
               <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase mb-3 ml-1">Details</Text>
               {breakdownItems.map((item, i) => {
-                const dayCategories = Object.entries(item)
-                  .filter(([key, val]) => key !== "key" && key !== "total" && typeof val === "number" && (val ?? 0) > 0)
-                  .sort((a, b) => (b[1] as number) - (a[1] as number));
-
                 return (
                   <View key={`${item.key}-${i}`} className="flex-row items-center justify-between py-3 border-b border-border/50">
                     <View className="flex-row items-center gap-3 flex-1">
@@ -248,11 +280,7 @@ export default function ExpensesAnalysisScreen() {
                         <Text className="text-text-primary text-sm font-medium">
                           {formatAnalysisPeriodLabel(item.key || "", filters.groupBy)}
                         </Text>
-                        <Text className="text-text-secondary text-xs">
-                          {dayCategories.map(([k]) =>
-                            k.charAt(0).toUpperCase() + k.slice(1).replace(/([A-Z])/g, " $1")
-                          ).join(", ") || "No expenses"}
-                        </Text>
+                        <Text className="text-text-secondary text-xs">{describeExpenseBreakdown(item)}</Text>
                       </View>
                     </View>
                     <AnalyticsValueText className="text-danger-600 font-bold text-sm">${fmt(item.total)}</AnalyticsValueText>

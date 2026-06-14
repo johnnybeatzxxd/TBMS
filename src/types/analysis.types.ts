@@ -57,7 +57,7 @@ export interface DashboardResponse {
 }
 
 // ─── Trip Summary ───────────────────────────────────────────────────
-export interface TripsSummaryPayload extends AnalysisFilters {}
+export type TripsSummaryPayload = AnalysisFilters;
 
 export interface TripTypeMetrics {
   count: number;
@@ -92,7 +92,7 @@ export interface TripsSummaryResponse {
 }
 
 // ─── Trip Routes ────────────────────────────────────────────────────
-export interface RoutesPayload extends AnalysisFilters {}
+export type RoutesPayload = AnalysisFilters;
 
 export interface RouteItem {
   loadingSite: string;
@@ -110,17 +110,20 @@ export interface RoutesResponse {
 }
 
 // ─── Fuel List ──────────────────────────────────────────────────────
-export interface FuelListPayload extends AnalysisFilters {}
+export interface FuelListPayload extends Omit<AnalysisFilters, "truckIds" | "groupBy"> {
+  truckId: string;
+}
 
 export interface FuelListItem {
-  id: string;
-  date: string;
-  price: number;
-  vol: number;
-  truckId: string;
-  prevKm?: number;
-  kmDifference?: number;
-  pricePerLiter?: number;
+  startDate: string;
+  endDate: string;
+  totalFuelLiters: number;
+  kmDriven: number;
+  totalCost: number;
+  fuelCostPerKm: number | null;
+  averageFuelPrice: number;
+  tripsCount: number;
+  litersPerKm: number | null;
 }
 
 export interface FuelListResponse {
@@ -131,7 +134,7 @@ export interface FuelListResponse {
 }
 
 // ─── Fuel Usage ─────────────────────────────────────────────────────
-export interface FuelUsagePayload extends AnalysisFilters {}
+export type FuelUsagePayload = AnalysisFilters;
 
 export interface FuelUsageSummary {
   totalLiters: number;
@@ -162,29 +165,45 @@ export interface FuelUsageResponse {
 }
 
 // ─── Expenses ───────────────────────────────────────────────────────
-export interface ExpensesPayload extends AnalysisFilters {}
+export type ExpensesPayload = AnalysisFilters;
 
-export interface ExpensesCategorySummary {
+export interface DriverExpenseBreakdown {
   total: number;
-  perdime: number;
-  salary: number;
-  maintenance: number;
-  refuel: number;
   roadExpenses: number;
-  other: number;
+  salary: number;
+  perdiem: number;
 }
 
-export interface ExpensesBreakdownItem extends ExpensesCategorySummary {
+export interface TruckExpenseByServiceType {
+  serviceTypeId: string;
+  serviceTypeName: string;
+  total: number;
+}
+
+export interface TruckExpensesBreakdown {
+  total: number;
+  byServiceType: TruckExpenseByServiceType[];
+  otherExpensesTotal: number;
+}
+
+export interface ExpensesSummary {
+  total: number;
+  driverExpense: DriverExpenseBreakdown;
+  fuelExpense: number;
+  truckExpenses: TruckExpensesBreakdown;
+}
+
+export interface ExpensesBreakdownItem extends ExpensesSummary {
   key: string;
 }
 
 export interface ExpensesResponse {
-  summary: ExpensesCategorySummary;
-  breakdown: PaginatedBreakdown<ExpensesBreakdownItem>;
+  summary: ExpensesSummary;
+  breakdown?: PaginatedBreakdown<ExpensesBreakdownItem>;
 }
 
 // ─── Profit ─────────────────────────────────────────────────────────
-export interface ProfitPayload extends AnalysisFilters {}
+export type ProfitPayload = AnalysisFilters;
 
 export interface ProfitSummary {
   revenue: number;
@@ -226,6 +245,7 @@ export interface ProfitResponse {
 export interface PerformancePayload {
   groupBy?: "truck" | "driver";
   truckIds?: string[];
+  driverId?: string;
   startDate?: string;
   endDate?: string;
 }
@@ -235,10 +255,13 @@ export interface PerformanceItem {
   totalTrips: number;
   approvalRate: number;
   revenue: number;
-  roadExpenseToRevnueRatio: number; // note: typo matches backend
-  liters: number;
-  fuelEfficiency: number | null;
+  driverExpense: number;
+  truckExpense: number;
+  fuelCost: number;
+  driverExpenseToRevnueRatio: number; // note: typo matches backend
   litersPerTrip: number;
+  fuelCostPerTrip: number;
+  profit: number;
 }
 
 export interface PerformanceResponse {

@@ -77,7 +77,7 @@ export const analysisService = {
    * POST /analysis/fuel/list
    * Paginated list of refuel logs with distance/price calculations.
    */
-  async getFuelList(payload: FuelListPayload = {}): Promise<FuelListResponse> {
+  async getFuelList(payload: FuelListPayload): Promise<FuelListResponse> {
     const res = await apiFetch("/analysis/fuel/list", {
       method: "POST",
       body: JSON.stringify(payload),
@@ -156,7 +156,7 @@ export const analysisService = {
    * Generates and downloads a CSV report for various analytical data types.
    */
   async exportData(payload: {
-    report: "refules" | "trips" | "expenses" | "moneyTransfer";
+    report: "refules" | "trips" | "expenses" | "moneyTransfer" | "fuel";
     truckIds?: string[];
     driverId?: string;
     startDate?: string;

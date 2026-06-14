@@ -9,6 +9,7 @@ import { analysisService } from "@/src/api/analysis.service";
 import { truckService } from "@/src/api/truck.service";
 import { buildPayloadFromFilters, getInitialFiltersFromParams } from "@/src/utils/analysisFilters";
 import { formatAnalysisChartLabel, formatAnalysisPeriodLabel } from "@/src/utils/analysisChartLabels";
+import { getScrollableChartWidth } from "@/src/utils/analysisChartLayout";
 import { FuelUsageResponse, FuelListItem } from "@/src/types/analysis.types";
 import { AnalysisHeader, AnalysisFilterState } from "@/src/components/AnalysisHeader";
 import { ANALYSIS_PAGE_SIZE, AnalysisLoadMore, hasMoreAnalysisPages } from "@/src/components/AnalysisLoadMore";
@@ -57,11 +58,19 @@ export default function RefuelAnalysisScreen() {
   const fetchRefuel = useCallback(async () => {
     const usagePayload = buildPayloadFromFilters(filters);
     const listPayload = buildPayloadFromFilters(filters, { page: 1, limit: ANALYSIS_PAGE_SIZE });
+    const selectedTruckId = filters.truckIds.length === 1 ? filters.truckIds[0] : null;
 
-    const [usageData, listData] = await Promise.all([
-      analysisService.getFuelUsage(usagePayload),
-      analysisService.getFuelList(listPayload),
-    ]);
+    const usageData = await analysisService.getFuelUsage(usagePayload);
+    const listData = selectedTruckId
+      ? await analysisService.getFuelList({
+          truckId: selectedTruckId,
+          driverId: listPayload.driverId,
+          startDate: listPayload.startDate,
+          endDate: listPayload.endDate,
+          page: 1,
+          limit: ANALYSIS_PAGE_SIZE,
+        })
+      : { data: [], total: 0, page: 1, limit: ANALYSIS_PAGE_SIZE };
     return { usageData, listData };
   }, [filters]);
 
@@ -100,7 +109,16 @@ export default function RefuelAnalysisScreen() {
     const nextPage = listPage + 1;
     try {
       const payload = buildPayloadFromFilters(filters, { page: nextPage, limit: ANALYSIS_PAGE_SIZE });
-      const listData = await analysisService.getFuelList(payload);
+      const selectedTruckId = filters.truckIds.length === 1 ? filters.truckIds[0] : null;
+      if (!selectedTruckId) return;
+      const listData = await analysisService.getFuelList({
+        truckId: selectedTruckId,
+        driverId: payload.driverId,
+        startDate: payload.startDate,
+        endDate: payload.endDate,
+        page: nextPage,
+        limit: ANALYSIS_PAGE_SIZE,
+      });
       setFuelList((prev) => [...prev, ...(listData.data || [])]);
       setListPage(nextPage);
     } catch (e) {
@@ -112,12 +130,14 @@ export default function RefuelAnalysisScreen() {
 
   const summary = usage?.summary;
   const breakdown = usage?.breakdown;
+  const selectedTruckId = filters.truckIds.length === 1 ? filters.truckIds[0] : null;
 
   // Build line chart data from breakdown
   const lineLabels = (breakdown?.data || []).map((item) =>
     formatAnalysisChartLabel(item.key || "", filters.groupBy)
   );
   const lineData = (breakdown?.data || []).map((item) => getFuelBreakdownMetrics(item).cost);
+  const chartWidth = getScrollableChartWidth(lineLabels.length, screenWidth);
   const buildFuelExportRows = () => [
     { section: "Summary", metric: "Total Cost", value: summary?.totalCost ?? 0 },
     { section: "Summary", metric: "Total Liters", value: summary?.totalLiters ?? 0 },
@@ -139,16 +159,18 @@ export default function RefuelAnalysisScreen() {
       };
     }),
     ...fuelList.map((item) => ({
-      section: "Refuel Logs",
-      id: item.id,
-      date: item.date,
-      truckId: item.truckId,
-      truckPlate: truckPlates[item.truckId] || "",
-      liters: item.vol,
-      price: item.price,
-      pricePerLiter: item.pricePerLiter ?? "",
-      prevKm: item.prevKm ?? "",
-      kmDifference: item.kmDifference ?? "",
+      section: "Fuel Intervals",
+      startDate: item.startDate,
+      endDate: item.endDate,
+      truckId: selectedTruckId || "",
+      truckPlate: selectedTruckId ? truckPlates[selectedTruckId] || "" : "",
+      totalFuelLiters: item.totalFuelLiters,
+      kmDriven: item.kmDriven,
+      totalCost: item.totalCost,
+      fuelCostPerKm: item.fuelCostPerKm ?? "",
+      averageFuelPrice: item.averageFuelPrice,
+      tripsCount: item.tripsCount,
+      litersPerKm: item.litersPerKm ?? "",
     })),
   ];
 
@@ -219,19 +241,21 @@ export default function RefuelAnalysisScreen() {
           <View className="bg-white rounded-2xl border border-border p-4 shadow-sm mb-4">
             <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase mb-3 ml-1">Fuel Cost Over Time</Text>
             {lineLabels.length > 0 && lineData.some(d => d > 0) ? (
-              <LineChart
-                data={{
-                  labels: lineLabels,
-                  datasets: [{ data: lineData.length > 0 ? lineData : [0] }],
-                }}
-                width={screenWidth - 64}
-                height={220}
-                chartConfig={chartConfig}
-                bezier
-                style={{ borderRadius: 16 }}
-                yAxisLabel="$"
-                yAxisSuffix=""
-              />
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <LineChart
+                  data={{
+                    labels: lineLabels,
+                    datasets: [{ data: lineData.length > 0 ? lineData : [0] }],
+                  }}
+                  width={chartWidth}
+                  height={220}
+                  chartConfig={chartConfig}
+                  bezier
+                  style={{ borderRadius: 16 }}
+                  yAxisLabel="$"
+                  yAxisSuffix=""
+                />
+              </ScrollView>
             ) : (
               <Text className="text-text-secondary text-center py-8">No fuel data available</Text>
             )}
@@ -266,28 +290,29 @@ export default function RefuelAnalysisScreen() {
             </View>
           )}
 
-          {/* Recent Refuel Log */}
+          {/* Fuel Interval Log */}
           {fuelList.length > 0 && (
             <View className="bg-white rounded-2xl border border-border p-4 shadow-sm">
-              <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase mb-3 ml-1">Recent Refuels</Text>
+              <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase mb-3 ml-1">Fuel Intervals</Text>
               {fuelList.map((r, i) => (
-                <View key={r.id || `${r.date}-${i}`} className="flex-row items-center justify-between py-3 border-b border-border/50">
+                <View key={`${r.startDate}-${r.endDate}-${i}`} className="flex-row items-center justify-between py-3 border-b border-border/50">
                   <View className="flex-row items-center gap-3 flex-1">
                     <View className="w-9 h-9 rounded-full bg-amber-50 items-center justify-center">
                       <MaterialCommunityIcons name="gas-station" size={16} color="#F59E0B" />
                     </View>
                     <View>
-                      <Text className="text-text-primary text-sm font-medium">{r.date}</Text>
+                      <Text className="text-text-primary text-sm font-medium">
+                        {new Date(r.startDate).toLocaleDateString()} - {new Date(r.endDate).toLocaleDateString()}
+                      </Text>
                       <Text className="text-text-secondary text-xs">
-                        {truckPlates[r.truckId] ? `${truckPlates[r.truckId]} · ` : ""}
-                        {fmt(r.vol)}L
-                        {r.pricePerLiter ? ` · $${fmt(Math.round(r.pricePerLiter))}/L` : ""}
-                        {r.prevKm != null ? ` · from ${fmt(r.prevKm)} km` : ""}
-                        {r.kmDifference ? ` · +${fmt(r.kmDifference)} km` : ""}
+                        {selectedTruckId && truckPlates[selectedTruckId] ? `${truckPlates[selectedTruckId]} · ` : ""}
+                        {fmt(r.totalFuelLiters)}L · {fmt(r.kmDriven)} km · {fmt(r.tripsCount)} trips
+                        {r.litersPerKm != null ? ` · ${r.litersPerKm.toFixed(2)} L/km` : ""}
+                        {r.fuelCostPerKm != null ? ` · $${fmt(Math.round(r.fuelCostPerKm))}/km` : ""}
                       </Text>
                     </View>
                   </View>
-                  <AnalyticsValueText className="text-amber-600 font-bold text-sm">${fmt(r.price)}</AnalyticsValueText>
+                  <AnalyticsValueText className="text-amber-600 font-bold text-sm">${fmt(r.totalCost)}</AnalyticsValueText>
                 </View>
               ))}
               <AnalysisLoadMore
@@ -299,8 +324,16 @@ export default function RefuelAnalysisScreen() {
             </View>
           )}
 
+          {!selectedTruckId && (
+            <View className="bg-white rounded-2xl border border-border p-4 shadow-sm mb-4">
+              <Text className="text-text-secondary text-sm text-center">
+                Select one truck to view full-tank fuel intervals.
+              </Text>
+            </View>
+          )}
+
           {/* Empty state */}
-          {fuelList.length === 0 && (breakdown?.data || []).length === 0 && (
+          {fuelList.length === 0 && (breakdown?.data || []).length === 0 && selectedTruckId && (
             <View className="bg-white rounded-2xl border border-border p-8 shadow-sm items-center">
               <MaterialCommunityIcons name="gas-station-off" size={48} color="#CBD5E1" />
               <Text className="text-text-secondary text-sm mt-3">No refuel data for this period</Text>

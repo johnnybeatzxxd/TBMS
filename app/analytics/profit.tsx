@@ -10,6 +10,7 @@ import { ProfitResponse, ProfitDataItem } from "@/src/types/analysis.types";
 import { AnalysisHeader, AnalysisFilterState } from "@/src/components/AnalysisHeader";
 import { ANALYSIS_PAGE_SIZE, AnalysisLoadMore, hasMoreAnalysisPages } from "@/src/components/AnalysisLoadMore";
 import { formatAnalysisChartLabel, formatAnalysisPeriodLabel } from "@/src/utils/analysisChartLabels";
+import { getScrollableChartWidth } from "@/src/utils/analysisChartLayout";
 import { AnalyticsExportButton } from "@/src/components/AnalyticsExportButton";
 import { AnalyticsValueText } from "@/src/components/AnalyticsValueText";
 
@@ -80,6 +81,7 @@ export default function ProfitAnalysisScreen() {
   // Bar chart: profit per period
   const chartLabels = profitItems.map((item) => formatAnalysisChartLabel(item.key || "", filters.groupBy));
   const chartData = profitItems.map((item) => item.profit ?? 0);
+  const chartWidth = getScrollableChartWidth(chartLabels.length, screenWidth);
   const buildProfitExportRows = () => [
     { section: "Summary", metric: "Revenue", value: summary?.revenue ?? 0 },
     { section: "Summary", metric: "Costs", value: summary?.costs ?? 0 },
@@ -110,7 +112,7 @@ export default function ProfitAnalysisScreen() {
         showBack
         filters={filters}
         onFiltersChange={setFilters}
-        groupByOptions={["day", "week", "month"]}
+        groupByOptions={["day", "week", "month", "truck"]}
         defaultGroupBy="week"
       />
 
@@ -161,20 +163,22 @@ export default function ProfitAnalysisScreen() {
           <View className="bg-white rounded-2xl border border-border p-4 shadow-sm mb-4">
             <Text className="text-text-secondary text-xs font-bold tracking-widest uppercase mb-3 ml-1">Profit by Period</Text>
             {chartLabels.length > 0 ? (
-              <BarChart
-                data={{
-                  labels: chartLabels,
-                  datasets: [{ data: chartData.length > 0 ? chartData : [0] }],
-                }}
-                width={screenWidth - 64}
-                height={200}
-                chartConfig={chartConfig}
-                fromZero
-                showValuesOnTopOfBars
-                yAxisLabel="$"
-                yAxisSuffix=""
-                style={{ borderRadius: 16 }}
-              />
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <BarChart
+                  data={{
+                    labels: chartLabels,
+                    datasets: [{ data: chartData.length > 0 ? chartData : [0] }],
+                  }}
+                  width={chartWidth}
+                  height={200}
+                  chartConfig={chartConfig}
+                  fromZero
+                  showValuesOnTopOfBars
+                  yAxisLabel="$"
+                  yAxisSuffix=""
+                  style={{ borderRadius: 16 }}
+                />
+              </ScrollView>
             ) : (
               <Text className="text-text-secondary text-center py-8">No profit data available</Text>
             )}

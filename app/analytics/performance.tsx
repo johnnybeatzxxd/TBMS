@@ -29,6 +29,7 @@ export default function PerformanceScreen() {
         const result = await analysisService.getPerformance({
           groupBy: entityGroupBy,
           truckIds: basePayload.truckIds,
+          driverId: basePayload.driverId,
           startDate: basePayload.startDate,
           endDate: basePayload.endDate,
         });
@@ -52,10 +53,13 @@ export default function PerformanceScreen() {
       totalTrips: item.totalTrips ?? 0,
       approvalRate: item.approvalRate ?? 0,
       revenue: item.revenue ?? 0,
-      roadExpenseToRevenueRatio: item.roadExpenseToRevnueRatio ?? 0,
-      liters: item.liters ?? 0,
+      driverExpense: item.driverExpense ?? 0,
+      truckExpense: item.truckExpense ?? 0,
+      fuelCost: item.fuelCost ?? 0,
+      driverExpenseToRevenueRatio: item.driverExpenseToRevnueRatio ?? 0,
       litersPerTrip: item.litersPerTrip ?? 0,
-      fuelEfficiency: item.fuelEfficiency ?? "",
+      fuelCostPerTrip: item.fuelCostPerTrip ?? 0,
+      profit: item.profit ?? 0,
     }));
 
   return (
@@ -134,8 +138,10 @@ export default function PerformanceScreen() {
                     <Text className="text-text-secondary text-xs">{fmt(item.totalTrips)} trips · {fmt(item.approvalRate)}% approved</Text>
                   </View>
                   <View className="items-end">
-                    <AnalyticsValueText className="text-success-600 font-bold text-lg">${fmt(item.revenue)}</AnalyticsValueText>
-                    <Text className="text-text-secondary text-xs">revenue</Text>
+                    <AnalyticsValueText className={`font-bold text-lg ${(item.profit ?? 0) >= 0 ? "text-success-600" : "text-danger-600"}`}>
+                      ${fmt(item.profit)}
+                    </AnalyticsValueText>
+                    <Text className="text-text-secondary text-xs">profit</Text>
                   </View>
                 </View>
 
@@ -151,22 +157,32 @@ export default function PerformanceScreen() {
                     <AnalyticsValueText className="text-text-primary font-bold text-sm">{fmt(item.approvalRate)}%</AnalyticsValueText>
                   </View>
                   <View className="flex-1 min-w-[45%] bg-surface rounded-xl px-3 py-2">
-                    <Text className="text-text-secondary text-xs">Road Exp Ratio</Text>
-                    <AnalyticsValueText className="text-text-primary font-bold text-sm">{(item.roadExpenseToRevnueRatio ?? 0).toFixed(1)}%</AnalyticsValueText>
+                    <Text className="text-text-secondary text-xs">Revenue</Text>
+                    <AnalyticsValueText className="text-success-600 font-bold text-sm">${fmt(item.revenue)}</AnalyticsValueText>
+                  </View>
+                  <View className="flex-1 min-w-[45%] bg-surface rounded-xl px-3 py-2">
+                    <Text className="text-text-secondary text-xs">Driver Exp Ratio</Text>
+                    <AnalyticsValueText className="text-text-primary font-bold text-sm">{(item.driverExpenseToRevnueRatio ?? 0).toFixed(1)}%</AnalyticsValueText>
                   </View>
                   <View className="flex-1 min-w-[45%] bg-surface rounded-xl px-3 py-2">
                     <Text className="text-text-secondary text-xs">L/Trip</Text>
                     <AnalyticsValueText className="text-text-primary font-bold text-sm">{(item.litersPerTrip ?? 0).toFixed(1)}</AnalyticsValueText>
                   </View>
                   <View className="flex-1 min-w-[45%] bg-surface rounded-xl px-3 py-2">
-                    <Text className="text-text-secondary text-xs">Total Fuel</Text>
-                    <AnalyticsValueText className="text-text-primary font-bold text-sm">{fmt(item.liters)}L</AnalyticsValueText>
+                    <Text className="text-text-secondary text-xs">Fuel Cost/Trip</Text>
+                    <AnalyticsValueText className="text-text-primary font-bold text-sm">${fmt(Math.round(item.fuelCostPerTrip ?? 0))}</AnalyticsValueText>
                   </View>
                   <View className="flex-1 min-w-[45%] bg-surface rounded-xl px-3 py-2">
-                    <Text className="text-text-secondary text-xs">Fuel Efficiency</Text>
-                    <AnalyticsValueText className="text-text-primary font-bold text-sm">
-                      {item.fuelEfficiency != null ? `${item.fuelEfficiency.toFixed(1)} km/L` : "N/A"}
-                    </AnalyticsValueText>
+                    <Text className="text-text-secondary text-xs">Driver Expense</Text>
+                    <AnalyticsValueText className="text-text-primary font-bold text-sm">${fmt(item.driverExpense)}</AnalyticsValueText>
+                  </View>
+                  <View className="flex-1 min-w-[45%] bg-surface rounded-xl px-3 py-2">
+                    <Text className="text-text-secondary text-xs">Truck Expense</Text>
+                    <AnalyticsValueText className="text-text-primary font-bold text-sm">${fmt(item.truckExpense)}</AnalyticsValueText>
+                  </View>
+                  <View className="flex-1 min-w-[45%] bg-surface rounded-xl px-3 py-2">
+                    <Text className="text-text-secondary text-xs">Fuel Cost</Text>
+                    <AnalyticsValueText className="text-text-primary font-bold text-sm">${fmt(item.fuelCost)}</AnalyticsValueText>
                   </View>
                 </View>
               </View>
