@@ -9,11 +9,10 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
-  Pressable,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { router, Stack } from "expo-router";
+import { router } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { expenseService } from "@/src/api/services";
 import { useActionStore } from "@/src/store";
@@ -25,7 +24,6 @@ export default function AddPerdiemModal() {
   const [remark, setRemark] = useState("");
   const { isActionPending, startAction, stopAction } = useActionStore();
   const loading = isActionPending("submit_perdiem");
-  const [type, setType] = useState<"PERDIME" | "SALARY">("PERDIME");
 
   const handleSubmit = async () => {
     const parsedAmount = parseFloat(amount);
@@ -39,12 +37,12 @@ export default function AddPerdiemModal() {
     startAction("submit_perdiem");
     try {
       await expenseService.addExpense("", {
-        remark: remark.trim() || (type === "PERDIME" ? "Daily Perdiem" : "Salary Payment"),
+        remark: remark.trim() || "Daily Perdiem",
         price: parsedAmount,
         date: formattedDate,
-        tag: type,
+        tag: "PERDIME",
       });
-      Alert.alert("Success", `${type === "PERDIME" ? "Perdiem" : "Salary"} logged successfully.`);
+      Alert.alert("Success", "Perdiem logged successfully.");
       router.back();
     } catch (error: any) {
       Alert.alert("Error", error.message || "Failed to log perdiem");
@@ -61,35 +59,11 @@ export default function AddPerdiemModal() {
           <TouchableOpacity onPress={() => router.back()} className="w-10 h-10 items-center justify-center">
             <Ionicons name="close" size={24} color="#0F172A" />
           </TouchableOpacity>
-          <Text className="text-text-primary font-bold text-xl">
-            Log {type === "PERDIME" ? "Perdiem" : "Salary"}
-          </Text>
+          <Text className="text-text-primary font-bold text-xl">Log Perdiem</Text>
           <View className="w-10 h-10" />
         </View>
 
         <ScrollView className="flex-1 px-4 py-6" contentContainerStyle={{ gap: 24, paddingBottom: 60 }}>
-          {/* Simple Toggle Switch */}
-          <View className="bg-slate-200 p-1 rounded-xl flex-row self-center w-full max-w-xs mb-2">
-            <Pressable 
-              onPress={() => setType("PERDIME")}
-              style={{ backgroundColor: type === "PERDIME" ? "#fff" : "transparent" }}
-              className="flex-1 py-2.5 rounded-lg items-center justify-center"
-            >
-              <Text className={`font-bold ${type === "PERDIME" ? "text-primary" : "text-slate-500"}`}>
-                Perdiem
-              </Text>
-            </Pressable>
-            <Pressable 
-              onPress={() => setType("SALARY")}
-              style={{ backgroundColor: type === "SALARY" ? "#fff" : "transparent" }}
-              className="flex-1 py-2.5 rounded-lg items-center justify-center"
-            >
-              <Text className={`font-bold ${type === "SALARY" ? "text-primary" : "text-slate-500"}`}>
-                Salary
-              </Text>
-            </Pressable>
-          </View>
-
           <View className="bg-white rounded-2xl p-5 border border-border shadow-sm gap-5">
             
             {/* Amount */}
@@ -176,9 +150,7 @@ export default function AddPerdiemModal() {
                 {loading ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text className="text-white font-bold text-base tracking-wide">
-                    Save {type === "PERDIME" ? "Perdiem" : "Salary"}
-                  </Text>
+                  <Text className="text-white font-bold text-base tracking-wide">Save Perdiem</Text>
                 )}
               </TouchableOpacity>
             </View>

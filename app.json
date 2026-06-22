@@ -2,7 +2,7 @@
   "expo": {
     "name": "Truck-Business-Managment-System",
     "slug": "Truck-Business-Managment-System",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "tbms",
@@ -25,6 +25,7 @@
         "barStyle": "dark-content",
         "backgroundColor": "#FFFFFF"
       },
+      "versionCode": 2,
       "package": "com.tadiwos_fleet_management"
     },
     "web": {

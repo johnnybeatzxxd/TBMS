@@ -61,6 +61,19 @@ function isFutureDate(d: Date) {
   return startOfDay(d).getTime() > startOfDay(new Date()).getTime();
 }
 
+function formatLocalDate(d: Date) {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseDateFieldValue(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return new Date();
+  const parsed = new Date(`${value.slice(0, 10)}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+}
+
 const imageFieldStyles = StyleSheet.create({
   slot: {
     width: 96,
@@ -153,6 +166,7 @@ export default function AddRequestScreen() {
 
   // Dynamic Template Fields
   const [values, setValues] = useState<Record<string, any>>({});
+  const [activeDateFieldId, setActiveDateFieldId] = useState<string | null>(null);
 
   const builtInKind =
     selectedServiceId === PERDIME_SERVICE_ID
@@ -215,7 +229,16 @@ export default function AddRequestScreen() {
         Alert.alert("Error", e.message || "Failed to load data.");
       })
       .finally(() => setLoading(false));
-  }, [params.id]);
+  }, [
+    initialBuiltInKind,
+    isEditMode,
+    params.amount,
+    params.date,
+    params.description,
+    params.id,
+    params.serviceRequestId,
+    params.values,
+  ]);
 
   // ── Fetch full template when driver selects a service type ────────
   useEffect(() => {
@@ -670,7 +693,7 @@ export default function AddRequestScreen() {
                           {field.dependsOn && <Ionicons name="git-branch-outline" size={12} color="#D97706" />}
                         </View>
 
-                        {(field.type === "text" || field.type === "number" || field.type === "date") && (
+                        {(field.type === "text" || field.type === "number") && (
                           <TextInput
                             value={values[field.id] || ""}
                             onChangeText={(v) => updateValue(field.id, v)}
@@ -679,6 +702,53 @@ export default function AddRequestScreen() {
                             keyboardType={field.type === "number" ? "numeric" : "default"}
                             className="bg-white border border-border rounded-xl h-14 px-4 text-base font-medium text-text-primary shadow-sm"
                           />
+                        )}
+
+                        {field.type === "date" && (
+                          <View>
+                            <TouchableOpacity
+                              onPress={() => setActiveDateFieldId(field.id)}
+                              className="bg-white border border-border rounded-xl h-14 px-4 flex-row items-center justify-between shadow-sm"
+                              activeOpacity={0.8}
+                            >
+                              <View className="flex-row items-center">
+                                <Ionicons name="calendar-outline" size={20} color="#94A3B8" />
+                                <Text
+                                  className={`text-base font-medium ml-3 ${
+                                    values[field.id] ? "text-text-primary" : "text-slate-400"
+                                  }`}
+                                >
+                                  {values[field.id] || field.placeholder || "Select date"}
+                                </Text>
+                              </View>
+                              <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                            </TouchableOpacity>
+
+                            {activeDateFieldId === field.id && (
+                              <DateTimePicker
+                                value={parseDateFieldValue(values[field.id])}
+                                mode="date"
+                                display="default"
+                                onChange={(event, selectedDate) => {
+                                  if (Platform.OS === "android" || event.type === "dismissed") {
+                                    setActiveDateFieldId(null);
+                                  }
+                                  if (selectedDate && event.type !== "dismissed") {
+                                    updateValue(field.id, formatLocalDate(selectedDate));
+                                  }
+                                }}
+                              />
+                            )}
+
+                            {Platform.OS === "ios" && activeDateFieldId === field.id && (
+                              <TouchableOpacity
+                                onPress={() => setActiveDateFieldId(null)}
+                                className="mt-2 py-2 items-center bg-slate-100 rounded-lg"
+                              >
+                                <Text className="text-primary font-semibold">Done</Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
                         )}
 
                         {field.type === "boolean" && (
