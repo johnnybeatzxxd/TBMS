@@ -10,6 +10,7 @@ import { useAuthStore } from "@/src/store";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback } from "react";
 import { useCachedFetch } from "@/src/hooks/useCachedFetch";
+import { ReceiptPhotosRow } from "@/src/components/TripReceiptViewer";
 
 const getGroupedData = (data: Transfer[]) => {
   const grouped = data.reduce((acc, item) => {
@@ -80,6 +81,7 @@ const TransferCard = ({ transfer, userName }: { transfer: Transfer, userName?: s
                <Text className="text-text-secondary text-xs uppercase font-bold tracking-widest">Remark</Text>
                <Text className="text-text-primary text-[13px] leading-5">{transfer.remark || "N/A"}</Text>
             </View>
+            <ReceiptPhotosRow receiptPic={transfer.receiptPics} label="Transfer Photos" />
           </View>
         </View>
       )}

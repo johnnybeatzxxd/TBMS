@@ -10,6 +10,7 @@ export interface Transfer {
   status?: "PENDING" | "APPROVED";
   approved?: "PENDING" | "APPROVED";
   bank?: string;
+  receiptPics?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -20,4 +21,5 @@ export interface AddTransferPayload {
   remark: string;
   date: string;
   bank?: string;
+  receiptPics?: string[];
 }

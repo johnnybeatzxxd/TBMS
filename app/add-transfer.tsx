@@ -16,12 +16,17 @@ import { router } from "expo-router";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { transferService, driverService } from "@/src/api/services";
 import { useAuthStore, useActionStore } from "@/src/store";
+import { ReceiptImageUploader } from "@/src/components/ReceiptImageUploader";
+import { uploadTransferReceipt } from "@/src/utils/firebaseUpload";
 
 export default function AddTransferModal() {
   const [driverId, setDriverId] = useState("");
   const [amount, setAmount] = useState("");
   const [remark, setRemark] = useState("");
   const [bank, setBank] = useState("");
+  const [receiptPicUrls, setReceiptPicUrls] = useState<string[]>([]);
+  const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
+  const [hasIncompleteReceipt, setHasIncompleteReceipt] = useState(false);
   
   // Hardcoding date to today for simplicity
   const [date, setDate] = useState(new Date());
@@ -66,6 +71,19 @@ export default function AddTransferModal() {
       return;
     }
 
+    if (isUploadingReceipt) {
+      Alert.alert("Please wait", "Transfer pictures are still uploading.");
+      return;
+    }
+
+    if (hasIncompleteReceipt) {
+      Alert.alert(
+        "Picture not uploaded",
+        "One or more transfer pictures did not finish uploading. Please retry or remove them."
+      );
+      return;
+    }
+
     const formattedDate = date.toISOString().split("T")[0];
     if (!formattedDate) {
       Alert.alert("Validation", "Please select a valid date.");
@@ -80,7 +98,10 @@ export default function AddTransferModal() {
         remark: remark.trim(),
         date: formattedDate,
         bank: bank.trim() || undefined,
+        receiptPics: receiptPicUrls,
       });
+      // Lazy import keeps the cache utility out of the screen's initial module graph.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { clearCachePrefix } = require("@/src/hooks/useCachedFetch");
       clearCachePrefix("DRIVER_TRANSFERS");
       router.back();
@@ -90,6 +111,8 @@ export default function AddTransferModal() {
       stopAction("submit_transfer");
     }
   };
+
+  const submitDisabled = loading || isUploadingReceipt;
 
   return (
     <SafeAreaView className="flex-1 bg-surface" edges={["top","bottom"]}>
@@ -252,19 +275,31 @@ export default function AddTransferModal() {
               )}
             </View>
 
+            <ReceiptImageUploader
+              maxImages={2}
+              uploadImage={uploadTransferReceipt}
+              onUrlsChange={setReceiptPicUrls}
+              onUploadingChange={setIsUploadingReceipt}
+              onIncompleteChange={setHasIncompleteReceipt}
+              sectionTitle="Transfer Receipt"
+              fieldLabel="Receipt / Optional Photos"
+            />
+
             <View className="flex-row gap-4 mt-4 z-0">
               <TouchableOpacity
                 onPress={() => router.back()}
                 className="flex-1 bg-surface-hover rounded-xl py-4 items-center justify-center border border-border"
-                disabled={loading}
+                disabled={submitDisabled}
               >
                 <Text className="text-text-secondary font-bold text-base">Cancel</Text>
               </TouchableOpacity>
               
               <TouchableOpacity
                 onPress={handleSubmit}
-                disabled={loading}
-                className="flex-1 bg-primary rounded-xl py-4 items-center justify-center shadow-sm shadow-primary-500"
+                disabled={submitDisabled}
+                className={`flex-1 rounded-xl py-4 items-center justify-center shadow-sm shadow-primary-500 ${
+                  submitDisabled ? "bg-primary/60" : "bg-primary"
+                }`}
               >
                 {loading ? (
                   <ActivityIndicator color="#fff" />

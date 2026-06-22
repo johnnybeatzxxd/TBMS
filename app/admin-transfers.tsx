@@ -7,6 +7,7 @@ import { useAuthStore, useCacheStore, useActionStore } from "@/src/store";
 import { transferService, driverService } from "@/src/api/services";
 import { Transfer } from "@/src/types/transfer.types";
 import { DateFilterBar, DateFilterPreset, passesDateFilter } from "@/src/components/DateFilterBar";
+import { ReceiptPhotosRow } from "@/src/components/TripReceiptViewer";
 
 const getRelativeDateLabel = (dateStr: string) => {
   const [year, month, day] = dateStr.split("-").map(Number);
@@ -114,6 +115,7 @@ const TransferCard = ({ tx, isManager, onApprove, onDelete, driverName }: { tx: 
                <Text className="text-text-secondary text-xs uppercase font-bold tracking-widest">Remark</Text>
                <Text className="text-text-primary text-[13px] leading-5">{tx.remark || "N/A"}</Text>
             </View>
+            <ReceiptPhotosRow receiptPic={tx.receiptPics} label="Transfer Photos" />
           </View>
           
           {isManager && (tx.status === "PENDING" || (tx as any).approved === "PENDING") && (
